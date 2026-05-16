@@ -4,22 +4,27 @@ import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
-import DATN.backend.response.ApiResponse;
+import DATN.backend.response.applicant.ApplicantResponse;
+import DATN.backend.response.applicant.RegistrationApplicantResponse;
+import DATN.backend.response.applicant.SavedJobResponse;
+import DATN.backend.response.cv.CvResponse;
+
+import java.util.List;
 
 public interface InterfaceApplicantService {
 
-    ApiResponse registerApplicant(RegistrationApplicantRequest request);
+    RegistrationApplicantResponse registerApplicant(RegistrationApplicantRequest request);
 
-    ApiResponse getApplicantById(Long applicantId);
+    ApplicantResponse getApplicantById(Long applicantId);
 
-    ApiResponse getAllApplicants();
+    List<ApplicantResponse> getAllApplicants();
 
-    ApiResponse updateApplicant(Long applicantId, UpdateApplicantRequest request);
+    ApplicantResponse updateApplicant(Long applicantId, UpdateApplicantRequest request);
 
-    ApiResponse saveJob(SaveJobRequest request);
+    SavedJobResponse saveJob(SaveJobRequest request);
 
-    ApiResponse getSavedJobs(Long applicantId);
+    List<SavedJobResponse> getSavedJobs(Long applicantId);
 
-    ApiResponse uploadCv(Long applicantId, UploadCvRequest request);
+    CvResponse uploadCv(Long applicantId, UploadCvRequest request);
 
 }

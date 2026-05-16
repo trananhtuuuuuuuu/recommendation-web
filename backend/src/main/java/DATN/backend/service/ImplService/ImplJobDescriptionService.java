@@ -2,7 +2,6 @@ package DATN.backend.service.ImplService;
 
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +15,6 @@ import DATN.backend.repository.ApplicantJobDescriptionRepository;
 import DATN.backend.repository.JobDescriptionRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
-import DATN.backend.response.ApiResponse;
 import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobDescriptionResponse;
 import DATN.backend.service.InterfaceService.InterfaceJobDescriptionService;
@@ -29,26 +27,23 @@ public class ImplJobDescriptionService implements InterfaceJobDescriptionService
         private final JobDescriptionRepository jobDescriptionRepository;
         private final RecruiterRepository recruiterRepository;
         private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
-        private final JobDescriptionMapper jobDescriptionMapper = new JobDescriptionMapper();
 
         @Override
-        public ApiResponse getAllJobs() {
-                List<JobDescriptionResponse> response = jobDescriptionRepository.findAll().stream()
-                                .map(jobDescriptionMapper::toResponse)
+        public List<JobDescriptionResponse> getAllJobs() {
+                return jobDescriptionRepository.findAll().stream()
+                                .map(JobDescriptionMapper::toResponse)
                                 .toList();
-                return new ApiResponse("Jobs found", HttpStatus.OK.value(), null, null, response);
         }
 
         @Override
-        public ApiResponse getJobById(Long jobId) {
+        public JobDescriptionResponse getJobById(Long jobId) {
                 JobDescription jobDescription = jobDescriptionRepository.findById(jobId)
                                 .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
-                return new ApiResponse("Job found", HttpStatus.OK.value(), null, null,
-                                jobDescriptionMapper.toResponse(jobDescription));
+                return JobDescriptionMapper.toResponse(jobDescription);
         }
 
         @Override
-        public ApiResponse getJobApplicantsCount(Long jobId, Long recruiterId) {
+        public JobApplicantsResponse getJobApplicantsCount(Long jobId, Long recruiterId) {
                 JobDescription jobDescription = jobDescriptionRepository.findById(jobId)
                                 .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
                 if (recruiterId != null && (jobDescription.getRecruiter() == null
@@ -59,36 +54,33 @@ public class ImplJobDescriptionService implements InterfaceJobDescriptionService
                                 .filter(relation -> relation.getJobDescription() != null
                                                 && relation.getJobDescription().getId().equals(jobId))
                                 .count();
-                JobApplicantsResponse response = jobDescriptionMapper.toApplicantsResponse(jobId, count);
-                return new ApiResponse("Applicant count found", HttpStatus.OK.value(), null, null, response);
+                return JobDescriptionMapper.toApplicantsResponse(jobId, count);
         }
 
         @Override
-        public ApiResponse getJobsByRecruiter(Long recruiterId) {
+        public List<JobDescriptionResponse> getJobsByRecruiter(Long recruiterId) {
                 if (!recruiterRepository.existsById(recruiterId)) {
                         throw new ResourcesNotFoundException("Recruiter not found");
                 }
-                List<JobDescriptionResponse> response = jobDescriptionRepository.findByRecruiter_Id(recruiterId)
+                return jobDescriptionRepository.findByRecruiter_Id(recruiterId)
                                 .stream()
-                                .map(jobDescriptionMapper::toResponse)
+                                .map(JobDescriptionMapper::toResponse)
                                 .toList();
-                return new ApiResponse("Recruiter jobs found", HttpStatus.OK.value(), null, null, response);
         }
 
         @Override
         @Transactional
-        public ApiResponse createJob(Long recruiterId, RecruiterJobRequest request) {
+        public JobDescriptionResponse createJob(Long recruiterId, RecruiterJobRequest request) {
                 Recruiter recruiter = recruiterRepository.findById(recruiterId)
                                 .orElseThrow(() -> new ResourcesNotFoundException("Recruiter not found"));
-                JobDescription jobDescription = jobDescriptionMapper.toNewJobDescription(recruiter, request);
+                JobDescription jobDescription = JobDescriptionMapper.toNewJobDescription(recruiter, request);
                 JobDescription savedJob = jobDescriptionRepository.save(jobDescription);
-                return new ApiResponse("Job created successfully", HttpStatus.CREATED.value(), null, null,
-                                jobDescriptionMapper.toResponse(savedJob));
+                return JobDescriptionMapper.toResponse(savedJob);
         }
 
         @Override
         @Transactional
-        public ApiResponse updateJob(Long recruiterId, Long jobId, RecruiterJobRequest request) {
+        public JobDescriptionResponse updateJob(Long recruiterId, Long jobId, RecruiterJobRequest request) {
                 Recruiter recruiter = recruiterRepository.findById(recruiterId)
                                 .orElseThrow(() -> new ResourcesNotFoundException("Recruiter not found"));
                 JobDescription jobDescription = jobDescriptionRepository.findById(jobId)
@@ -97,10 +89,9 @@ public class ImplJobDescriptionService implements InterfaceJobDescriptionService
                                 && !jobDescription.getRecruiter().getId().equals(recruiter.getId())) {
                         throw new AlreadyExistException("Only posting recruiter can edit this job");
                 }
-                jobDescriptionMapper.updateJobDescription(jobDescription, request);
+                JobDescriptionMapper.updateJobDescription(jobDescription, request);
                 jobDescription.setRecruiter(recruiter);
                 JobDescription savedJob = jobDescriptionRepository.save(jobDescription);
-                return new ApiResponse("Job updated successfully", HttpStatus.OK.value(), null, null,
-                                jobDescriptionMapper.toResponse(savedJob));
+                return JobDescriptionMapper.toResponse(savedJob);
         }
 }

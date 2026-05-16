@@ -1,5 +1,6 @@
 package DATN.backend.controller.v1;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +12,7 @@ import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.service.InterfaceService.InterfaceApplicantService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -18,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/registrations/applicant")
 @RequiredArgsConstructor
 @Validated
+@Tag(name = "Applicant Registration", description = "Applicant registration APIs")
 public class ApplicantRegistrationController {
 
     private final InterfaceApplicantService applicantService;
@@ -25,6 +28,7 @@ public class ApplicantRegistrationController {
     @Operation(summary = "Register applicant")
     @PostMapping
     public ResponseEntity<ApiResponse> registerApplicant(@Valid @RequestBody RegistrationApplicantRequest request) {
-        return ResponseEntity.status(201).body(applicantService.registerApplicant(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Applicant registered successfully",
+                HttpStatus.CREATED, applicantService.registerApplicant(request)));
     }
 }

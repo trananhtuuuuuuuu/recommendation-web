@@ -1,5 +1,6 @@
 package DATN.backend.controller.v1;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +12,7 @@ import DATN.backend.request.recruiter.RegistrationRecruiterRequest;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.service.InterfaceService.InterfaceRecruiterService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -18,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/registrations/recruiters")
 @RequiredArgsConstructor
 @Validated
+@Tag(name = "Recruiter Registration", description = "Recruiter registration APIs")
 public class RecruiterRegistrationController {
 
     private final InterfaceRecruiterService recruiterService;
@@ -25,6 +28,7 @@ public class RecruiterRegistrationController {
     @Operation(summary = "Register recruiter")
     @PostMapping
     public ResponseEntity<ApiResponse> registerRecruiter(@Valid @RequestBody RegistrationRecruiterRequest request) {
-        return ResponseEntity.status(201).body(recruiterService.registerRecruiter(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Recruiter registered successfully",
+                HttpStatus.CREATED, recruiterService.registerRecruiter(request)));
     }
 }

@@ -2,7 +2,6 @@ package DATN.backend.service.ImplService;
 
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +24,6 @@ import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
-import DATN.backend.response.ApiResponse;
 import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
 import DATN.backend.response.applicant.RegistrationApplicantResponse;
@@ -44,11 +42,10 @@ public class ImplApplicantService implements InterfaceApplicantService {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicantMapper applicantMapper = new ApplicantMapper();
 
     @Override
     @Transactional
-    public ApiResponse registerApplicant(RegistrationApplicantRequest request) {
+    public RegistrationApplicantResponse registerApplicant(RegistrationApplicantRequest request) {
         if (userRepository.findByUserName(request.getUserName()).isPresent()) {
             throw new AlreadyExistException("User name already exists");
         }
@@ -59,45 +56,41 @@ public class ImplApplicantService implements InterfaceApplicantService {
         Role role = roleRepository.findByRoleName(request.getRoleName())
                 .orElseGet(() -> roleRepository.save(new Role(request.getRoleName(), request.getRoleName())));
 
-        Applicant applicant = applicantMapper.toNewApplicant(request);
+        Applicant applicant = ApplicantMapper.toNewApplicant(request);
         applicant.setPassword(passwordEncoder.encode(request.getPassword()));
         applicant.setRole(role);
 
         Applicant savedApplicant = applicantRepository.save(applicant);
-        RegistrationApplicantResponse response = applicantMapper.toRegistrationResponse(savedApplicant);
-        return new ApiResponse("Applicant registered successfully", HttpStatus.CREATED.value(), null, null, response);
+        return ApplicantMapper.toRegistrationResponse(savedApplicant);
     }
 
     @Override
-    public ApiResponse getApplicantById(Long applicantId) {
+    public ApplicantResponse getApplicantById(Long applicantId) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        ApplicantResponse response = applicantMapper.toApplicantResponse(applicant);
-        return new ApiResponse("Applicant found", HttpStatus.OK.value(), null, null, response);
+        return ApplicantMapper.toApplicantResponse(applicant);
     }
 
     @Override
-    public ApiResponse getAllApplicants() {
-        List<ApplicantResponse> response = applicantRepository.findAll().stream()
-                .map(applicantMapper::toApplicantResponse)
+    public List<ApplicantResponse> getAllApplicants() {
+        return applicantRepository.findAll().stream()
+                .map(ApplicantMapper::toApplicantResponse)
                 .toList();
-        return new ApiResponse("Applicants found", HttpStatus.OK.value(), null, null, response);
     }
 
     @Override
     @Transactional
-    public ApiResponse updateApplicant(Long applicantId, UpdateApplicantRequest request) {
+    public ApplicantResponse updateApplicant(Long applicantId, UpdateApplicantRequest request) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        applicantMapper.updateApplicant(applicant, request);
+        ApplicantMapper.updateApplicant(applicant, request);
         Applicant savedApplicant = applicantRepository.save(applicant);
-        ApplicantResponse response = applicantMapper.toApplicantResponse(savedApplicant);
-        return new ApiResponse("Applicant updated successfully", HttpStatus.OK.value(), null, null, response);
+        return ApplicantMapper.toApplicantResponse(savedApplicant);
     }
 
     @Override
     @Transactional
-    public ApiResponse saveJob(SaveJobRequest request) {
+    public SavedJobResponse saveJob(SaveJobRequest request) {
         Applicant applicant = applicantRepository.findById(request.getApplicantId())
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
         JobDescription jobDescription = jobDescriptionRepository.findById(request.getJobDescriptionId())
@@ -112,22 +105,21 @@ public class ImplApplicantService implements InterfaceApplicantService {
         ApplicantJobDescription relation = applicantJobDescriptionRepository
                 .save(new ApplicantJobDescription(applicant, jobDescription));
 
-        SavedJobResponse response = new SavedJobResponse(
+        return new SavedJobResponse(
                 relation.getId(),
                 applicant.getId(),
                 jobDescription.getId(),
                 jobDescription.getJobTitle(),
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
                 jobDescription.getLocation());
-        return new ApiResponse("Job saved successfully", HttpStatus.CREATED.value(), null, null, response);
     }
 
     @Override
-    public ApiResponse getSavedJobs(Long applicantId) {
+    public List<SavedJobResponse> getSavedJobs(Long applicantId) {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        List<SavedJobResponse> response = applicantJobDescriptionRepository.findByApplicant_Id(applicantId).stream()
+        return applicantJobDescriptionRepository.findByApplicant_Id(applicantId).stream()
                 .map(relation -> new SavedJobResponse(
                         relation.getId(),
                         relation.getApplicant().getId(),
@@ -137,19 +129,17 @@ public class ImplApplicantService implements InterfaceApplicantService {
                                 : relation.getJobDescription().getRecruiter().getCompanyName(),
                         relation.getJobDescription().getLocation()))
                 .toList();
-        return new ApiResponse("Saved jobs found", HttpStatus.OK.value(), null, null, response);
     }
 
     @Override
     @Transactional
-    public ApiResponse uploadCv(Long applicantId, UploadCvRequest request) {
+    public CvResponse uploadCv(Long applicantId, UploadCvRequest request) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        Cv cv = applicantMapper.toCv(request);
+        Cv cv = ApplicantMapper.toCv(request);
         Cv savedCv = cvRepository.save(cv);
         applicant.setCv(savedCv);
         applicantRepository.save(applicant);
-        CvResponse response = applicantMapper.toCvResponse(savedCv);
-        return new ApiResponse("CV uploaded successfully", HttpStatus.CREATED.value(), null, null, response);
+        return ApplicantMapper.toCvResponse(savedCv);
     }
 }

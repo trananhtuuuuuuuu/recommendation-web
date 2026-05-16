@@ -16,22 +16,20 @@ public class GlobalException {
 
     @ExceptionHandler(AlreadyExistException.class)
     public ResponseEntity<ApiResponse> handleAlreadyExistException(AlreadyExistException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse(
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(
                 exception.getMessage(),
-                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT,
                 exception.getMessage(),
-                List.of(exception.getMessage()),
-                null));
+                List.of(exception.getMessage())));
     }
 
     @ExceptionHandler(ResourcesNotFoundException.class)
     public ResponseEntity<ApiResponse> handleResourcesNotFoundException(ResourcesNotFoundException exception) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse(
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(
                 exception.getMessage(),
-                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND,
                 exception.getMessage(),
-                List.of(exception.getMessage()),
-                null));
+                List.of(exception.getMessage())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -40,22 +38,20 @@ public class GlobalException {
         List<String> errors = exception.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .toList();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse(
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(
                 "Validation failed",
-                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST,
                 "Validation failed",
-                errors,
-                null));
+                errors));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse> handleIllegalArgumentException(IllegalArgumentException exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse(
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(
                 exception.getMessage(),
-                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST,
                 exception.getMessage(),
-                List.of(exception.getMessage()),
-                null));
+                List.of(exception.getMessage())));
     }
 
 }

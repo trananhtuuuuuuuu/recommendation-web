@@ -1,5 +1,6 @@
 package DATN.backend.controller.v1;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +15,7 @@ import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.service.InterfaceService.InterfaceJobDescriptionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/recruiters/jobs")
 @RequiredArgsConstructor
 @Validated
+@Tag(name = "Recruiter Job", description = "Recruiter job management APIs")
 public class RecruiterJobController {
 
     private final InterfaceJobDescriptionService jobDescriptionService;
@@ -28,20 +31,23 @@ public class RecruiterJobController {
     @Operation(summary = "Get jobs posted by recruiter")
     @GetMapping("/{recruiterId}")
     public ResponseEntity<ApiResponse> getJobsByRecruiter(@PathVariable Long recruiterId) {
-        return ResponseEntity.ok(jobDescriptionService.getJobsByRecruiter(recruiterId));
+        return ResponseEntity.ok(ApiResponse.success("Recruiter jobs found", HttpStatus.OK,
+                jobDescriptionService.getJobsByRecruiter(recruiterId)));
     }
 
     @Operation(summary = "Create a recruiter job")
     @PostMapping("/{recruiterId}")
     public ResponseEntity<ApiResponse> createJob(@PathVariable Long recruiterId,
             @Valid @RequestBody RecruiterJobRequest request) {
-        return ResponseEntity.status(201).body(jobDescriptionService.createJob(recruiterId, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Job created successfully",
+                HttpStatus.CREATED, jobDescriptionService.createJob(recruiterId, request)));
     }
 
     @Operation(summary = "Update a recruiter job")
     @PutMapping("/{recruiterId}/{jobId}")
     public ResponseEntity<ApiResponse> updateJob(@PathVariable Long recruiterId, @PathVariable Long jobId,
             @Valid @RequestBody RecruiterJobRequest request) {
-        return ResponseEntity.ok(jobDescriptionService.updateJob(recruiterId, jobId, request));
+        return ResponseEntity.ok(ApiResponse.success("Job updated successfully", HttpStatus.OK,
+                jobDescriptionService.updateJob(recruiterId, jobId, request)));
     }
 }

@@ -7,7 +7,10 @@ import DATN.backend.response.recruiter.RecruiterResponse;
 
 public class RecruiterMapper {
 
-    public Recruiter toNewRecruiter(RegistrationRecruiterRequest request) {
+    private RecruiterMapper() {
+    }
+
+    public static Recruiter toNewRecruiter(RegistrationRecruiterRequest request) {
         Recruiter recruiter = new Recruiter();
         recruiter.setAddress(request.getAddress());
         recruiter.setEmail(request.getEmail());
@@ -30,7 +33,7 @@ public class RecruiterMapper {
         return recruiter;
     }
 
-    public RegistrationRecruiterResponse toRegistrationResponse(Recruiter recruiter) {
+    public static RegistrationRecruiterResponse toRegistrationResponse(Recruiter recruiter) {
         return new RegistrationRecruiterResponse(
                 recruiter.getId(),
                 recruiter.getUserName(),
@@ -41,7 +44,7 @@ public class RecruiterMapper {
                 recruiter.getRole() == null ? null : recruiter.getRole().getRoleName());
     }
 
-    public RecruiterResponse toRecruiterResponse(Recruiter recruiter) {
+    public static RecruiterResponse toRecruiterResponse(Recruiter recruiter) {
         return new RecruiterResponse(
                 recruiter.getId(),
                 recruiter.getUserName(),

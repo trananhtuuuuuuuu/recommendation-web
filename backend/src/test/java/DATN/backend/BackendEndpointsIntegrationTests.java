@@ -2,6 +2,7 @@ package DATN.backend;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,16 +11,23 @@ import java.time.LocalDate;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 
+import DATN.backend.Enum.ApplicantStatusEnum;
+import DATN.backend.Enum.GenderEnum;
+import DATN.backend.model.Applicant;
+import DATN.backend.model.ApplicantJobDescription;
 import DATN.backend.model.JobDescription;
 import DATN.backend.model.Recruiter;
 import DATN.backend.model.Role;
+import DATN.backend.repository.ApplicantJobDescriptionRepository;
+import DATN.backend.repository.ApplicantRepository;
+import DATN.backend.repository.CvRepository;
 import DATN.backend.repository.JobDescriptionRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.repository.RoleRepository;
@@ -27,31 +35,43 @@ import DATN.backend.repository.UserRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class BackendEndpointsIntegrationTests {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private final MockMvc mockMvc;
+    private final UserRepository userRepository;
+    private final ApplicantRepository applicantRepository;
+    private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
+    private final CvRepository cvRepository;
+    private final RecruiterRepository recruiterRepository;
+    private final RoleRepository roleRepository;
+    private final JobDescriptionRepository jobDescriptionRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private RecruiterRepository recruiterRepository;
-
-    @Autowired
-    private RoleRepository roleRepository;
-
-    @Autowired
-    private JobDescriptionRepository jobDescriptionRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
+            ApplicantRepository applicantRepository,
+            ApplicantJobDescriptionRepository applicantJobDescriptionRepository, CvRepository cvRepository,
+            RecruiterRepository recruiterRepository, RoleRepository roleRepository,
+            JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder) {
+        this.mockMvc = mockMvc;
+        this.userRepository = userRepository;
+        this.applicantRepository = applicantRepository;
+        this.applicantJobDescriptionRepository = applicantJobDescriptionRepository;
+        this.cvRepository = cvRepository;
+        this.recruiterRepository = recruiterRepository;
+        this.roleRepository = roleRepository;
+        this.jobDescriptionRepository = jobDescriptionRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     @BeforeEach
     void cleanDatabase() {
+        applicantJobDescriptionRepository.deleteAll();
         jobDescriptionRepository.deleteAll();
+        applicantRepository.deleteAll();
         recruiterRepository.deleteAll();
         userRepository.deleteAll();
+        cvRepository.deleteAll();
         roleRepository.deleteAll();
     }
 
@@ -79,6 +99,22 @@ class BackendEndpointsIntegrationTests {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.userName").value("applicant01"))
                 .andExpect(jsonPath("$.data.email").value("applicant@example.com"));
+    }
+
+    @Test
+    void applicantRegistrationValidationShouldReturnErrorsArray() throws Exception {
+        mockMvc.perform(post("/api/v1/registrations/applicant")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "email": "",
+                          "password": "",
+                          "userName": ""
+                        }
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     @Test
@@ -111,29 +147,192 @@ class BackendEndpointsIntegrationTests {
     }
 
     @Test
-    void browseJobsShouldListSeededJobs() throws Exception {
-        Role recruiterRole = roleRepository.save(new Role("RECRUITER", "Recruiter"));
+    void recruiterRegistrationShouldCreateRecruiter() throws Exception {
+        mockMvc.perform(post("/api/v1/registrations/recruiters")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "address": "Hanoi",
+                          "email": "recruiter-register@example.com",
+                          "password": "secret123",
+                          "phone": "+84909998888",
+                          "userName": "recruiterregister",
+                          "companyName": "Register Corp",
+                          "taxCode": "TAX-REGISTER",
+                          "establishedDate": "2020-01-01"
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.userName").value("recruiterregister"))
+                .andExpect(jsonPath("$.data.companyName").value("Register Corp"));
+    }
+
+    @Test
+    void applicantEndpointsShouldReadUpdateSaveJobAndUploadCv() throws Exception {
+        Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+        Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+        JobDescription job = seedJob(recruiter, "Backend Engineer");
+
+        mockMvc.perform(get("/api/v1/applicants"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].userName").value("applicant01"));
+
+        mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.email").value("applicant@example.com"));
+
+        mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "address": "Da Nang",
+                          "email": "updated-applicant@example.com",
+                          "phone": "+84901234567",
+                          "userName": "updatedapplicant",
+                          "fullName": "Updated Applicant",
+                          "gender": "Female",
+                          "status": "OpenToWork"
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userName").value("updatedapplicant"))
+                .andExpect(jsonPath("$.data.address").value("Da Nang"));
+
+        mockMvc.perform(post("/api/v1/applicants/save/job")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "applicantId": %d,
+                          "jobDescriptionId": %d
+                        }
+                        """.formatted(applicant.getId(), job.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.jobTitle").value("Backend Engineer"));
+
+        mockMvc.perform(get("/api/v1/applicants/saved-jobs").param("applicantId", applicant.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].jobDescriptionId").value(job.getId()));
+
+        mockMvc.perform(post("/api/v1/applicants/upload-cv/{applicantId}", applicant.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "fullName": "Updated Applicant",
+                          "address": "Da Nang",
+                          "phone": "+84901234567",
+                          "objective": "Build good software",
+                          "skills": "Java, Spring Boot"
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.fullName").value("Updated Applicant"));
+    }
+
+    @Test
+    void recruiterAndJobEndpointsShouldReadCreateAndUpdateJobs() throws Exception {
+        Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+        JobDescription existingJob = seedJob(recruiter, "Backend Engineer");
+
+        mockMvc.perform(get("/api/v1/recruiters"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].companyName").value("Example Corp"));
+
+        mockMvc.perform(get("/api/v1/recruiters/{recruiterId}", recruiter.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userName").value("recruiter01"));
+
+        mockMvc.perform(get("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
+
+        mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "jobTitle": "Frontend Engineer",
+                          "aboutCompany": "Product team",
+                          "jobDescription": "Build UI",
+                          "location": "Remote",
+                          "postedDate": "2026-05-16"
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.jobTitle").value("Frontend Engineer"));
+
+        mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(), existingJob.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "jobTitle": "Senior Backend Engineer",
+                          "aboutCompany": "Platform team",
+                          "jobDescription": "Build APIs",
+                          "location": "Hybrid",
+                          "postedDate": "2026-05-16"
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jobTitle").value("Senior Backend Engineer"))
+                .andExpect(jsonPath("$.data.location").value("Hybrid"));
+    }
+
+    @Test
+    void browseJobsEndpointsShouldListDetailAndApplicantCount() throws Exception {
+        Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+        Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+        JobDescription jobDescription = seedJob(recruiter, "Backend Engineer");
+        applicantJobDescriptionRepository.save(new ApplicantJobDescription(applicant, jobDescription));
+
+        mockMvc.perform(get("/api/v1/browse-jobs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
+
+        mockMvc.perform(get("/api/v1/browse-jobs/{jobId}", jobDescription.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(jobDescription.getId()));
+
+        mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", jobDescription.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicantCount").value(1));
+    }
+
+    private Applicant seedApplicant(String userName, String email) {
+        Role role = roleRepository.findByRoleName("APPLICANT")
+                .orElseGet(() -> roleRepository.save(new Role("APPLICANT", "Applicant")));
+        Applicant applicant = new Applicant();
+        applicant.setAddress("Hanoi");
+        applicant.setEmail(email);
+        applicant.setUserName(userName);
+        applicant.setPassword(passwordEncoder.encode("secret123"));
+        applicant.setPhone("+84901234567");
+        applicant.setFullName("Applicant One");
+        applicant.setGender(GenderEnum.Male);
+        applicant.setStatus(ApplicantStatusEnum.OpenToWork);
+        applicant.setRole(role);
+        return applicantRepository.save(applicant);
+    }
+
+    private Recruiter seedRecruiter(String userName, String email) {
+        Role role = roleRepository.findByRoleName("RECRUITER")
+                .orElseGet(() -> roleRepository.save(new Role("RECRUITER", "Recruiter")));
         Recruiter recruiter = new Recruiter();
         recruiter.setAddress("Hanoi");
-        recruiter.setEmail("recruiter@example.com");
-        recruiter.setUserName("recruiter01");
+        recruiter.setEmail(email);
+        recruiter.setUserName(userName);
         recruiter.setPassword(passwordEncoder.encode("secret123"));
         recruiter.setPhone("+84909998888");
         recruiter.setCompanyName("Example Corp");
         recruiter.setTaxCode("TAX-001");
         recruiter.setEstablishedDate("2020-01-01");
-        recruiter.setRole(recruiterRole);
-        recruiter = recruiterRepository.save(recruiter);
+        recruiter.setRole(role);
+        return recruiterRepository.save(recruiter);
+    }
 
+    private JobDescription seedJob(Recruiter recruiter, String jobTitle) {
         JobDescription jobDescription = new JobDescription();
-        jobDescription.setJobTitle("Backend Engineer");
+        jobDescription.setJobTitle(jobTitle);
         jobDescription.setLocation("Remote");
         jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));
         jobDescription.setRecruiter(recruiter);
-        jobDescriptionRepository.save(jobDescription);
-
-        mockMvc.perform(get("/api/v1/browse-jobs"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
+        return jobDescriptionRepository.save(jobDescription);
     }
 }

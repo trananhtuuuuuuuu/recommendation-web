@@ -13,7 +13,10 @@ import DATN.backend.response.cv.CvResponse;
 
 public class ApplicantMapper {
 
-    public RegistrationApplicantResponse toRegistrationResponse(Applicant applicant) {
+    private ApplicantMapper() {
+    }
+
+    public static RegistrationApplicantResponse toRegistrationResponse(Applicant applicant) {
         return new RegistrationApplicantResponse(
                 applicant.getUserName(),
                 applicant.getEmail(),
@@ -26,7 +29,7 @@ public class ApplicantMapper {
                 applicant.getCv() == null ? null : String.valueOf(applicant.getCv().getId()));
     }
 
-    public ApplicantResponse toApplicantResponse(Applicant applicant) {
+    public static ApplicantResponse toApplicantResponse(Applicant applicant) {
         return new ApplicantResponse(
                 applicant.getId(),
                 applicant.getUserName(),
@@ -39,7 +42,7 @@ public class ApplicantMapper {
                 applicant.getCv() == null ? null : applicant.getCv().getId());
     }
 
-    public Applicant toNewApplicant(RegistrationApplicantRequest request) {
+    public static Applicant toNewApplicant(RegistrationApplicantRequest request) {
         Applicant applicant = new Applicant();
         applicant.setAddress(request.getAddress());
         applicant.setEmail(request.getEmail());
@@ -55,7 +58,7 @@ public class ApplicantMapper {
         return applicant;
     }
 
-    public Applicant updateApplicant(Applicant applicant, UpdateApplicantRequest request) {
+    public static Applicant updateApplicant(Applicant applicant, UpdateApplicantRequest request) {
         applicant.setAddress(request.getAddress());
         applicant.setEmail(request.getEmail());
         applicant.setPhone(request.getPhone());
@@ -68,7 +71,7 @@ public class ApplicantMapper {
         return applicant;
     }
 
-    public Cv toCv(UploadCvRequest request) {
+    public static Cv toCv(UploadCvRequest request) {
         return new Cv(
                 request.getFullName(),
                 request.getAddress(),
@@ -80,7 +83,7 @@ public class ApplicantMapper {
                 request.getCertifications());
     }
 
-    public CvResponse toCvResponse(Cv cv) {
+    public static CvResponse toCvResponse(Cv cv) {
         return new CvResponse(
                 cv.getId(),
                 cv.getFullName(),

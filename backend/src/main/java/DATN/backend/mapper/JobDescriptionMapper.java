@@ -11,7 +11,10 @@ import DATN.backend.response.job.JobDescriptionResponse;
 
 public class JobDescriptionMapper {
 
-    public JobDescription toNewJobDescription(Recruiter recruiter, RecruiterJobRequest request) {
+    private JobDescriptionMapper() {
+    }
+
+    public static JobDescription toNewJobDescription(Recruiter recruiter, RecruiterJobRequest request) {
         JobDescription jobDescription = new JobDescription();
         jobDescription.setRecruiter(recruiter);
         jobDescription.setJobTitle(request.getJobTitle());
@@ -31,7 +34,7 @@ public class JobDescriptionMapper {
         return jobDescription;
     }
 
-    public JobDescription updateJobDescription(JobDescription jobDescription, RecruiterJobRequest request) {
+    public static JobDescription updateJobDescription(JobDescription jobDescription, RecruiterJobRequest request) {
         jobDescription.setJobTitle(request.getJobTitle());
         jobDescription.setAboutCompany(request.getAboutCompany());
         jobDescription.setJobDescription(request.getJobDescription());
@@ -49,7 +52,7 @@ public class JobDescriptionMapper {
         return jobDescription;
     }
 
-    public JobDescriptionResponse toResponse(JobDescription jobDescription) {
+    public static JobDescriptionResponse toResponse(JobDescription jobDescription) {
         return new JobDescriptionResponse(
                 jobDescription.getId(),
                 jobDescription.getJobTitle(),
@@ -71,11 +74,11 @@ public class JobDescriptionMapper {
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName());
     }
 
-    public JobApplicantsResponse toApplicantsResponse(Long jobId, Long count) {
+    public static JobApplicantsResponse toApplicantsResponse(Long jobId, Long count) {
         return new JobApplicantsResponse(jobId, count);
     }
 
-    private Date parseDate(String value) {
+    private static Date parseDate(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }

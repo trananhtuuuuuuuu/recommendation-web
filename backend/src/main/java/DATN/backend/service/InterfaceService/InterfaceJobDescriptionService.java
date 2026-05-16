@@ -1,19 +1,22 @@
 package DATN.backend.service.InterfaceService;
 
 import DATN.backend.request.recruiter.RecruiterJobRequest;
-import DATN.backend.response.ApiResponse;
+import DATN.backend.response.job.JobApplicantsResponse;
+import DATN.backend.response.job.JobDescriptionResponse;
+
+import java.util.List;
 
 public interface InterfaceJobDescriptionService {
 
-    ApiResponse getAllJobs();
+    List<JobDescriptionResponse> getAllJobs();
 
-    ApiResponse getJobById(Long jobId);
+    JobDescriptionResponse getJobById(Long jobId);
 
-    ApiResponse getJobApplicantsCount(Long jobId, Long recruiterId);
+    JobApplicantsResponse getJobApplicantsCount(Long jobId, Long recruiterId);
 
-    ApiResponse getJobsByRecruiter(Long recruiterId);
+    List<JobDescriptionResponse> getJobsByRecruiter(Long recruiterId);
 
-    ApiResponse createJob(Long recruiterId, RecruiterJobRequest request);
+    JobDescriptionResponse createJob(Long recruiterId, RecruiterJobRequest request);
 
-    ApiResponse updateJob(Long recruiterId, Long jobId, RecruiterJobRequest request);
+    JobDescriptionResponse updateJob(Long recruiterId, Long jobId, RecruiterJobRequest request);
 }
