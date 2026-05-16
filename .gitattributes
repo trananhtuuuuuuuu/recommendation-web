@@ -1,2 +1,23 @@
-/mvnw text eol=lf
+# Force LF line endings for shell scripts — prevents CRLF corruption on Windows clones
+# which causes "exit code 127 / command not found" inside Docker Linux containers.
+
+# Default: auto line-ending conversion
+* text=auto
+
+# Shell scripts MUST stay LF (Unix) — CRLF breaks the shebang inside Docker
+*.sh text eol=lf
+mvnw text eol=lf
+
+# Windows batch files keep CRLF
+*.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Binary files — no conversion
+*.jar binary
+*.png binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

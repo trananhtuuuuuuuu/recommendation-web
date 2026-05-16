@@ -8,8 +8,8 @@ COPY backend/pom.xml ./
 COPY backend/.mvn .mvn
 COPY backend/mvnw ./
 
-# Download dependencies (cached as long as pom.xml doesn't change)
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
+# Strip Windows CRLF line endings from mvnw if present (safety net for Windows clones)
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw dependency:go-offline -B
 
 # Copy source and build (skip tests – run them separately in CI)
 COPY backend/src ./src
