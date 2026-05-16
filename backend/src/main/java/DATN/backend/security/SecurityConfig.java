@@ -35,14 +35,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/v1/home",
+                                "/api/v1/auth",
                                 "/api/v1/auth/**",
+                                "/api/v1/registrations",
                                 "/api/v1/registrations/**",
-                                "/api/v1/browse-jobs/**",
+                                "/api/v1/browse-jobs", // exact match (no trailing path)
+                                "/api/v1/browse-jobs/**", // with sub-paths /{id}, /applicants/{id}
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html")
                         .permitAll()
-                        .anyRequest().authenticated())
+                        .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -50,11 +53,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        // Explicitly list allowed origins — wildcard "*" cannot be used with
+        // allowCredentials(true)
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000", // frontend (Docker / local dev)
+                "http://localhost:8080", // alternative local dev port
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:8080"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // cache preflight for 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

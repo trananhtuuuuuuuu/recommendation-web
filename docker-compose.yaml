@@ -1,35 +1,72 @@
 services:
-
+  #  db:
+  #   image: postgres:16
+  #   container_name: rw-db
+  #   restart: unless-stopped
+  #   networks:
+  #     - rw-network
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME:-rw-db}
+  #     POSTGRES_USER: ${DB_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+  #   # ports:
+  #   #   - "8386:5432"
+  #   volumes:
+  #     - pg_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-rw-db}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
   # ── Spring Boot Backend ──────────────────────────────────────────────────
-  # Connects to the already-running Postgres container (postgres-db on host port 8386).
-  # The backend container uses host.docker.internal to reach the host's port 8386.
+  # Connects to the EXTERNAL postgres-db container already running on host port 8386.
+  # host.docker.internal resolves to the host machine from inside Docker (Linux needs
+  # extra_hosts: host.docker.internal:host-gateway for this to work).
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: rw-backend
     restart: unless-stopped
+    networks:
+      - rw-network
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # lets containers reach host ports on Linux
+      - "host.docker.internal:host-gateway"
     environment:
+      SERVER_PORT: 8081
       SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:8386/${DB_NAME:-rw-db}
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-123456}
       SPRING_JPA_HIBERNATE_DDL_AUTO: none
-      SERVER_PORT: 8000
     ports:
-      - "8000:8000"
+      - "8000:8081"
 
-  # ── Frontend (uncomment when frontend/ directory exists) ─────────────────
-  # frontend:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.client
-  #   container_name: rw-frontend
-  #   restart: unless-stopped
-  #   environment:
-  #     VITE_API_URL: http://localhost:8000
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
+  # ── React / Vite Frontend ────────────────────────────────────────────────
+  # localhost:3000 (your machine) → :3001 (inside container, nginx)
+  # VITE_API_BASE_URL is baked at build time — must be the HOST port (8000)
+  # because it's the browser that calls the backend, not the container.
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: rw-frontend
+    restart: unless-stopped
+    networks:
+      - rw-network
+    ports:
+      - "3000:3001"
+    depends_on:
+      - backend
+
+# ── Shared Bridge Network ────────────────────────────────────────────────────
+# All three services join "rw-network" so they can reach each other
+# by container/service name (e.g. "db", "backend", "frontend") instead of IP.
+networks:
+  rw-network:
+    driver: bridge
+
+volumes:
+  pg_data:
+    driver: local

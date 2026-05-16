@@ -1,5 +1,5 @@
 # The overview about this project
-This repository contains the backend for the recommendation website. The backend is a Spring Boot application under the backend/ folder, exposing REST APIs (currently versioned under /api/v1). It uses layered architecture (controller -> service -> repository) with DTO/request/response models and a common ApiResponse envelope.
+This repository is a full-stack recommendation website. The backend is a Spring Boot application under the backend/ folder, exposing REST APIs (currently versioned under /api/v1). It uses layered architecture (controller -> service -> repository) with DTO/request/response models and a common ApiResponse envelope. The frontend is a React + TypeScript SPA under the frontend/ folder, built with Vite, TailwindCSS, and shadcn/ui component library, communicating with the backend over HTTP.
 
 # The architecture of project (describ for me me each forder and subfolders responsible for what?)
 - backend/
@@ -25,6 +25,68 @@ This repository contains the backend for the recommendation website. The backend
 		- static/, templates/: static assets and template files if needed.
 	- src/test/java/DATN/backend/: unit/integration tests for backend.
 	- target/: build output (generated classes and resources).
+
+- frontend/
+	- src/
+		- main.tsx: React application entry point (mounts App into the DOM).
+		- App.tsx: Root component — sets up React Router routes and top-level providers.
+		- App.css / index.css: Global styles and TailwindCSS base configuration.
+		- pages/: Full-page view components, one file per route. Key pages:
+			- Index.tsx: Landing / home page.
+			- Auth.tsx: Shared login page for all roles.
+			- ApplicantRegistration.tsx / RecruiterRegistration.tsx: Registration forms.
+			- Jobs.tsx: Browse all job listings.
+			- JobDetail.tsx: Detail view for a single job.
+			- JobApplicants.tsx: Recruiter view — applicants for a specific job.
+			- JobDescriptions.tsx / PostEditJob.tsx: Recruiter job management.
+			- Profile.tsx: Applicant profile view/edit.
+			- Applicants.tsx / ApplicantDetail.tsx: Admin applicant management.
+			- Recruiters.tsx / RecruiterDetail.tsx / RecruiterJobs.tsx: Recruiter management.
+			- SavedJobs.tsx: Applicant saved jobs list.
+			- Notifications.tsx: User notifications.
+			- ApplicantAuth.tsx / RecruiterAuth.tsx: Role-specific auth guard redirect pages.
+			- Forbidden.tsx / NotFound.tsx: Error pages.
+		- components/: Reusable components.
+			- Layout.tsx: Shared page layout (navbar, sidebar, footer wrapper).
+			- NavLink.tsx: Styled navigation link component.
+			- RouteGuard.tsx: Protects routes based on authentication/role from AuthContext.
+			- ui/: All shadcn/ui primitives (Button, Input, Dialog, Table, Select, etc.).
+		- contexts/
+			- AuthContext.tsx: Global auth state (current user, token, login/logout). Consumed via useContext across the app.
+		- hooks/
+			- use-toast.ts: Toast notification hook (wraps sonner).
+			- use-mobile.tsx: Hook to detect mobile viewport.
+		- lib/
+			- api.ts: Axios/fetch wrapper — base URL config, request interceptors, auth token injection.
+			- jobsApi.ts: API call functions specific to job-related endpoints.
+			- utils.ts: Shared utility helpers (e.g., cn() for class merging).
+		- test/: Frontend unit/integration tests (Vitest + Testing Library).
+	- public/: Static assets served as-is (favicon, images).
+	- index.html: HTML shell Vite injects the React bundle into.
+	- vite.config.ts: Vite build configuration (dev server, plugins).
+	- tailwind.config.ts: TailwindCSS theme configuration.
+	- components.json: shadcn/ui CLI configuration (component style and paths).
+	- playwright.config.ts: End-to-end test configuration (Playwright).
+	- tsconfig.json / tsconfig.app.json: TypeScript compiler settings.
+	- .env: Frontend environment variables (e.g., VITE_API_BASE_URL pointing to the backend).
+
+## Frontend Tech Stack
+- Framework: React 18 + TypeScript, bundled with Vite.
+- Routing: React Router DOM v6.
+- UI Components: shadcn/ui (Radix UI primitives + TailwindCSS).
+- Forms: React Hook Form + Zod validation.
+- Data Fetching: TanStack Query (React Query v5).
+- Animations: Framer Motion.
+- Testing: Vitest (unit) + Playwright (e2e).
+- Package manager: npm (also supports bun).
+
+## Frontend Development Instructions
+- All new pages go in src/pages/ and must be registered as a route in App.tsx.
+- All new reusable components go in src/components/. Use shadcn/ui primitives from src/components/ui/ rather than writing raw HTML.
+- All backend API calls must go through src/lib/api.ts (never call fetch/axios directly from pages).
+- Route protection (authenticated/role-based) is handled via RouteGuard.tsx — wrap new protected routes with it.
+- Auth state is read from AuthContext — never store tokens in component state.
+- Run the dev server with: cd frontend && npm run dev (starts on port 3000).
 
 # The follow at the backend side you should implement request -> controller and then controller catch request and validate and throw exception follow by "exception folder" and response follow ApiResponse class -> controller call to service and service mapper from Request to Entity and handle logic at there and call to Repository layer and then mapper again to Response to return for client via ApiResponse class (at service layer), the way set up the name for endpoint or class you should follow by everything already existed in my project.
 Implementation flow (follow existing naming and patterns):
