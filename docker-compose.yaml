@@ -1,0 +1,35 @@
+services:
+
+  # ── Spring Boot Backend ──────────────────────────────────────────────────
+  # Connects to the already-running Postgres container (postgres-db on host port 8386).
+  # The backend container uses host.docker.internal to reach the host's port 8386.
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rw-backend
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets containers reach host ports on Linux
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:8386/${DB_NAME:-rw-db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-123456}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SERVER_PORT: 8000
+    ports:
+      - "8000:8000"
+
+  # ── Frontend (uncomment when frontend/ directory exists) ─────────────────
+  # frontend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.client
+  #   container_name: rw-frontend
+  #   restart: unless-stopped
+  #   environment:
+  #     VITE_API_URL: http://localhost:8000
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend

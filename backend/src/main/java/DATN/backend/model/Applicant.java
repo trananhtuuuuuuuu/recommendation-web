@@ -24,11 +24,11 @@ import lombok.Setter;
 public class Applicant extends User {
 
     @Column(nullable = true)
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private ApplicantStatusEnum status;
 
     @Column(nullable = true)
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private GenderEnum gender;
 
     @Column(nullable = false)
