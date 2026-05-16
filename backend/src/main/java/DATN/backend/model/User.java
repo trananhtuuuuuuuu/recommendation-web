@@ -19,7 +19,6 @@ import jakarta.persistence.InheritanceType;
 @Entity
 @Table(name = "users")
 @Inheritance(strategy = InheritanceType.JOINED)
-@DiscriminatorColumn(name = "user_type")
 @Getter
 @Setter
 @AllArgsConstructor

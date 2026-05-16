@@ -5,6 +5,8 @@ import DATN.backend.Enum.GenderEnum;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -22,9 +24,11 @@ import lombok.Setter;
 public class Applicant extends User {
 
     @Column(nullable = true)
+    @Enumerated(EnumType.STRING)
     private ApplicantStatusEnum status;
 
     @Column(nullable = true)
+    @Enumerated(EnumType.STRING)
     private GenderEnum gender;
 
     @Column(nullable = false)
