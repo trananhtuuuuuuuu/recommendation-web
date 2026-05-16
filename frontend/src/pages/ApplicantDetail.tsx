@@ -1,92 +1,90 @@
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, Mail, Phone, MapPin, Shield, ArrowLeft, Edit, Briefcase, GraduationCap, Award } from "lucide-react";
+import { User, Mail, Phone, MapPin, Shield, ArrowLeft, Briefcase, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
-
-const mockApplicant = {
-  id: "1",
-  fullName: "Jane Smith",
-  email: "j***@email.com",
-  phone: "+1 ***-***-1234",
-  address: "Boston, MA",
-  status: "Active",
-  objective: "Privacy-aware engineer seeking impactful roles.",
-  skills: ["React", "Node.js", "Cryptography"],
-  experience: [{ title: "Engineer", company: "Acme", period: "2022 - Present" }],
-  education: [{ degree: "B.S. CS", school: "MIT", year: "2022" }],
-  certificates: ["CIPP"],
-};
+import { ApiError } from "@/lib/api";
+import { fetchApplicant, type Applicant } from "@/lib/jobsApi";
 
 export default function ApplicantDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [editMode, setEditMode] = useState(false);
+  const [applicant, setApplicant] = useState<Applicant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    setLoading(true);
+    fetchApplicant(id)
+      .then((data) => { if (active) setApplicant(data); })
+      .catch((e) => { if (active) setError(e instanceof ApiError ? e.message : "Failed to load applicant"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [id]);
+
+  if (loading) {
+    return <div className="text-center pt-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
+  }
+
+  if (error || !applicant) {
+    return (
+      <div className="max-w-lg mx-auto pt-16 text-center space-y-3">
+        <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+        <p className="text-sm text-foreground">{error ?? "Applicant not found"}</p>
+        <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1">
-          <ArrowLeft className="w-4 h-4" /> Back
-        </Button>
-        <Button size="sm" onClick={() => setEditMode(!editMode)} className="gap-1 bg-primary text-primary-foreground">
-          <Edit className="w-3.5 h-3.5" /> {editMode ? "Cancel" : "Edit Profile"}
-        </Button>
-      </div>
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </Button>
 
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-xl p-6">
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center"><User className="w-7 h-7 text-primary" /></div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="font-display text-xl font-bold text-foreground">{mockApplicant.fullName}</h2>
-              <Badge className="bg-primary/10 text-primary text-[10px]"><Shield className="w-3 h-3 mr-1" />ID: {id}</Badge>
+          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
+            <User className="w-7 h-7 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h2 className="font-display text-xl font-bold text-foreground">{applicant.fullName ?? applicant.userName ?? "Applicant"}</h2>
+              <Badge className="bg-primary/10 text-primary text-[10px]"><Shield className="w-3 h-3 mr-1" />ID: {applicant.id}</Badge>
+              {applicant.status && <Badge className="bg-success/10 text-success text-[10px]">{applicant.status}</Badge>}
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {mockApplicant.email}</span>
-              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {mockApplicant.phone}</span>
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {mockApplicant.address}</span>
+              {applicant.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {applicant.email}</span>}
+              {applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {applicant.phone}</span>}
+              {applicant.address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {applicant.address}</span>}
             </div>
           </div>
         </div>
       </motion.div>
 
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-2">Objective</h3>
-        <p className="text-sm text-muted-foreground">{mockApplicant.objective}</p>
-      </div>
-
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3">Skills</h3>
-        <div className="flex flex-wrap gap-2">
-          {mockApplicant.skills.map(s => <span key={s} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary">{s}</span>)}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="glass-card rounded-xl p-6">
+          <h3 className="font-display font-semibold text-foreground mb-3">Profile</h3>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>Username: <span className="text-foreground">{applicant.userName ?? "N/A"}</span></p>
+            <p>Gender: <span className="text-foreground">{applicant.gender ?? "N/A"}</span></p>
+            <p>Status: <span className="text-foreground">{applicant.status ?? "N/A"}</span></p>
+          </div>
         </div>
-      </div>
 
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2"><Briefcase className="w-4 h-4 text-primary" /> Experience</h3>
-        {mockApplicant.experience.map((e, i) => (
-          <div key={i} className="border-l-2 border-primary/30 pl-4">
-            <h4 className="font-medium text-sm">{e.title}</h4>
-            <p className="text-xs text-muted-foreground">{e.company} · {e.period}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2"><GraduationCap className="w-4 h-4 text-primary" /> Education</h3>
-        {mockApplicant.education.map((e, i) => (
-          <div key={i} className="border-l-2 border-primary/30 pl-4">
-            <h4 className="font-medium text-sm">{e.degree}</h4>
-            <p className="text-xs text-muted-foreground">{e.school} · {e.year}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-primary" /> Certificates</h3>
-        {mockApplicant.certificates.map((c, i) => <p key={i} className="text-sm text-muted-foreground">• {c}</p>)}
+        <div className="glass-card rounded-xl p-6">
+          <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-primary" /> CV
+          </h3>
+          {applicant.cvId ? (
+            <p className="text-sm text-muted-foreground">CV record ID: <span className="text-foreground">{applicant.cvId}</span></p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No CV uploaded yet.</p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -33,8 +33,8 @@ export default function JobDetail() {
       fetchJobApplicantCount(id)
         .then((res) => {
           if (!active) return;
-          const c = typeof res === "number" ? res : (res as any)?.count ?? null;
-          setApplicantsCount(c);
+          const normalized = typeof res === "number" ? res : (res as any)?.applicantCount ?? (res as any)?.count ?? null;
+          setApplicantsCount(normalized);
         })
         .catch(() => { /* non-fatal */ });
     }

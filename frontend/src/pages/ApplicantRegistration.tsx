@@ -46,11 +46,10 @@ export default function ApplicantRegistration() {
         email: form.email,
         phone: form.phone,
         address: form.address,
-        gender: form.gender,
+        gender: form.gender || null,
         password: form.password,
-        status: "ACTIVE",
+        status: "OpenToWork",
         roleName: "APPLICANT",
-        cvUrl: "",
       });
       toast.success("Account created. Please sign in.");
       navigate("/auth");
@@ -132,9 +131,8 @@ export default function ApplicantRegistration() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Select</option>
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
                 </select>
               </div>
             </div>

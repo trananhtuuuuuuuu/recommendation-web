@@ -3,14 +3,14 @@ import { motion } from "framer-motion";
 import { Bookmark, Briefcase, MapPin, Loader2, AlertCircle, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { fetchSavedJobs, getJobId, getJobTitle, type Job } from "@/lib/jobsApi";
+import { fetchSavedJobs, getJobId, type SavedJob } from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 
 export default function SavedJobs() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export default function SavedJobs() {
             <motion.div key={id || i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
               className="glass-card rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h3 className="font-display font-semibold text-foreground">{getJobTitle(job)}</h3>
+                <h3 className="font-display font-semibold text-foreground">{job.jobTitle ?? "Untitled"}</h3>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1">
                   {job.companyName && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> {job.companyName}</span>}
                   {job.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {job.location}</span>}

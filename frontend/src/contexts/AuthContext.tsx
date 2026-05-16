@@ -83,7 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (input: LoginInput): Promise<AuthUser> => {
-    const data = await apiRequest<{ token?: string; accessToken?: string; role?: string }>(
+    const data = await apiRequest<{
+      token?: string;
+      accessToken?: string;
+      role?: string;
+      roleName?: string;
+      userId?: string | number;
+      userName?: string;
+    }>(
       "/api/v1/auth",
       { method: "POST", body: input, auth: false }
     );
@@ -92,9 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(tk);
     const claims = decodeJwt(tk);
     const u: AuthUser = {
-      id: extractUserId(claims),
-      userName: input.userName,
-      role: extractRole(claims) ?? ((data?.role?.toUpperCase() as Role) || null),
+      id: data?.userId !== undefined ? String(data.userId) : extractUserId(claims),
+      userName: data?.userName ?? input.userName,
+      role: extractRole(claims) ?? (((data?.roleName ?? data?.role)?.toUpperCase() as Role) || null),
     };
     writeStoredUser(u);
     setTokenState(tk);

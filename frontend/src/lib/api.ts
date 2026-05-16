@@ -138,9 +138,21 @@ export function decodeJwt(token: string): JwtClaims | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
-    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const rawPayload = parts.length === 2 ? parts[0] : parts[1];
+    const payload = rawPayload.replace(/-/g, "+").replace(/_/g, "/");
     const padded = payload + "===".slice((payload.length + 3) % 4);
     const decoded = atob(padded);
+    if (decoded.includes("|")) {
+      const [userId, userName, email, roleName, , exp] = decoded.split("|");
+      return {
+        userId,
+        sub: userName,
+        role: roleName,
+        roles: roleName ? [roleName] : undefined,
+        exp: exp ? Number(exp) : undefined,
+        email,
+      } as JwtClaims & { email?: string };
+    }
     return JSON.parse(decoded) as JwtClaims;
   } catch {
     return null;

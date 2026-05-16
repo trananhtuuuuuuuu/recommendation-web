@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { uploadCv } from "@/lib/jobsApi";
+import { fetchApplicant, uploadCv, type Applicant } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 
 const profile = {
@@ -49,6 +49,7 @@ interface WorkEntry {
 
 export default function Profile() {
   const { user: authUser } = useAuth();
+  const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [privacyMode, setPrivacyMode] = useState(true);
   const [showCVForm, setShowCVForm] = useState(false);
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -70,6 +71,24 @@ export default function Profile() {
   const [workList, setWorkList] = useState<WorkEntry[]>([
     { companyName: "", role: "", time: "" },
   ]);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+    let active = true;
+    fetchApplicant(authUser.id)
+      .then((data) => {
+        if (!active) return;
+        setApplicant(data);
+        setFullName((current) => current || data.fullName || "");
+        setPhone((current) => current || data.phone || "");
+        setAddress((current) => current || data.address || "");
+        setGmail((current) => current || data.email || "");
+      })
+      .catch(() => {
+        /* Non-applicant roles can still view this page shell. */
+      });
+    return () => { active = false; };
+  }, [authUser?.id]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,16 +134,37 @@ export default function Profile() {
     }
     try {
       await uploadCv(authUser.id, {
-        fullName, dob, phone, address, github, gmail,
-        technicalSkill, certificates,
-        education: educationList, workExperience: workList,
-        cvFileName: cvFile?.name,
+        fullName,
+        phone,
+        address,
+        objective: [
+          dob ? `Date of birth: ${dob}` : "",
+          github ? `GitHub: ${github}` : "",
+          gmail ? `Email: ${gmail}` : "",
+        ].filter(Boolean).join("\n"),
+        skills: technicalSkill,
+        experience: workList
+          .filter((work) => work.companyName || work.role || work.time)
+          .map((work) => `${work.role || "Role"} at ${work.companyName || "Company"} (${work.time || "N/A"})`)
+          .join("\n"),
+        education: educationList
+          .filter((edu) => edu.schoolName || edu.major || edu.time)
+          .map((edu) => `${edu.major || "Major"} at ${edu.schoolName || "School"} (${edu.time || "N/A"})${edu.gpa ? `, GPA ${edu.gpa}` : ""}${edu.outstandingSubjects ? `, ${edu.outstandingSubjects}` : ""}`)
+          .join("\n"),
+        certifications: [certificates, cvFile?.name ? `Uploaded file: ${cvFile.name}` : ""].filter(Boolean).join("\n"),
       });
       toast.success("CV uploaded.");
       setShowCVForm(false);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Upload failed");
     }
+  };
+
+  const displayProfile = {
+    fullName: applicant?.fullName || profile.fullName,
+    email: applicant?.email || profile.email,
+    phone: applicant?.phone || profile.phone,
+    address: applicant?.address || profile.address,
   };
 
   return (
@@ -358,15 +398,15 @@ export default function Profile() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="font-display text-xl font-bold text-foreground">{profile.fullName}</h2>
+              <h2 className="font-display text-xl font-bold text-foreground">{displayProfile.fullName}</h2>
               <Badge className="bg-primary/10 text-primary text-[10px]">
                 <Shield className="w-3 h-3 mr-1" /> Verified
               </Badge>
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {privacyMode ? profile.email : "john.doe@email.com"}</span>
-              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {privacyMode ? profile.phone : "+1 555-123-4567"}</span>
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {profile.address}</span>
+              <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {privacyMode ? "Email hidden" : displayProfile.email}</span>
+              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {privacyMode ? "Phone hidden" : displayProfile.phone}</span>
+              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {displayProfile.address}</span>
             </div>
           </div>
         </div>
