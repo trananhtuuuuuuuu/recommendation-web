@@ -39,7 +39,8 @@ public class ApplicantMapper {
                 applicant.getAddress(),
                 applicant.getGender() == null ? null : applicant.getGender().name(),
                 applicant.getStatus() == null ? null : applicant.getStatus().name(),
-                applicant.getCv() == null ? null : applicant.getCv().getId());
+                applicant.getCv() == null ? null : applicant.getCv().getId(),
+                applicant.getCv() == null ? null : toCvResponse(applicant.getCv()));
     }
 
     public static Applicant toNewApplicant(RegistrationApplicantRequest request) {

@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api";
 import { fetchApplicant, type Applicant } from "@/lib/jobsApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ApplicantDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role, user } = useAuth();
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export default function ApplicantDetail() {
   if (loading) {
     return <div className="text-center pt-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
   }
+  const canSeeContact = role === "ADMIN" || (role === "APPLICANT" && String(user?.id) === String(applicant.id));
 
   if (error || !applicant) {
     return (
@@ -57,9 +60,10 @@ export default function ApplicantDetail() {
               {applicant.status && <Badge className="bg-success/10 text-success text-[10px]">{applicant.status}</Badge>}
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              {applicant.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {applicant.email}</span>}
-              {applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {applicant.phone}</span>}
-              {applicant.address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {applicant.address}</span>}
+              {canSeeContact && applicant.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {applicant.email}</span>}
+              {canSeeContact && applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {applicant.phone}</span>}
+              {canSeeContact && applicant.address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {applicant.address}</span>}
+              {!canSeeContact && <span className="text-xs">Contact details hidden until the applicant shares them.</span>}
             </div>
           </div>
         </div>
@@ -79,8 +83,12 @@ export default function ApplicantDetail() {
           <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
             <Briefcase className="w-4 h-4 text-primary" /> CV
           </h3>
-          {applicant.cvId ? (
-            <p className="text-sm text-muted-foreground">CV record ID: <span className="text-foreground">{applicant.cvId}</span></p>
+          {applicant.cv ? (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>Objective: <span className="text-foreground">{applicant.cv.objective || "N/A"}</span></p>
+              <p>Skills: <span className="text-foreground">{applicant.cv.skills || "N/A"}</span></p>
+              <p>Experience: <span className="text-foreground">{applicant.cv.experience || "N/A"}</span></p>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">No CV uploaded yet.</p>
           )}

@@ -13,6 +13,15 @@ public interface ApplicantJobDescriptionRepository extends JpaRepository<Applica
 
     List<ApplicantJobDescription> findByApplicant_Id(Long applicantId);
 
+    List<ApplicantJobDescription> findByApplicant_IdAndActionType(Long applicantId, String actionType);
+
+    List<ApplicantJobDescription> findByJobDescription_IdAndActionType(Long jobDescriptionId, String actionType);
+
+    long countByJobDescription_IdAndActionType(Long jobDescriptionId, String actionType);
+
     Optional<ApplicantJobDescription> findByApplicant_IdAndJobDescription_Id(Long applicantId, Long jobDescriptionId);
+
+    Optional<ApplicantJobDescription> findByApplicant_IdAndJobDescription_IdAndActionType(Long applicantId,
+            Long jobDescriptionId, String actionType);
 
 }

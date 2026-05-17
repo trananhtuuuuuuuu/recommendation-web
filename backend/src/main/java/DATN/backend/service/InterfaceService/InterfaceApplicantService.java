@@ -23,7 +23,11 @@ public interface InterfaceApplicantService {
 
     SavedJobResponse saveJob(SaveJobRequest request);
 
+    SavedJobResponse applyJob(SaveJobRequest request);
+
     List<SavedJobResponse> getSavedJobs(Long applicantId);
+
+    List<SavedJobResponse> getAppliedJobs(Long applicantId);
 
     CvResponse uploadCv(Long applicantId, UploadCvRequest request);
 

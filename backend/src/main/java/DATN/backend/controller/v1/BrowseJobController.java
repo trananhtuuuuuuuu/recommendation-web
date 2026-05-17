@@ -43,4 +43,11 @@ public class BrowseJobController {
         return ResponseEntity.ok(ApiResponse.success("Applicant count found", HttpStatus.OK,
                 jobDescriptionService.getJobApplicantsCount(jobId, null)));
     }
+
+    @Operation(summary = "Get applicants who applied for a job")
+    @GetMapping("/applicants/{jobId}/list")
+    public ResponseEntity<ApiResponse> getApplicants(@PathVariable Long jobId) {
+        return ResponseEntity.ok(ApiResponse.success("Job applicants found", HttpStatus.OK,
+                jobDescriptionService.getJobApplicants(jobId, null)));
+    }
 }

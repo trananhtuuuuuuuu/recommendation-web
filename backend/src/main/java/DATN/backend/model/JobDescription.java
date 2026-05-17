@@ -69,6 +69,9 @@ public class JobDescription extends BaseEntity {
     @Column(nullable = true)
     private Date endDate;
 
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String customApplicationFields;
+
     public JobDescription(String jobTitle, String aboutCompany, String jobDescription, String requirements,
             String benefits, String location, String salaryRange, String jobType, String experienceLevel,
             String industry, Date postedDate, Date applicationDeadline, Date startDate, Date endDate) {

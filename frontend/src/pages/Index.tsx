@@ -2,13 +2,8 @@ import { Shield, Lock, Eye, Users, Briefcase, ArrowRight, CheckCircle } from "lu
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-
-const stats = [
-  { label: "Jobs Posted", value: "2,450+", icon: Briefcase },
-  { label: "Privacy Protected", value: "99.9%", icon: Shield },
-  { label: "Active Users", value: "18K+", icon: Users },
-  { label: "Data Encrypted", value: "100%", icon: Lock },
-];
+import { useEffect, useMemo, useState } from "react";
+import { fetchHome } from "@/lib/jobsApi";
 
 const features = [
   {
@@ -44,6 +39,21 @@ const item = {
 };
 
 export default function Index() {
+  const [homeData, setHomeData] = useState<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchHome().then((data) => { if (active) setHomeData(data); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const stats = useMemo(() => [
+    { label: "Jobs Posted", value: String(homeData?.jobsPosted ?? 0), icon: Briefcase },
+    { label: "Recruiters", value: String(homeData?.recruiters ?? 0), icon: Shield },
+    { label: "Active Applicants", value: String(homeData?.activeApplicants ?? 0), icon: Users },
+    { label: "Data Encrypted", value: "100%", icon: Lock },
+  ], [homeData]);
+
   return (
     <div className="space-y-16">
       {/* Hero */}

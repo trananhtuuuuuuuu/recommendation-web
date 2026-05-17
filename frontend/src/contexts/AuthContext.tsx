@@ -35,7 +35,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function readStoredUser(): AuthUser | null {
   try {
-    const raw = sessionStorage.getItem(USER_STORAGE_KEY);
+    const raw = localStorage.getItem(USER_STORAGE_KEY) ?? sessionStorage.getItem(USER_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
@@ -44,8 +44,13 @@ function readStoredUser(): AuthUser | null {
 
 function writeStoredUser(user: AuthUser | null) {
   try {
-    if (user) sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-    else sessionStorage.removeItem(USER_STORAGE_KEY);
+    if (user) {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    }
   } catch {
     /* ignore */
   }

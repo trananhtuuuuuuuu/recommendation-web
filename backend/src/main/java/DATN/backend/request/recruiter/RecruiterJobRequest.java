@@ -28,4 +28,5 @@ public class RecruiterJobRequest {
     private String applicationDeadline;
     private String startDate;
     private String endDate;
+    private String customApplicationFields;
 }

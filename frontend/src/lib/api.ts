@@ -31,7 +31,7 @@ export class ApiError extends Error {
 
 export function getToken(): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    return localStorage.getItem(TOKEN_STORAGE_KEY) ?? sessionStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
     return null;
   }
@@ -39,8 +39,13 @@ export function getToken(): string | null {
 
 export function setToken(token: string | null) {
   try {
-    if (token) sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
-    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
   } catch {
     /* ignore */
   }
@@ -103,6 +108,7 @@ export async function apiRequest<T = unknown>(
     if (res.status === 401) {
       setToken(null);
       try {
+        localStorage.removeItem(USER_STORAGE_KEY);
         sessionStorage.removeItem(USER_STORAGE_KEY);
       } catch {
         /* ignore */

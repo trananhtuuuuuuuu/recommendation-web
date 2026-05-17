@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ResourcesNotFoundException;
+import DATN.backend.mapper.ApplicantMapper;
 import DATN.backend.mapper.JobDescriptionMapper;
 //import DATN.backend.model.ApplicantJobDescription;
 import DATN.backend.model.JobDescription;
@@ -16,6 +17,7 @@ import DATN.backend.repository.JobDescriptionRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.job.JobApplicantsResponse;
+import DATN.backend.response.job.JobApplicantResponse;
 import DATN.backend.response.job.JobDescriptionResponse;
 import DATN.backend.service.InterfaceService.InterfaceJobDescriptionService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ImplJobDescriptionService implements InterfaceJobDescriptionService {
+
+        private static final String APPLIED_ACTION = "APPLIED";
 
         private final JobDescriptionRepository jobDescriptionRepository;
         private final RecruiterRepository recruiterRepository;
@@ -50,11 +54,29 @@ public class ImplJobDescriptionService implements InterfaceJobDescriptionService
                                 || !jobDescription.getRecruiter().getId().equals(recruiterId))) {
                         throw new AlreadyExistException("Only posting recruiter can access this resource");
                 }
-                Long count = applicantJobDescriptionRepository.findAll().stream()
-                                .filter(relation -> relation.getJobDescription() != null
-                                                && relation.getJobDescription().getId().equals(jobId))
-                                .count();
+                Long count = applicantJobDescriptionRepository.countByJobDescription_IdAndActionType(jobId,
+                                APPLIED_ACTION);
                 return JobDescriptionMapper.toApplicantsResponse(jobId, count);
+        }
+
+        @Override
+        public List<JobApplicantResponse> getJobApplicants(Long jobId, Long recruiterId) {
+                JobDescription jobDescription = jobDescriptionRepository.findById(jobId)
+                                .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
+                if (recruiterId != null && (jobDescription.getRecruiter() == null
+                                || !jobDescription.getRecruiter().getId().equals(recruiterId))) {
+                        throw new AlreadyExistException("Only posting recruiter can access this resource");
+                }
+                return applicantJobDescriptionRepository.findByJobDescription_IdAndActionType(jobId, APPLIED_ACTION)
+                                .stream()
+                                .map(relation -> new JobApplicantResponse(
+                                                relation.getId(),
+                                                jobId,
+                                                ApplicantMapper.toApplicantResponse(relation.getApplicant()),
+                                                relation.getCoverLetter(),
+                                                relation.getPortfolioUrl(),
+                                                relation.getApplicationAnswers()))
+                                .toList();
         }
 
         @Override

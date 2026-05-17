@@ -14,7 +14,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: "/jobs", label: "Browse Jobs", icon: Briefcase },
   ];
   if (role === "APPLICANT") {
-    navItems.push({ to: "/applicants/saved-jobs", label: "Saved Jobs", icon: Bookmark });
+    navItems.push({ to: "/applicants/saved-jobs", label: "My Jobs", icon: Bookmark });
   }
   if (role === "RECRUITER") {
     navItems.push({ to: "/recruiters/jobs", label: "My Jobs", icon: FilePlus });
@@ -120,7 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="p-4 lg:p-8">{children}</main>
+      <main className="p-4 lg:p-8 min-h-[calc(100vh-3.5rem)]">{children}</main>
     </div>
   );
 }

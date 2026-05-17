@@ -27,4 +27,5 @@ public class JobDescriptionResponse {
     private String endDate;
     private Long recruiterId;
     private String recruiterName;
+    private String customApplicationFields;
 }

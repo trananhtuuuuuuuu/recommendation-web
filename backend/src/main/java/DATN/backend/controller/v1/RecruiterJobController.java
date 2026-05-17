@@ -50,4 +50,11 @@ public class RecruiterJobController {
         return ResponseEntity.ok(ApiResponse.success("Job updated successfully", HttpStatus.OK,
                 jobDescriptionService.updateJob(recruiterId, jobId, request)));
     }
+
+    @Operation(summary = "Get applied applicants for a recruiter job")
+    @GetMapping("/{recruiterId}/{jobId}/applicants")
+    public ResponseEntity<ApiResponse> getAppliedApplicants(@PathVariable Long recruiterId, @PathVariable Long jobId) {
+        return ResponseEntity.ok(ApiResponse.success("Job applicants found", HttpStatus.OK,
+                jobDescriptionService.getJobApplicants(jobId, recruiterId)));
+    }
 }

@@ -60,7 +60,7 @@ const App = () => (
                 <RouteGuard roles={["APPLICANT"]}><SavedJobs /></RouteGuard>
               } />
               <Route path="/applicants/:id" element={
-                <RouteGuard roles={["APPLICANT", "ADMIN"]}><ApplicantDetail /></RouteGuard>
+                <RouteGuard roles={["APPLICANT", "RECRUITER", "ADMIN"]}><ApplicantDetail /></RouteGuard>
               } />
 
               {/* Recruiter-only */}
@@ -77,7 +77,7 @@ const App = () => (
                 <RouteGuard roles={["RECRUITER", "ADMIN"]}><JobApplicants /></RouteGuard>
               } />
               <Route path="/recruiters/:id" element={
-                <RouteGuard roles={["RECRUITER", "ADMIN"]}><RecruiterDetail /></RouteGuard>
+                <RouteGuard roles={["APPLICANT", "RECRUITER", "ADMIN"]}><RecruiterDetail /></RouteGuard>
               } />
 
               {/* Admin-only */}

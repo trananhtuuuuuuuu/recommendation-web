@@ -203,6 +203,20 @@ class BackendEndpointsIntegrationTests {
                 .content("""
                         {
                           "applicantId": %d,
+                          "jobDescriptionId": %d,
+                          "coverLetter": "I can help this team",
+                          "portfolioUrl": "https://portfolio.example.com",
+                          "applicationAnswers": "{\\"years_in_role\\":\\"3\\",\\"english_level\\":\\"Advanced\\"}"
+                        }
+                        """.formatted(applicant.getId(), job.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.jobTitle").value("Backend Engineer"));
+
+        mockMvc.perform(post("/api/v1/applicants/apply/job")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "applicantId": %d,
                           "jobDescriptionId": %d
                         }
                         """.formatted(applicant.getId(), job.getId())))
@@ -210,6 +224,10 @@ class BackendEndpointsIntegrationTests {
                 .andExpect(jsonPath("$.data.jobTitle").value("Backend Engineer"));
 
         mockMvc.perform(get("/api/v1/applicants/saved-jobs").param("applicantId", applicant.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].jobDescriptionId").value(job.getId()));
+
+        mockMvc.perform(get("/api/v1/applicants/applied-jobs").param("applicantId", applicant.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].jobDescriptionId").value(job.getId()));
 
@@ -240,6 +258,24 @@ class BackendEndpointsIntegrationTests {
         mockMvc.perform(get("/api/v1/recruiters/{recruiterId}", recruiter.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.userName").value("recruiter01"));
+
+        mockMvc.perform(put("/api/v1/recruiters/{recruiterId}", recruiter.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "address": "Ho Chi Minh City",
+                          "email": "updated-recruiter@example.com",
+                          "phone": "+84909998888",
+                          "userName": "updatedrecruiter",
+                          "companyName": "Updated Corp",
+                          "taxCode": "TAX-UPDATED",
+                          "establishedDate": "2020-01-01",
+                          "companyDescription": "General Java and React requirements"
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.companyName").value("Updated Corp"))
+                .andExpect(jsonPath("$.data.companyDescription").value("General Java and React requirements"));
 
         mockMvc.perform(get("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId()))
                 .andExpect(status().isOk())
@@ -280,7 +316,9 @@ class BackendEndpointsIntegrationTests {
         Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
         Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
         JobDescription jobDescription = seedJob(recruiter, "Backend Engineer");
-        applicantJobDescriptionRepository.save(new ApplicantJobDescription(applicant, jobDescription));
+        ApplicantJobDescription application = new ApplicantJobDescription(applicant, jobDescription);
+        application.setApplicationAnswers("{\"years_in_role\":\"3\"}");
+        applicantJobDescriptionRepository.save(application);
 
         mockMvc.perform(get("/api/v1/browse-jobs"))
                 .andExpect(status().isOk())
@@ -293,6 +331,11 @@ class BackendEndpointsIntegrationTests {
         mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", jobDescription.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.applicantCount").value(1));
+
+        mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].applicant.userName").value("applicant01"))
+                .andExpect(jsonPath("$.data[0].applicationAnswers").exists());
     }
 
     private Applicant seedApplicant(String userName, String email) {

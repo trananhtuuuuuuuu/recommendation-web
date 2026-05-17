@@ -1,484 +1,590 @@
-import { User, Mail, Phone, MapPin, Shield, Lock, Briefcase, GraduationCap, Award, Edit, Eye, EyeOff, Upload, Plus, Trash2, Github } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Award,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  GraduationCap,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  Save,
+  Trash2,
+  User,
+  X,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  fetchApplicant,
+  fetchRecruiter,
+  updateApplicant,
+  updateRecruiter,
+  uploadCv,
+  type Applicant,
+  type Recruiter,
+} from "@/lib/jobsApi";
+import { ApiError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
-import { fetchApplicant, uploadCv, type Applicant } from "@/lib/jobsApi";
-import { ApiError } from "@/lib/api";
 
-const profile = {
-  fullName: "John Doe",
-  email: "j***@email.com",
-  phone: "+1 ***-***-4567",
-  address: "San Francisco, CA",
-  objective: "Experienced software engineer passionate about privacy-preserving technologies. Seeking opportunities to build secure, user-centric applications.",
-  skills: ["React", "TypeScript", "Node.js", "Python", "Cryptography", "Privacy Engineering", "Docker", "PostgreSQL"],
-  experience: [
-    { title: "Senior Developer", company: "TechCorp", period: "2021 - Present", desc: "Led privacy-first frontend architecture for 3 products." },
-    { title: "Full Stack Developer", company: "StartupXYZ", period: "2019 - 2021", desc: "Built secure APIs and microservices handling 1M+ requests/day." },
-  ],
-  education: [
-    { degree: "M.S. Computer Science", school: "Stanford University", year: "2019" },
-    { degree: "B.S. Software Engineering", school: "UC Berkeley", year: "2017" },
-  ],
-  certificates: [
-    "Certified Information Privacy Professional (CIPP)",
-    "AWS Solutions Architect",
-    "Google Cloud Professional",
-  ],
+type TextListField = "skills" | "experience" | "education" | "certifications";
+
+const emptyApplicantForm = {
+  userName: "",
+  email: "",
+  phone: "",
+  address: "",
+  fullName: "",
+  gender: "",
+  status: "",
 };
 
-interface EducationEntry {
-  schoolName: string;
-  time: string;
-  major: string;
-  gpa: string;
-  outstandingSubjects: string;
-}
+const emptyRecruiterForm = {
+  userName: "",
+  email: "",
+  phone: "",
+  address: "",
+  companyName: "",
+  companyDescription: "",
+  companyLocation: "",
+  companySize: "",
+  industry: "",
+  website: "",
+  logoUrl: "",
+  contactEmail: "",
+  contactPhone: "",
+  taxCode: "",
+  businessLicense: "",
+  establishedDate: "",
+  companyType: "",
+};
 
-interface WorkEntry {
-  companyName: string;
-  role: string;
-  time: string;
-}
+const emptyCvForm = {
+  fullName: "",
+  address: "",
+  phone: "",
+  objective: "",
+  skills: [""],
+  experience: [""],
+  education: [""],
+  certifications: [""],
+};
 
 export default function Profile() {
-  const { user: authUser } = useAuth();
+  const { user: authUser, role } = useAuth();
   const [applicant, setApplicant] = useState<Applicant | null>(null);
-  const [privacyMode, setPrivacyMode] = useState(true);
-  const [showCVForm, setShowCVForm] = useState(false);
-  const [cvFile, setCvFile] = useState<File | null>(null);
-
-  // CV form fields
-  const [fullName, setFullName] = useState("");
-  const [dob, setDob] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [github, setGithub] = useState("");
-  const [gmail, setGmail] = useState("");
-  const [technicalSkill, setTechnicalSkill] = useState("");
-  const [certificates, setCertificates] = useState("");
-
-  const [educationList, setEducationList] = useState<EducationEntry[]>([
-    { schoolName: "", time: "", major: "", gpa: "", outstandingSubjects: "" },
-  ]);
-
-  const [workList, setWorkList] = useState<WorkEntry[]>([
-    { companyName: "", role: "", time: "" },
-  ]);
+  const [recruiter, setRecruiter] = useState<Recruiter | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [applicantForm, setApplicantForm] = useState(emptyApplicantForm);
+  const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
+  const [cvForm, setCvForm] = useState(emptyCvForm);
 
   useEffect(() => {
     if (!authUser?.id) return;
     let active = true;
-    fetchApplicant(authUser.id)
+    setLoading(true);
+    const request = role === "RECRUITER" ? fetchRecruiter(authUser.id) : fetchApplicant(authUser.id);
+
+    request
       .then((data) => {
         if (!active) return;
-        setApplicant(data);
-        setFullName((current) => current || data.fullName || "");
-        setPhone((current) => current || data.phone || "");
-        setAddress((current) => current || data.address || "");
-        setGmail((current) => current || data.email || "");
+        if (role === "RECRUITER") {
+          const next = data as Recruiter;
+          setRecruiter(next);
+          setRecruiterForm({
+            userName: next.userName || authUser.userName || "",
+            email: next.email || "",
+            phone: next.phone || "",
+            address: next.address || "",
+            companyName: next.companyName || "",
+            companyDescription: next.companyDescription || "",
+            companyLocation: next.companyLocation || "",
+            companySize: next.companySize || "",
+            industry: next.industry || "",
+            website: next.website || "",
+            logoUrl: next.logoUrl || "",
+            contactEmail: next.contactEmail || "",
+            contactPhone: next.contactPhone || "",
+            taxCode: next.taxCode || "",
+            businessLicense: next.businessLicense || "",
+            establishedDate: next.establishedDate || "",
+            companyType: next.companyType || "",
+          });
+        } else {
+          const next = data as Applicant;
+          setApplicant(next);
+          setApplicantForm({
+            userName: next.userName || authUser.userName || "",
+            email: next.email || "",
+            phone: next.phone || "",
+            address: next.address || "",
+            fullName: next.fullName || "",
+            gender: next.gender || "",
+            status: next.status || "",
+          });
+          setCvForm({
+            fullName: next.cv?.fullName || next.fullName || "",
+            address: next.cv?.address || next.address || "",
+            phone: next.cv?.phone || next.phone || "",
+            objective: next.cv?.objective || "",
+            skills: toList(next.cv?.skills),
+            experience: toList(next.cv?.experience),
+            education: toList(next.cv?.education),
+            certifications: toList(next.cv?.certifications),
+          });
+        }
       })
-      .catch(() => {
-        /* Non-applicant roles can still view this page shell. */
+      .catch((error) => {
+        toast.error(error instanceof ApiError ? error.message : "Unable to load profile");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-    return () => { active = false; };
-  }, [authUser?.id]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setCvFile(file);
-  };
+    return () => {
+      active = false;
+    };
+  }, [authUser?.id, authUser?.userName, role]);
 
-  const addEducation = () => {
-    setEducationList([...educationList, { schoolName: "", time: "", major: "", gpa: "", outstandingSubjects: "" }]);
-  };
+  const applicantHighlights = useMemo(() => {
+    const cv = applicant?.cv;
+    return [
+      { label: "Skills", value: toList(cv?.skills).filter(Boolean).length },
+      { label: "Experience", value: toList(cv?.experience).filter(Boolean).length },
+      { label: "Education", value: toList(cv?.education).filter(Boolean).length },
+      { label: "Certificates", value: toList(cv?.certifications).filter(Boolean).length },
+    ];
+  }, [applicant]);
 
-  const removeEducation = (index: number) => {
-    if (educationList.length > 1) {
-      setEducationList(educationList.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateEducation = (index: number, field: keyof EducationEntry, value: string) => {
-    const updated = [...educationList];
-    updated[index][field] = value;
-    setEducationList(updated);
-  };
-
-  const addWork = () => {
-    setWorkList([...workList, { companyName: "", role: "", time: "" }]);
-  };
-
-  const removeWork = (index: number) => {
-    if (workList.length > 1) {
-      setWorkList(workList.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateWork = (index: number, field: keyof WorkEntry, value: string) => {
-    const updated = [...workList];
-    updated[index][field] = value;
-    setWorkList(updated);
-  };
-
-  const handleSubmitCV = async () => {
-    if (!authUser?.id) {
-      toast.error("Please sign in as an applicant to upload your CV.");
-      return;
-    }
+  const handleSave = async () => {
+    if (!authUser?.id) return;
+    setSaving(true);
     try {
-      await uploadCv(authUser.id, {
-        fullName,
-        phone,
-        address,
-        objective: [
-          dob ? `Date of birth: ${dob}` : "",
-          github ? `GitHub: ${github}` : "",
-          gmail ? `Email: ${gmail}` : "",
-        ].filter(Boolean).join("\n"),
-        skills: technicalSkill,
-        experience: workList
-          .filter((work) => work.companyName || work.role || work.time)
-          .map((work) => `${work.role || "Role"} at ${work.companyName || "Company"} (${work.time || "N/A"})`)
-          .join("\n"),
-        education: educationList
-          .filter((edu) => edu.schoolName || edu.major || edu.time)
-          .map((edu) => `${edu.major || "Major"} at ${edu.schoolName || "School"} (${edu.time || "N/A"})${edu.gpa ? `, GPA ${edu.gpa}` : ""}${edu.outstandingSubjects ? `, ${edu.outstandingSubjects}` : ""}`)
-          .join("\n"),
-        certifications: [certificates, cvFile?.name ? `Uploaded file: ${cvFile.name}` : ""].filter(Boolean).join("\n"),
-      });
-      toast.success("CV uploaded.");
-      setShowCVForm(false);
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Upload failed");
+      if (role === "RECRUITER") {
+        const updated = await updateRecruiter(authUser.id, recruiterForm);
+        setRecruiter(updated);
+      } else {
+        const updated = await updateApplicant(authUser.id, applicantForm);
+        await uploadCv(authUser.id, {
+          fullName: cvForm.fullName || applicantForm.fullName,
+          address: cvForm.address || applicantForm.address,
+          phone: cvForm.phone || applicantForm.phone,
+          objective: cvForm.objective,
+          skills: fromList(cvForm.skills),
+          experience: fromList(cvForm.experience),
+          education: fromList(cvForm.education),
+          certifications: fromList(cvForm.certifications),
+        });
+        const refreshed = await fetchApplicant(authUser.id);
+        setApplicant(refreshed || updated);
+      }
+      setEditing(false);
+      toast.success("Profile updated.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Unable to save profile");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const displayProfile = {
-    fullName: applicant?.fullName || profile.fullName,
-    email: applicant?.email || profile.email,
-    phone: applicant?.phone || profile.phone,
-    address: applicant?.address || profile.address,
-  };
+  if (loading) {
+    return (
+      <div className="min-h-[55vh] flex items-center justify-center text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    );
+  }
+
+  if (role === "RECRUITER") {
+    return (
+      <ProfileShell
+        title={recruiter?.companyName || "Recruiter Profile"}
+        subtitle={recruiter?.industry || "Company profile and hiring requirements"}
+        icon={<Building2 className="w-7 h-7 text-primary" />}
+        editing={editing}
+        saving={saving}
+        onEdit={() => setEditing(true)}
+        onCancel={() => setEditing(false)}
+        onSave={handleSave}
+      >
+        {editing ? (
+          <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
+        ) : (
+          <RecruiterView recruiter={recruiter} />
+        )}
+      </ProfileShell>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">My Profile / CV</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your privacy-protected profile</p>
+    <ProfileShell
+      title={applicant?.fullName || "Applicant Profile"}
+      subtitle={applicant?.status || "Applicant career profile"}
+      icon={<User className="w-7 h-7 text-primary" />}
+      editing={editing}
+      saving={saving}
+      onEdit={() => setEditing(true)}
+      onCancel={() => setEditing(false)}
+      onSave={handleSave}
+    >
+      {editing ? (
+        <ApplicantEditForm
+          applicantForm={applicantForm}
+          setApplicantForm={setApplicantForm}
+          cvForm={cvForm}
+          setCvForm={setCvForm}
+        />
+      ) : (
+        <ApplicantView applicant={applicant} highlights={applicantHighlights} />
+      )}
+    </ProfileShell>
+  );
+}
+
+function ProfileShell({
+  title,
+  subtitle,
+  icon,
+  editing,
+  saving,
+  onEdit,
+  onCancel,
+  onSave,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  editing: boolean;
+  saving: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+            {icon}
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold text-foreground">{title}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setShowCVForm(true)}
-          >
-            <Upload className="w-4 h-4" /> Upload CV
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setPrivacyMode(!privacyMode)}
-          >
-            {privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            {privacyMode ? "Privacy On" : "Privacy Off"}
-          </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
-            <Edit className="w-4 h-4" /> Edit
-          </Button>
+        <div className="flex gap-2">
+          {editing ? (
+            <>
+              <Button variant="outline" onClick={onCancel} className="gap-2">
+                <X className="w-4 h-4" /> Cancel
+              </Button>
+              <Button onClick={onSave} disabled={saving} className="gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save
+              </Button>
+            </>
+          ) : (
+            <Button onClick={onEdit} className="gap-2">
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
+          )}
         </div>
       </div>
-
-      {/* Upload CV Form Modal */}
-      <AnimatePresence>
-        {showCVForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-foreground/50 z-50 flex items-start justify-center pt-8 px-4 overflow-y-auto"
-            onClick={(e) => e.target === e.currentTarget && setShowCVForm(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.97 }}
-              className="glass-card rounded-xl p-6 w-full max-w-2xl mb-8"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="font-display text-xl font-bold text-foreground">Upload Your CV</h2>
-                <Button variant="ghost" size="icon" onClick={() => setShowCVForm(false)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* File Upload Area */}
-              <div className="mb-6">
-                <label
-                  htmlFor="cv-upload"
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-primary/30 rounded-xl cursor-pointer hover:border-primary/60 transition-colors bg-primary/5"
-                >
-                  <Upload className="w-8 h-8 text-primary mb-2" />
-                  <span className="text-sm text-muted-foreground">
-                    {cvFile ? cvFile.name : "Click to upload your CV (PDF, DOCX)"}
-                  </span>
-                  <input
-                    id="cv-upload"
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </label>
-              </div>
-
-              {/* Form Fields */}
-              <div className="space-y-5">
-                {/* Personal Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input id="fullName" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="dob">Date of Birth</Label>
-                    <Input id="dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" placeholder="+1 555-123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" placeholder="San Francisco, CA" value={address} onChange={(e) => setAddress(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="github" className="flex items-center gap-1.5">
-                      <Github className="w-3.5 h-3.5" /> GitHub Repo
-                    </Label>
-                    <Input id="github" placeholder="https://github.com/username" value={github} onChange={(e) => setGithub(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="gmail" className="flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5" /> Gmail
-                    </Label>
-                    <Input id="gmail" type="email" placeholder="you@gmail.com" value={gmail} onChange={(e) => setGmail(e.target.value)} />
-                  </div>
-                </div>
-
-                {/* Education */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5">
-                      <GraduationCap className="w-4 h-4 text-primary" /> Education
-                    </Label>
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs text-primary" onClick={addEducation}>
-                      <Plus className="w-3 h-3" /> Add
-                    </Button>
-                  </div>
-                  <div className="space-y-4">
-                    {educationList.map((edu, i) => (
-                      <div key={i} className="border border-border rounded-lg p-4 space-y-3 relative">
-                        {educationList.length > 1 && (
-                          <button
-                            onClick={() => removeEducation(i)}
-                            className="absolute top-3 right-3 text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs">School Name</Label>
-                            <Input placeholder="Stanford University" value={edu.schoolName} onChange={(e) => updateEducation(i, "schoolName", e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Time Period</Label>
-                            <Input placeholder="2017 - 2019" value={edu.time} onChange={(e) => updateEducation(i, "time", e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Major</Label>
-                            <Input placeholder="Computer Science" value={edu.major} onChange={(e) => updateEducation(i, "major", e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">GPA</Label>
-                            <Input placeholder="3.8/4.0" value={edu.gpa} onChange={(e) => updateEducation(i, "gpa", e.target.value)} />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Outstanding Subjects</Label>
-                          <Input placeholder="Data Structures (A+), Algorithms (A), Machine Learning (A+)" value={edu.outstandingSubjects} onChange={(e) => updateEducation(i, "outstandingSubjects", e.target.value)} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Technical Skills */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="skills">Technical Skills</Label>
-                  <Textarea id="skills" placeholder="React, TypeScript, Node.js, Python, Docker..." value={technicalSkill} onChange={(e) => setTechnicalSkill(e.target.value)} />
-                </div>
-
-                {/* Work Experience */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5">
-                      <Briefcase className="w-4 h-4 text-primary" /> Work Experience
-                    </Label>
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs text-primary" onClick={addWork}>
-                      <Plus className="w-3 h-3" /> Add
-                    </Button>
-                  </div>
-                  <div className="space-y-4">
-                    {workList.map((work, i) => (
-                      <div key={i} className="border border-border rounded-lg p-4 space-y-3 relative">
-                        {workList.length > 1 && (
-                          <button
-                            onClick={() => removeWork(i)}
-                            className="absolute top-3 right-3 text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs">Company Name</Label>
-                            <Input placeholder="TechCorp" value={work.companyName} onChange={(e) => updateWork(i, "companyName", e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Role</Label>
-                            <Input placeholder="Senior Developer" value={work.role} onChange={(e) => updateWork(i, "role", e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Time Period</Label>
-                            <Input placeholder="2021 - Present" value={work.time} onChange={(e) => updateWork(i, "time", e.target.value)} />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Certificates */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="certs" className="flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-primary" /> Certificates
-                  </Label>
-                  <Textarea id="certs" placeholder="AWS Solutions Architect, Google Cloud Professional..." value={certificates} onChange={(e) => setCertificates(e.target.value)} />
-                </div>
-
-                {/* Submit */}
-                <div className="flex gap-3 pt-2">
-                  <Button className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSubmitCV}>
-                    Submit CV
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowCVForm(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Header Card */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-xl p-6">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center shield-glow">
-            <User className="w-7 h-7 text-primary" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="font-display text-xl font-bold text-foreground">{displayProfile.fullName}</h2>
-              <Badge className="bg-primary/10 text-primary text-[10px]">
-                <Shield className="w-3 h-3 mr-1" /> Verified
-              </Badge>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {privacyMode ? "Email hidden" : displayProfile.email}</span>
-              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {privacyMode ? "Phone hidden" : displayProfile.phone}</span>
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {displayProfile.address}</span>
-            </div>
-          </div>
-        </div>
-        {privacyMode && (
-          <div className="mt-4 flex items-center gap-2 text-xs text-primary bg-primary/5 rounded-lg px-3 py-2">
-            <Lock className="w-3 h-3" />
-            Privacy mode active — sensitive info is masked from recruiters
-          </div>
-        )}
-      </motion.div>
-
-      {/* Objective */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-2">Objective</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{profile.objective}</p>
-      </motion.div>
-
-      {/* Skills */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3">Skills</h3>
-        <div className="flex flex-wrap gap-2">
-          {profile.skills.map(s => (
-            <span key={s} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary">{s}</span>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Experience */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Briefcase className="w-4 h-4 text-primary" /> Experience
-        </h3>
-        <div className="space-y-4">
-          {profile.experience.map((exp, i) => (
-            <div key={i} className="border-l-2 border-primary/30 pl-4">
-              <h4 className="font-medium text-sm text-foreground">{exp.title}</h4>
-              <p className="text-xs text-muted-foreground">{exp.company} · {exp.period}</p>
-              <p className="text-sm text-muted-foreground mt-1">{exp.desc}</p>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Education */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-4 flex items-center gap-2">
-          <GraduationCap className="w-4 h-4 text-primary" /> Education
-        </h3>
-        <div className="space-y-3">
-          {profile.education.map((edu, i) => (
-            <div key={i} className="border-l-2 border-primary/30 pl-4">
-              <h4 className="font-medium text-sm text-foreground">{edu.degree}</h4>
-              <p className="text-xs text-muted-foreground">{edu.school} · {edu.year}</p>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Certificates */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card rounded-xl p-6">
-        <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> Certificates
-        </h3>
-        <div className="space-y-2">
-          {profile.certificates.map((cert, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-              {cert}
-            </div>
-          ))}
-        </div>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        {children}
       </motion.div>
     </div>
   );
+}
+
+function ApplicantView({ applicant, highlights }: { applicant: Applicant | null; highlights: { label: string; value: number }[] }) {
+  const cv = applicant?.cv;
+  return (
+    <div className="grid xl:grid-cols-[320px_1fr] gap-5">
+      <div className="space-y-5">
+        <Panel title="Personal">
+          <Info icon={<Mail />} label="Email" value={applicant?.email} />
+          <Info icon={<Phone />} label="Phone" value={applicant?.phone} />
+          <Info icon={<MapPin />} label="Address" value={applicant?.address} />
+          <div className="flex gap-2 pt-2">
+            {applicant?.gender && <Badge variant="outline">{applicant.gender}</Badge>}
+            {applicant?.status && <Badge>{applicant.status}</Badge>}
+          </div>
+        </Panel>
+        <div className="grid grid-cols-2 gap-3">
+          {highlights.map((item) => (
+            <div key={item.label} className="rounded-lg border bg-card p-4">
+              <p className="text-2xl font-bold text-foreground">{item.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-5">
+        <Panel title="Objective">
+          <p className="text-sm text-muted-foreground whitespace-pre-line">{cv?.objective || "No objective has been added yet."}</p>
+        </Panel>
+        <ListPanel icon={<CheckCircle2 />} title="Skills" values={toList(cv?.skills)} />
+        <ListPanel icon={<Briefcase />} title="Experience" values={toList(cv?.experience)} />
+        <ListPanel icon={<GraduationCap />} title="Education" values={toList(cv?.education)} />
+        <ListPanel icon={<Award />} title="Certificates" values={toList(cv?.certifications)} />
+      </div>
+    </div>
+  );
+}
+
+function RecruiterView({ recruiter }: { recruiter: Recruiter | null }) {
+  return (
+    <div className="grid xl:grid-cols-[360px_1fr] gap-5">
+      <div className="space-y-5">
+        <Panel title="Company Identity">
+          <Info icon={<Building2 />} label="Company" value={recruiter?.companyName} />
+          <Info icon={<Briefcase />} label="Industry" value={recruiter?.industry} />
+          <Info icon={<UsersIcon />} label="Company Size" value={recruiter?.companySize} />
+          <Info icon={<MapPin />} label="Location" value={recruiter?.companyLocation || recruiter?.address} />
+        </Panel>
+        <Panel title="Contact">
+          <Info icon={<Mail />} label="Account Email" value={recruiter?.email} />
+          <Info icon={<Phone />} label="Account Phone" value={recruiter?.phone} />
+          <Info icon={<Mail />} label="Hiring Email" value={recruiter?.contactEmail} />
+          <Info icon={<Phone />} label="Hiring Phone" value={recruiter?.contactPhone} />
+        </Panel>
+      </div>
+      <div className="space-y-5">
+        <Panel title="General Hiring Requirements">
+          <p className="text-sm text-muted-foreground whitespace-pre-line">
+            {recruiter?.companyDescription || "No general requirements have been added yet."}
+          </p>
+        </Panel>
+        <Panel title="Business Details">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Info label="Tax Code" value={recruiter?.taxCode} />
+            <Info label="Established Date" value={recruiter?.establishedDate} />
+            <Info label="Company Type" value={recruiter?.companyType} />
+            <Info label="Website" value={recruiter?.website} />
+            <Info label="Business License" value={recruiter?.businessLicense} />
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function ApplicantEditForm({
+  applicantForm,
+  setApplicantForm,
+  cvForm,
+  setCvForm,
+}: {
+  applicantForm: typeof emptyApplicantForm;
+  setApplicantForm: React.Dispatch<React.SetStateAction<typeof emptyApplicantForm>>;
+  cvForm: typeof emptyCvForm;
+  setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
+}) {
+  const setApplicantField = (field: keyof typeof emptyApplicantForm, value: string) => {
+    setApplicantForm((current) => ({ ...current, [field]: value }));
+  };
+  const setCvField = (field: keyof typeof emptyCvForm, value: string) => {
+    setCvForm((current) => ({ ...current, [field]: value }));
+  };
+  const setList = (field: TextListField, values: string[]) => {
+    setCvForm((current) => ({ ...current, [field]: values }));
+  };
+
+  return (
+    <div className="space-y-5">
+      <Panel title="Personal Profile">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Field label="User Name" value={applicantForm.userName} onChange={(value) => setApplicantField("userName", value)} />
+          <Field label="Full Name" value={applicantForm.fullName} onChange={(value) => setApplicantField("fullName", value)} />
+          <Field label="Email" value={applicantForm.email} onChange={(value) => setApplicantField("email", value)} />
+          <Field label="Phone" value={applicantForm.phone} onChange={(value) => setApplicantField("phone", value)} />
+          <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
+          <Field label="Gender" value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} />
+          <Field label="Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} />
+        </div>
+      </Panel>
+      <Panel title="Career Profile">
+        <div className="grid md:grid-cols-3 gap-4">
+          <Field label="CV Name" value={cvForm.fullName} onChange={(value) => setCvField("fullName", value)} />
+          <Field label="CV Phone" value={cvForm.phone} onChange={(value) => setCvField("phone", value)} />
+          <Field label="CV Address" value={cvForm.address} onChange={(value) => setCvField("address", value)} />
+        </div>
+        <div className="mt-4 space-y-2">
+          <Label>Objective</Label>
+          <Textarea value={cvForm.objective} onChange={(event) => setCvField("objective", event.target.value)} />
+        </div>
+      </Panel>
+      <EditableList title="Skills" values={cvForm.skills} onChange={(values) => setList("skills", values)} placeholder="Java, Spring Boot, React" />
+      <EditableList title="Experience" values={cvForm.experience} onChange={(values) => setList("experience", values)} placeholder="Backend Developer at ABC, 2024 - Present" />
+      <EditableList title="Education" values={cvForm.education} onChange={(values) => setList("education", values)} placeholder="B.S. Computer Science, HCMUS, 2026" />
+      <EditableList title="Certificates" values={cvForm.certifications} onChange={(values) => setList("certifications", values)} placeholder="AWS Cloud Practitioner" />
+    </div>
+  );
+}
+
+function RecruiterEditForm({
+  form,
+  setForm,
+}: {
+  form: typeof emptyRecruiterForm;
+  setForm: React.Dispatch<React.SetStateAction<typeof emptyRecruiterForm>>;
+}) {
+  const setField = (field: keyof typeof emptyRecruiterForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  return (
+    <div className="space-y-5">
+      <Panel title="Company Identity">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Field label="Company Name" value={form.companyName} onChange={(value) => setField("companyName", value)} />
+          <Field label="Industry" value={form.industry} onChange={(value) => setField("industry", value)} />
+          <Field label="Company Size" value={form.companySize} onChange={(value) => setField("companySize", value)} />
+          <Field label="Company Type" value={form.companyType} onChange={(value) => setField("companyType", value)} />
+          <Field label="Company Location" value={form.companyLocation} onChange={(value) => setField("companyLocation", value)} />
+          <Field label="Website" value={form.website} onChange={(value) => setField("website", value)} />
+        </div>
+        <div className="mt-4 space-y-2">
+          <Label>General Hiring Requirements</Label>
+          <Textarea value={form.companyDescription} onChange={(event) => setField("companyDescription", event.target.value)} />
+        </div>
+      </Panel>
+      <Panel title="Account And Hiring Contact">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Field label="User Name" value={form.userName} onChange={(value) => setField("userName", value)} />
+          <Field label="Account Email" value={form.email} onChange={(value) => setField("email", value)} />
+          <Field label="Account Phone" value={form.phone} onChange={(value) => setField("phone", value)} />
+          <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
+          <Field label="Hiring Email" value={form.contactEmail} onChange={(value) => setField("contactEmail", value)} />
+          <Field label="Hiring Phone" value={form.contactPhone} onChange={(value) => setField("contactPhone", value)} />
+        </div>
+      </Panel>
+      <Panel title="Business Verification">
+        <div className="grid md:grid-cols-3 gap-4">
+          <Field label="Tax Code" value={form.taxCode} onChange={(value) => setField("taxCode", value)} />
+          <Field label="Established Date" value={form.establishedDate} onChange={(value) => setField("establishedDate", value)} />
+          <Field label="Business License" value={form.businessLicense} onChange={(value) => setField("businessLicense", value)} />
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function EditableList({
+  title,
+  values,
+  onChange,
+  placeholder,
+}: {
+  title: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+}) {
+  const updateAt = (index: number, value: string) => {
+    onChange(values.map((item, itemIndex) => (itemIndex === index ? value : item)));
+  };
+
+  return (
+    <Panel title={title}>
+      <div className="space-y-3">
+        {values.map((value, index) => (
+          <div key={index} className="flex gap-2">
+            <Input value={value} placeholder={placeholder} onChange={(event) => updateAt(index, event.target.value)} />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => onChange(values.length === 1 ? [""] : values.filter((_, itemIndex) => itemIndex !== index))}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => onChange([...values, ""])}>
+          <Plus className="w-4 h-4" /> Add {title}
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
+function ListPanel({ icon, title, values }: { icon: React.ReactNode; title: string; values: string[] }) {
+  const filtered = values.filter(Boolean);
+  return (
+    <Panel title={title}>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No {title.toLowerCase()} added yet.</p>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-3">
+          {filtered.map((item) => (
+            <div key={item} className="flex items-start gap-3 rounded-lg border bg-secondary/40 p-3">
+              <span className="mt-0.5 text-primary [&_svg]:w-4 [&_svg]:h-4">{icon}</span>
+              <span className="text-sm text-foreground">{item}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border bg-card p-5">
+      <h2 className="font-display text-base font-semibold text-foreground mb-4">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
+  const id = label.toLowerCase().replace(/\s+/g, "-");
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} value={value || ""} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function Info({ icon, label, value }: { icon?: React.ReactNode; label: string; value?: string | number | null }) {
+  return (
+    <div className="flex items-start gap-3 py-2">
+      {icon && <span className="mt-0.5 text-primary [&_svg]:w-4 [&_svg]:h-4">{icon}</span>}
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium text-foreground break-words">{value || "Not provided"}</p>
+      </div>
+    </div>
+  );
+}
+
+function toList(value?: string | null) {
+  const items = (value || "")
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : [""];
+}
+
+function fromList(values: string[]) {
+  return values.map((item) => item.trim()).filter(Boolean).join("\n");
+}
+
+function UsersIcon() {
+  return <User className="w-4 h-4" />;
 }

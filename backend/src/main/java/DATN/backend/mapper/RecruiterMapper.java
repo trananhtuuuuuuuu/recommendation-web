@@ -2,6 +2,7 @@ package DATN.backend.mapper;
 
 import DATN.backend.model.Recruiter;
 import DATN.backend.request.recruiter.RegistrationRecruiterRequest;
+import DATN.backend.request.recruiter.UpdateRecruiterRequest;
 import DATN.backend.response.recruiter.RegistrationRecruiterResponse;
 import DATN.backend.response.recruiter.RecruiterResponse;
 
@@ -64,5 +65,26 @@ public class RecruiterMapper {
                 recruiter.getCompanyType(),
                 recruiter.getAddress(),
                 recruiter.getPhone());
+    }
+
+    public static Recruiter updateRecruiter(Recruiter recruiter, UpdateRecruiterRequest request) {
+        recruiter.setAddress(request.getAddress());
+        recruiter.setEmail(request.getEmail());
+        recruiter.setPhone(request.getPhone());
+        recruiter.setUserName(request.getUserName());
+        recruiter.setCompanyName(request.getCompanyName());
+        recruiter.setCompanyDescription(request.getCompanyDescription());
+        recruiter.setCompanyLocation(request.getCompanyLocation());
+        recruiter.setCompanySize(request.getCompanySize());
+        recruiter.setIndustry(request.getIndustry());
+        recruiter.setWebsite(request.getWebsite());
+        recruiter.setLogoUrl(request.getLogoUrl());
+        recruiter.setContactEmail(request.getContactEmail());
+        recruiter.setContactPhone(request.getContactPhone());
+        recruiter.setTaxCode(request.getTaxCode());
+        recruiter.setBusinessLicense(request.getBusinessLicense());
+        recruiter.setEstablishedDate(request.getEstablishedDate());
+        recruiter.setCompanyType(request.getCompanyType());
+        return recruiter;
     }
 }

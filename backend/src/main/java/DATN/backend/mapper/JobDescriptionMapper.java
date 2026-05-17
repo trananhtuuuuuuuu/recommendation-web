@@ -31,6 +31,7 @@ public class JobDescriptionMapper {
         jobDescription.setApplicationDeadline(parseDate(request.getApplicationDeadline()));
         jobDescription.setStartDate(parseDate(request.getStartDate()));
         jobDescription.setEndDate(parseDate(request.getEndDate()));
+        jobDescription.setCustomApplicationFields(request.getCustomApplicationFields());
         return jobDescription;
     }
 
@@ -49,6 +50,7 @@ public class JobDescriptionMapper {
         jobDescription.setApplicationDeadline(parseDate(request.getApplicationDeadline()));
         jobDescription.setStartDate(parseDate(request.getStartDate()));
         jobDescription.setEndDate(parseDate(request.getEndDate()));
+        jobDescription.setCustomApplicationFields(request.getCustomApplicationFields());
         return jobDescription;
     }
 
@@ -71,7 +73,8 @@ public class JobDescriptionMapper {
                 jobDescription.getStartDate() == null ? null : jobDescription.getStartDate().toString(),
                 jobDescription.getEndDate() == null ? null : jobDescription.getEndDate().toString(),
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getId(),
-                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName());
+                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
+                jobDescription.getCustomApplicationFields());
     }
 
     public static JobApplicantsResponse toApplicantsResponse(Long jobId, Long count) {

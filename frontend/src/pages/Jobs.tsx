@@ -32,6 +32,9 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
 
   const [compareAll, setCompareAll] = useState(false);
   const [comparingAll, setComparingAll] = useState(false);
@@ -41,6 +44,7 @@ export default function Jobs() {
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null);
   const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -52,13 +56,22 @@ export default function Jobs() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return jobs;
     const q = query.toLowerCase();
     return jobs.filter((j) =>
-      [getJobTitle(j), j.companyName, j.location, j.industry]
+      (!q || [getJobTitle(j), j.companyName, j.location, j.industry, j.jobDescription, j.requirements]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      ) &&
+      (!locationFilter || j.location === locationFilter) &&
+      (!typeFilter || j.jobType === typeFilter) &&
+      (!industryFilter || j.industry === industryFilter)
     );
-  }, [jobs, query]);
+  }, [jobs, query, locationFilter, typeFilter, industryFilter]);
+
+  const filterOptions = useMemo(() => ({
+    locations: Array.from(new Set(jobs.map((j) => j.location).filter(Boolean))) as string[],
+    types: Array.from(new Set(jobs.map((j) => j.jobType).filter(Boolean))) as string[],
+    industries: Array.from(new Set(jobs.map((j) => j.industry).filter(Boolean))) as string[],
+  }), [jobs]);
 
   const handleSave = async (job: Job) => {
     const id = getJobId(job);
@@ -105,8 +118,8 @@ export default function Jobs() {
   const clearAll = () => { setCompareAll(false); setAllResults({}); setSingleResults({}); setExpandedSuggestion(null); };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="rounded-lg border bg-card p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Job Listings</h1>
           <p className="text-sm text-muted-foreground mt-1">Browse open opportunities</p>
@@ -118,6 +131,21 @@ export default function Jobs() {
             placeholder="Search title, company..."
             className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30 w-56"
           />
+          <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
+            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All locations</option>
+            {filterOptions.locations.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All types</option>
+            {filterOptions.types.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}
+            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All industries</option>
+            {filterOptions.industries.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
           {(compareAll || Object.keys(singleResults).length > 0) && (
             <Button variant="ghost" size="sm" onClick={clearAll} className="gap-1 text-xs text-muted-foreground">
               <X className="w-3 h-3" /> Clear AI
@@ -130,7 +158,7 @@ export default function Jobs() {
               {comparingAll ? "Analyzing..." : "AI Compare All"}
             </Button>
           )}
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => { setQuery(""); setLocationFilter(""); setTypeFilter(""); setIndustryFilter(""); }}>
             <Filter className="w-4 h-4" /> Filters <ChevronDown className="w-3 h-3" />
           </Button>
         </div>
@@ -163,12 +191,13 @@ export default function Jobs() {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="grid xl:grid-cols-2 gap-4">
         {filtered.map((job, i) => {
           const id = getJobId(job);
           const result = getResult(id);
           const isExpanded = expandedSuggestion === id;
           const isSaved = savedJobs.has(id);
+          const isApplied = appliedJobs.has(id);
 
           return (
             <motion.div
@@ -176,7 +205,7 @@ export default function Jobs() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="glass-card rounded-xl p-5 hover:shield-glow transition-all group"
+              className="rounded-lg border bg-card p-5 hover:shield-glow transition-all group"
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -214,6 +243,11 @@ export default function Jobs() {
                     </Button>
                     {role === "APPLICANT" && (
                       <>
+                        <Button size="sm" disabled={isApplied}
+                          className="gap-1 text-xs" onClick={() => navigate(`/jobs/${id}`)}>
+                          <Briefcase className="w-3 h-3" />
+                          {isApplied ? "Applied" : "Apply"}
+                        </Button>
                         <Button size="sm" variant="outline" disabled={savingId === id}
                           className="gap-1 text-xs" onClick={() => handleSave(job)}>
                           {savingId === id ? <Loader2 className="w-3 h-3 animate-spin" /> :
@@ -240,15 +274,15 @@ export default function Jobs() {
                     exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="mt-4 pt-4 border-t border-border grid sm:grid-cols-3 gap-4">
                       <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-success">✅ Pros</h4>
+                        <h4 className="text-xs font-semibold text-success">Pros</h4>
                         <ul className="space-y-1">{result.pros.map((p, i) => <li key={i} className="text-xs text-muted-foreground">• {p}</li>)}</ul>
                       </div>
                       <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-destructive">⚠️ Cons</h4>
+                        <h4 className="text-xs font-semibold text-destructive">Cons</h4>
                         <ul className="space-y-1">{result.cons.map((c, i) => <li key={i} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
                       </div>
                       <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-primary">💡 Suggestions</h4>
+                        <h4 className="text-xs font-semibold text-primary">Suggestions</h4>
                         <ul className="space-y-1">{result.suggestions.map((s, i) => <li key={i} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
                       </div>
                     </div>

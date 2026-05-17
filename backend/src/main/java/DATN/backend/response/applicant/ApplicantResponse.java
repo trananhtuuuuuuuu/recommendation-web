@@ -1,5 +1,6 @@
 package DATN.backend.response.applicant;
 
+import DATN.backend.response.cv.CvResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,4 +20,5 @@ public class ApplicantResponse {
     private String gender;
     private String status;
     private Long cvId;
+    private CvResponse cv;
 }

@@ -35,6 +35,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ImplApplicantService implements InterfaceApplicantService {
 
+    private static final String SAVED_ACTION = "SAVED";
+    private static final String APPLIED_ACTION = "APPLIED";
+
     private final ApplicantRepository applicantRepository;
     private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
     private final JobDescriptionRepository jobDescriptionRepository;
@@ -96,14 +99,43 @@ public class ImplApplicantService implements InterfaceApplicantService {
         JobDescription jobDescription = jobDescriptionRepository.findById(request.getJobDescriptionId())
                 .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
 
-        applicantJobDescriptionRepository.findByApplicant_IdAndJobDescription_Id(request.getApplicantId(),
-                request.getJobDescriptionId())
+        applicantJobDescriptionRepository.findByApplicant_IdAndJobDescription_IdAndActionType(request.getApplicantId(),
+                request.getJobDescriptionId(), SAVED_ACTION)
                 .ifPresent(existing -> {
                     throw new AlreadyExistException("Job already saved by this applicant");
                 });
 
         ApplicantJobDescription relation = applicantJobDescriptionRepository
-                .save(new ApplicantJobDescription(applicant, jobDescription));
+                .save(new ApplicantJobDescription(applicant, jobDescription, SAVED_ACTION));
+
+        return new SavedJobResponse(
+                relation.getId(),
+                applicant.getId(),
+                jobDescription.getId(),
+                jobDescription.getJobTitle(),
+                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
+                jobDescription.getLocation());
+    }
+
+    @Override
+    @Transactional
+    public SavedJobResponse applyJob(SaveJobRequest request) {
+        Applicant applicant = applicantRepository.findById(request.getApplicantId())
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        JobDescription jobDescription = jobDescriptionRepository.findById(request.getJobDescriptionId())
+                .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
+
+        applicantJobDescriptionRepository.findByApplicant_IdAndJobDescription_IdAndActionType(request.getApplicantId(),
+                request.getJobDescriptionId(), APPLIED_ACTION)
+                .ifPresent(existing -> {
+                    throw new AlreadyExistException("Applicant already applied for this job");
+                });
+
+        ApplicantJobDescription relation = applicantJobDescriptionRepository
+                .save(new ApplicantJobDescription(applicant, jobDescription, APPLIED_ACTION));
+        relation.setCoverLetter(request.getCoverLetter());
+        relation.setPortfolioUrl(request.getPortfolioUrl());
+        relation.setApplicationAnswers(request.getApplicationAnswers());
 
         return new SavedJobResponse(
                 relation.getId(),
@@ -119,7 +151,24 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        return applicantJobDescriptionRepository.findByApplicant_Id(applicantId).stream()
+        return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, SAVED_ACTION).stream()
+                .map(relation -> new SavedJobResponse(
+                        relation.getId(),
+                        relation.getApplicant().getId(),
+                        relation.getJobDescription().getId(),
+                        relation.getJobDescription().getJobTitle(),
+                        relation.getJobDescription().getRecruiter() == null ? null
+                                : relation.getJobDescription().getRecruiter().getCompanyName(),
+                        relation.getJobDescription().getLocation()))
+                .toList();
+    }
+
+    @Override
+    public List<SavedJobResponse> getAppliedJobs(Long applicantId) {
+        if (!applicantRepository.existsById(applicantId)) {
+            throw new ResourcesNotFoundException("Applicant not found");
+        }
+        return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION).stream()
                 .map(relation -> new SavedJobResponse(
                         relation.getId(),
                         relation.getApplicant().getId(),

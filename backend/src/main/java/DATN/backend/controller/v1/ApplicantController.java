@@ -60,11 +60,25 @@ public class ApplicantController {
                 applicantService.getSavedJobs(applicantId)));
     }
 
+    @Operation(summary = "Get applied jobs for applicant")
+    @GetMapping("/applied-jobs")
+    public ResponseEntity<ApiResponse> getAppliedJobs(@RequestParam Long applicantId) {
+        return ResponseEntity.ok(ApiResponse.success("Applied jobs found", HttpStatus.OK,
+                applicantService.getAppliedJobs(applicantId)));
+    }
+
     @Operation(summary = "Save a job for applicant")
     @PostMapping("/save/job")
     public ResponseEntity<ApiResponse> saveJob(@Valid @RequestBody SaveJobRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Job saved successfully",
                 HttpStatus.CREATED, applicantService.saveJob(request)));
+    }
+
+    @Operation(summary = "Apply to a job as applicant")
+    @PostMapping("/apply/job")
+    public ResponseEntity<ApiResponse> applyJob(@Valid @RequestBody SaveJobRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Job applied successfully",
+                HttpStatus.CREATED, applicantService.applyJob(request)));
     }
 
     @Operation(summary = "Upload CV for applicant")

@@ -4,7 +4,10 @@ import { motion } from "framer-motion";
 import { Briefcase, MapPin, Clock, Users, ArrowLeft, Bookmark, Loader2, AlertCircle, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { fetchJob, fetchJobApplicantCount, saveJob, type Job } from "@/lib/jobsApi";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { applyJob, fetchJob, fetchJobApplicantCount, saveJob, type ApplicationField, type Job } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -18,7 +21,11 @@ export default function JobDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [applied, setApplied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [showApplyForm, setShowApplyForm] = useState(false);
+  const [applicationAnswers, setApplicationAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -53,6 +60,31 @@ export default function JobDetail() {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to save");
     } finally { setSaving(false); }
+  };
+
+  const customFields = parseApplicationFields(job?.customApplicationFields);
+  const handleApply = async () => {
+    if (!isAuthenticated) { navigate("/auth"); return; }
+    if (role !== "APPLICANT") { toast.error("Only applicants can apply for jobs."); return; }
+    if (!user?.id || !id) return;
+    const missing = customFields.find((field) => field.required && !applicationAnswers[field.id]?.trim());
+    if (missing) {
+      toast.error(`Please answer: ${missing.label}`);
+      return;
+    }
+    setApplying(true);
+    try {
+      await applyJob(user.id, id, {
+        coverLetter: applicationAnswers.cover_letter || "",
+        portfolioUrl: applicationAnswers.portfolio_url || "",
+        applicationAnswers: JSON.stringify(applicationAnswers),
+      });
+      setApplied(true);
+      setShowApplyForm(false);
+      toast.success("Application submitted.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to apply");
+    } finally { setApplying(false); }
   };
 
   if (loading) {
@@ -94,13 +126,24 @@ export default function JobDetail() {
           </div>
           <div className="text-right">
             {job.salaryRange && <p className="font-display font-semibold text-foreground">{job.salaryRange}</p>}
-            {job.jobType && <p className="text-xs text-muted-foreground mb-2">{job.jobType}</p>}
-            {role === "APPLICANT" && (
-              <Button size="sm" variant="outline" onClick={handleSave} disabled={saving} className="gap-1">
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
-                  <Bookmark className={`w-3.5 h-3.5 ${saved ? "fill-primary text-primary" : ""}`} />}
-                {saved ? "Saved" : "Save"}
+              {job.jobType && <p className="text-xs text-muted-foreground mb-2">{job.jobType}</p>}
+            {job.recruiterId && (
+              <Button size="sm" variant="ghost" onClick={() => navigate(`/recruiters/${job.recruiterId}`)}>
+                Recruiter Profile
               </Button>
+            )}
+            {role === "APPLICANT" && (
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button size="sm" onClick={() => setShowApplyForm(true)} disabled={applied} className="gap-1">
+                  <Briefcase className="w-3.5 h-3.5" />
+                  {applied ? "Applied" : "Apply"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleSave} disabled={saving} className="gap-1">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+                    <Bookmark className={`w-3.5 h-3.5 ${saved ? "fill-primary text-primary" : ""}`} />}
+                  {saved ? "Saved" : "Save"}
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -134,6 +177,69 @@ export default function JobDetail() {
           {job.endDate && <span>End: {job.endDate}</span>}
         </div>
       </motion.div>
+
+      {showApplyForm && (
+        <div className="fixed inset-0 z-50 bg-foreground/40 flex items-start justify-center p-4 pt-12 overflow-y-auto" onClick={(event) => event.target === event.currentTarget && setShowApplyForm(false)}>
+          <div className="w-full max-w-2xl rounded-lg border bg-background p-6 shadow-xl space-y-5">
+            <div>
+              <h2 className="font-display text-xl font-bold text-foreground">Apply for {job.jobTitle || job.title}</h2>
+              <p className="text-sm text-muted-foreground mt-1">Your saved CV/profile will be attached. Complete the recruiter questions before submitting.</p>
+            </div>
+            <div className="space-y-4">
+              {(customFields.length > 0 ? customFields : defaultApplicationFields).map((field) => (
+                <ApplicationFieldInput
+                  key={field.id}
+                  field={field}
+                  value={applicationAnswers[field.id] || ""}
+                  onChange={(value) => setApplicationAnswers((current) => ({ ...current, [field.id]: value }))}
+                />
+              ))}
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setShowApplyForm(false)}>Cancel</Button>
+              <Button onClick={handleApply} disabled={applying} className="gap-2">
+                {applying && <Loader2 className="w-4 h-4 animate-spin" />}
+                Submit Application
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const defaultApplicationFields: ApplicationField[] = [
+  { id: "years_in_role", label: "How many years have you worked in this role?", type: "text", required: true },
+  { id: "english_level", label: "Current English level", type: "select", required: true, options: ["Beginner", "Intermediate", "Upper-intermediate", "Advanced", "Fluent"] },
+  { id: "cover_letter", label: "Cover letter", type: "textarea" },
+  { id: "portfolio_url", label: "Portfolio URL", type: "url" },
+];
+
+function parseApplicationFields(raw?: string): ApplicationField[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function ApplicationFieldInput({ field, value, onChange }: { field: ApplicationField; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <Label>{field.label}{field.required ? " *" : ""}</Label>
+      {field.type === "textarea" ? (
+        <Textarea value={value} onChange={(event) => onChange(event.target.value)} />
+      ) : field.type === "select" ? (
+        <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full px-3 py-2 text-sm bg-background rounded-md border border-input">
+          <option value="">Select an option</option>
+          {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      ) : (
+        <Input type={field.type === "url" ? "url" : "text"} value={value} onChange={(event) => onChange(event.target.value)} />
+      )}
     </div>
   );
 }

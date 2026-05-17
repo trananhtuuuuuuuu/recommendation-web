@@ -15,6 +15,7 @@ import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
 import DATN.backend.request.recruiter.RegistrationRecruiterRequest;
+import DATN.backend.request.recruiter.UpdateRecruiterRequest;
 import DATN.backend.response.recruiter.RecruiterResponse;
 import DATN.backend.response.recruiter.RegistrationRecruiterResponse;
 import DATN.backend.service.InterfaceService.InterfaceRecruiterService;
@@ -61,5 +62,15 @@ public class ImplRecruiterService implements InterfaceRecruiterService {
         return recruiterRepository.findAll().stream()
                 .map(RecruiterMapper::toRecruiterResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public RecruiterResponse updateRecruiter(Long recruiterId, UpdateRecruiterRequest request) {
+        Recruiter recruiter = recruiterRepository.findById(recruiterId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Recruiter not found"));
+        RecruiterMapper.updateRecruiter(recruiter, request);
+        Recruiter savedRecruiter = recruiterRepository.save(recruiter);
+        return RecruiterMapper.toRecruiterResponse(savedRecruiter);
     }
 }
