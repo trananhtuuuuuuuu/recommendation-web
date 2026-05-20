@@ -194,4 +194,5 @@ export const uploadCv = (applicantId: string | number, body: any) =>
   apiRequest<any>(`/api/v1/applicants/upload-cv/${applicantId}`, {
     method: "POST",
     body,
+    isForm: body instanceof FormData,
   });

@@ -1,9 +1,11 @@
 package DATN.backend.controller.v1;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -82,8 +84,16 @@ public class ApplicantController {
     }
 
     @Operation(summary = "Upload CV for applicant")
-    @PostMapping("/upload-cv/{applicantId}")
+    @PostMapping(value = "/upload-cv/{applicantId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse> uploadCv(@PathVariable Long applicantId,
+            @Valid @ModelAttribute UploadCvRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("CV uploaded successfully",
+                HttpStatus.CREATED, applicantService.uploadCv(applicantId, request)));
+    }
+
+    @Operation(summary = "Upload CV metadata for applicant")
+    @PostMapping(value = "/upload-cv/{applicantId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse> uploadCvMetadata(@PathVariable Long applicantId,
             @Valid @RequestBody UploadCvRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("CV uploaded successfully",
                 HttpStatus.CREATED, applicantService.uploadCv(applicantId, request)));

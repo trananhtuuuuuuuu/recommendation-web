@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.web.multipart.MultipartFile;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -23,4 +24,5 @@ public class UploadCvRequest {
     private String education;
     private String certifications;
     private String cvFileUrl;
+    private MultipartFile cvFile;
 }

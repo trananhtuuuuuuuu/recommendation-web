@@ -1,10 +1,17 @@
 package DATN.backend.service.ImplService;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ResourcesNotFoundException;
@@ -37,6 +44,7 @@ public class ImplApplicantService implements InterfaceApplicantService {
 
     private static final String SAVED_ACTION = "SAVED";
     private static final String APPLIED_ACTION = "APPLIED";
+    private static final Path CV_UPLOAD_DIR = Path.of("uploads", "cvs");
 
     private final ApplicantRepository applicantRepository;
     private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
@@ -185,10 +193,47 @@ public class ImplApplicantService implements InterfaceApplicantService {
     public CvResponse uploadCv(Long applicantId, UploadCvRequest request) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        MultipartFile cvFile = request.getCvFile();
+        if (cvFile != null && !cvFile.isEmpty()) {
+            request.setCvFileUrl(storeCvFile(cvFile));
+        } else if ((request.getCvFileUrl() == null || request.getCvFileUrl().isBlank()) && applicant.getCv() != null) {
+            request.setCvFileUrl(applicant.getCv().getCvFileUrl());
+        }
         Cv cv = ApplicantMapper.toCv(request);
         Cv savedCv = cvRepository.save(cv);
         applicant.setCv(savedCv);
         applicantRepository.save(applicant);
         return ApplicantMapper.toCvResponse(savedCv);
+    }
+
+    private String storeCvFile(MultipartFile cvFile) {
+        String originalName = StringUtils.cleanPath(cvFile.getOriginalFilename() == null ? "cv" : cvFile.getOriginalFilename());
+        if (originalName.contains("..")) {
+            throw new IllegalArgumentException("Invalid CV file name");
+        }
+
+        String contentType = cvFile.getContentType();
+        if (contentType != null && !List.of(
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                .contains(contentType)) {
+            throw new IllegalArgumentException("CV file must be a PDF, DOC, or DOCX file");
+        }
+
+        String extension = "";
+        int dotIndex = originalName.lastIndexOf('.');
+        if (dotIndex >= 0) {
+            extension = originalName.substring(dotIndex);
+        }
+        String fileName = UUID.randomUUID() + extension;
+
+        try {
+            Files.createDirectories(CV_UPLOAD_DIR);
+            Files.copy(cvFile.getInputStream(), CV_UPLOAD_DIR.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+            return "/uploads/cvs/" + fileName;
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Unable to store CV file");
+        }
     }
 }
