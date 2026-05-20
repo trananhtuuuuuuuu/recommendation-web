@@ -46,6 +46,7 @@ export interface Applicant {
     experience?: string;
     education?: string;
     certifications?: string;
+    cvFileUrl?: string;
   } | null;
   [k: string]: any;
 }
@@ -61,6 +62,7 @@ export interface Recruiter {
   industry?: string;
   website?: string;
   logoUrl?: string;
+  coverImageUrl?: string;
   contactEmail?: string;
   contactPhone?: string;
   taxCode?: string;

@@ -40,6 +40,9 @@ public class Recruiter extends User {
     @Column(nullable = true)
     private String logoUrl;
 
+    @Column(nullable = true, length = 2048)
+    private String coverImageUrl;
+
     @Column(nullable = true)
     private String contactEmail;
 
@@ -60,8 +63,8 @@ public class Recruiter extends User {
 
     public Recruiter(String address, String email, String fullName, String password, String phone, String companyName,
             String companyDescription, String companyLocation, String companySize, String industry, String website,
-            String logoUrl, String contactEmail, String contactPhone, String taxCode, String businessLicense,
-            String establishedDate, String companyType) {
+            String logoUrl, String coverImageUrl, String contactEmail, String contactPhone, String taxCode,
+            String businessLicense, String establishedDate, String companyType) {
         super(address, email, fullName, password, phone);
         this.companyName = companyName;
         this.companyDescription = companyDescription;
@@ -70,6 +73,7 @@ public class Recruiter extends User {
         this.industry = industry;
         this.website = website;
         this.logoUrl = logoUrl;
+        this.coverImageUrl = coverImageUrl;
         this.contactEmail = contactEmail;
         this.contactPhone = contactPhone;
         this.taxCode = taxCode;

@@ -19,4 +19,5 @@ public class CvResponse {
     private String experience;
     private String education;
     private String certifications;
+    private String cvFileUrl;
 }

@@ -59,6 +59,7 @@ const emptyRecruiterForm = {
   industry: "",
   website: "",
   logoUrl: "",
+  coverImageUrl: "",
   contactEmail: "",
   contactPhone: "",
   taxCode: "",
@@ -76,6 +77,7 @@ const emptyCvForm = {
   experience: [""],
   education: [""],
   certifications: [""],
+  cvFileUrl: "",
 };
 
 export default function Profile() {
@@ -113,6 +115,7 @@ export default function Profile() {
             industry: next.industry || "",
             website: next.website || "",
             logoUrl: next.logoUrl || "",
+            coverImageUrl: next.coverImageUrl || "",
             contactEmail: next.contactEmail || "",
             contactPhone: next.contactPhone || "",
             taxCode: next.taxCode || "",
@@ -141,6 +144,7 @@ export default function Profile() {
             experience: toList(next.cv?.experience),
             education: toList(next.cv?.education),
             certifications: toList(next.cv?.certifications),
+            cvFileUrl: next.cv?.cvFileUrl || "",
           });
         }
       })
@@ -184,6 +188,7 @@ export default function Profile() {
           experience: fromList(cvForm.experience),
           education: fromList(cvForm.education),
           certifications: fromList(cvForm.certifications),
+          cvFileUrl: cvForm.cvFileUrl,
         });
         const refreshed = await fetchApplicant(authUser.id);
         setApplicant(refreshed || updated);
@@ -336,6 +341,15 @@ function ApplicantView({ applicant, highlights }: { applicant: Applicant | null;
         <Panel title="Objective">
           <p className="text-sm text-muted-foreground whitespace-pre-line">{cv?.objective || "No objective has been added yet."}</p>
         </Panel>
+        <Panel title="CV File">
+          {cv?.cvFileUrl ? (
+            <a href={cv.cvFileUrl} target="_blank" rel="noreferrer" className="text-sm text-primary underline underline-offset-4">
+              Open uploaded CV
+            </a>
+          ) : (
+            <p className="text-sm text-muted-foreground">No CV file reference has been added yet.</p>
+          )}
+        </Panel>
         <ListPanel icon={<CheckCircle2 />} title="Skills" values={toList(cv?.skills)} />
         <ListPanel icon={<Briefcase />} title="Experience" values={toList(cv?.experience)} />
         <ListPanel icon={<GraduationCap />} title="Education" values={toList(cv?.education)} />
@@ -347,36 +361,63 @@ function ApplicantView({ applicant, highlights }: { applicant: Applicant | null;
 
 function RecruiterView({ recruiter }: { recruiter: Recruiter | null }) {
   return (
-    <div className="grid xl:grid-cols-[360px_1fr] gap-5">
-      <div className="space-y-5">
-        <Panel title="Company Identity">
-          <Info icon={<Building2 />} label="Company" value={recruiter?.companyName} />
-          <Info icon={<Briefcase />} label="Industry" value={recruiter?.industry} />
-          <Info icon={<UsersIcon />} label="Company Size" value={recruiter?.companySize} />
-          <Info icon={<MapPin />} label="Location" value={recruiter?.companyLocation || recruiter?.address} />
-        </Panel>
-        <Panel title="Contact">
-          <Info icon={<Mail />} label="Account Email" value={recruiter?.email} />
-          <Info icon={<Phone />} label="Account Phone" value={recruiter?.phone} />
-          <Info icon={<Mail />} label="Hiring Email" value={recruiter?.contactEmail} />
-          <Info icon={<Phone />} label="Hiring Phone" value={recruiter?.contactPhone} />
-        </Panel>
-      </div>
-      <div className="space-y-5">
-        <Panel title="General Hiring Requirements">
-          <p className="text-sm text-muted-foreground whitespace-pre-line">
-            {recruiter?.companyDescription || "No general requirements have been added yet."}
-          </p>
-        </Panel>
-        <Panel title="Business Details">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Info label="Tax Code" value={recruiter?.taxCode} />
-            <Info label="Established Date" value={recruiter?.establishedDate} />
-            <Info label="Company Type" value={recruiter?.companyType} />
-            <Info label="Website" value={recruiter?.website} />
-            <Info label="Business License" value={recruiter?.businessLicense} />
+    <div className="space-y-5">
+      <div className="relative overflow-hidden rounded-2xl border bg-card">
+        <div
+          className="h-44 bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500"
+          style={recruiter?.coverImageUrl ? { backgroundImage: `url(${recruiter.coverImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        />
+        <div className="px-5 pb-5 -mt-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div className="flex items-end gap-4">
+            <div className="w-20 h-20 rounded-2xl border-4 border-background bg-secondary overflow-hidden shadow-md flex items-center justify-center">
+              {recruiter?.logoUrl ? (
+                <img src={recruiter.logoUrl} alt={recruiter.companyName || "Recruiter avatar"} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-primary">{recruiter?.companyName?.[0] ?? "R"}</span>
+              )}
+            </div>
+            <div className="pb-1">
+              <h2 className="font-display text-xl font-semibold text-foreground">{recruiter?.companyName || "Recruiter Profile"}</h2>
+              <p className="text-sm text-muted-foreground">{recruiter?.industry || "Company profile and hiring requirements"}</p>
+            </div>
           </div>
-        </Panel>
+          <div className="flex gap-2 flex-wrap">
+            {recruiter?.companyType && <Badge variant="outline">{recruiter.companyType}</Badge>}
+            {recruiter?.companySize && <Badge>{recruiter.companySize}</Badge>}
+          </div>
+        </div>
+      </div>
+      <div className="grid xl:grid-cols-[360px_1fr] gap-5">
+        <div className="space-y-5">
+          <Panel title="Company Identity">
+            <Info icon={<Building2 />} label="Company" value={recruiter?.companyName} />
+            <Info icon={<Briefcase />} label="Industry" value={recruiter?.industry} />
+            <Info icon={<UsersIcon />} label="Company Size" value={recruiter?.companySize} />
+            <Info icon={<MapPin />} label="Location" value={recruiter?.companyLocation || recruiter?.address} />
+          </Panel>
+          <Panel title="Contact">
+            <Info icon={<Mail />} label="Account Email" value={recruiter?.email} />
+            <Info icon={<Phone />} label="Account Phone" value={recruiter?.phone} />
+            <Info icon={<Mail />} label="Hiring Email" value={recruiter?.contactEmail} />
+            <Info icon={<Phone />} label="Hiring Phone" value={recruiter?.contactPhone} />
+          </Panel>
+        </div>
+        <div className="space-y-5">
+          <Panel title="General Hiring Requirements">
+            <p className="text-sm text-muted-foreground whitespace-pre-line">
+              {recruiter?.companyDescription || "No general requirements have been added yet."}
+            </p>
+          </Panel>
+          <Panel title="Business Details">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Info label="Tax Code" value={recruiter?.taxCode} />
+              <Info label="Established Date" value={recruiter?.establishedDate} />
+              <Info label="Company Type" value={recruiter?.companyType} />
+              <Info label="Website" value={recruiter?.website} />
+              <Info label="Business License" value={recruiter?.businessLicense} />
+            </div>
+          </Panel>
+        </div>
       </div>
     </div>
   );
@@ -426,6 +467,9 @@ function ApplicantEditForm({
           <Label>Objective</Label>
           <Textarea value={cvForm.objective} onChange={(event) => setCvField("objective", event.target.value)} />
         </div>
+        <div className="mt-4 space-y-2">
+          <Field label="CV File URL" value={cvForm.cvFileUrl} onChange={(value) => setCvField("cvFileUrl", value)} />
+        </div>
       </Panel>
       <EditableList title="Skills" values={cvForm.skills} onChange={(values) => setList("skills", values)} placeholder="Java, Spring Boot, React" />
       <EditableList title="Experience" values={cvForm.experience} onChange={(values) => setList("experience", values)} placeholder="Backend Developer at ABC, 2024 - Present" />
@@ -456,6 +500,8 @@ function RecruiterEditForm({
           <Field label="Company Type" value={form.companyType} onChange={(value) => setField("companyType", value)} />
           <Field label="Company Location" value={form.companyLocation} onChange={(value) => setField("companyLocation", value)} />
           <Field label="Website" value={form.website} onChange={(value) => setField("website", value)} />
+          <Field label="Logo URL" value={form.logoUrl} onChange={(value) => setField("logoUrl", value)} />
+          <Field label="Cover Image URL" value={form.coverImageUrl} onChange={(value) => setField("coverImageUrl", value)} />
         </div>
         <div className="mt-4 space-y-2">
           <Label>General Hiring Requirements</Label>

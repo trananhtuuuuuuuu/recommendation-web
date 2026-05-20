@@ -40,6 +40,7 @@ public class UpdateRecruiterRequest {
     private String industry;
     private String website;
     private String logoUrl;
+    private String coverImageUrl;
     private String contactEmail;
     private String contactPhone;
     private String businessLicense;

@@ -20,6 +20,7 @@ public class RecruiterResponse {
     private String industry;
     private String website;
     private String logoUrl;
+    private String coverImageUrl;
     private String contactEmail;
     private String contactPhone;
     private String taxCode;

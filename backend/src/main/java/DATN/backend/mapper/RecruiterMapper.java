@@ -25,6 +25,7 @@ public class RecruiterMapper {
         recruiter.setIndustry(request.getIndustry());
         recruiter.setWebsite(request.getWebsite());
         recruiter.setLogoUrl(request.getLogoUrl());
+        recruiter.setCoverImageUrl(request.getCoverImageUrl());
         recruiter.setContactEmail(request.getContactEmail());
         recruiter.setContactPhone(request.getContactPhone());
         recruiter.setTaxCode(request.getTaxCode());
@@ -57,6 +58,7 @@ public class RecruiterMapper {
                 recruiter.getIndustry(),
                 recruiter.getWebsite(),
                 recruiter.getLogoUrl(),
+                recruiter.getCoverImageUrl(),
                 recruiter.getContactEmail(),
                 recruiter.getContactPhone(),
                 recruiter.getTaxCode(),
@@ -79,6 +81,7 @@ public class RecruiterMapper {
         recruiter.setIndustry(request.getIndustry());
         recruiter.setWebsite(request.getWebsite());
         recruiter.setLogoUrl(request.getLogoUrl());
+        recruiter.setCoverImageUrl(request.getCoverImageUrl());
         recruiter.setContactEmail(request.getContactEmail());
         recruiter.setContactPhone(request.getContactPhone());
         recruiter.setTaxCode(request.getTaxCode());

@@ -1,12 +1,17 @@
 spring:
   application:
     name: backend
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-postgres.sql
   datasource:
     url: jdbc:postgresql://localhost:8386/rw-db
     username: postgres
     password: 123456
     driver-class-name: org.postgresql.Driver
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: none
     show-sql: false

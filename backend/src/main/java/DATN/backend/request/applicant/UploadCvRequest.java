@@ -22,4 +22,5 @@ public class UploadCvRequest {
     private String experience;
     private String education;
     private String certifications;
+    private String cvFileUrl;
 }

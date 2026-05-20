@@ -48,8 +48,11 @@ public class Cv extends BaseEntity {
     @Column(nullable = true, columnDefinition = "TEXT")
     private String certifications;
 
+    @Column(nullable = true, length = 2048)
+    private String cvFileUrl;
+
     public Cv(String fullName, String address, String phone, String objective, String skills, String experience,
-            String education, String certifications) {
+            String education, String certifications, String cvFileUrl) {
         super();
         this.fullName = fullName;
         this.address = address;
@@ -59,6 +62,7 @@ public class Cv extends BaseEntity {
         this.experience = experience;
         this.education = education;
         this.certifications = certifications;
+        this.cvFileUrl = cvFileUrl;
     }
 
     @OneToOne(mappedBy = "cv")

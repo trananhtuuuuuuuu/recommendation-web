@@ -22,7 +22,8 @@ INSERT INTO cvs (
     skills,
     experience,
     education,
-    certifications
+    certifications,
+    cv_file_url
 )
 VALUES
     (
@@ -34,7 +35,8 @@ VALUES
         'Java, Spring Boot, PostgreSQL, Docker, REST API',
         '2 years building internal APIs and reporting services.',
         'BSc Computer Science, HCMUS',
-        'AWS Certified Cloud Practitioner'
+        'AWS Certified Cloud Practitioner',
+        'https://files.example.com/cv/nguyen-van-an.pdf'
     ),
     (
         1002,
@@ -45,7 +47,8 @@ VALUES
         'React, TypeScript, TailwindCSS, Testing Library',
         '3 years delivering React dashboards and design system components.',
         'BSc Software Engineering, HCMUS',
-        'Google UX Design Certificate'
+        'Google UX Design Certificate',
+        'https://files.example.com/cv/tran-thi-binh.pdf'
     ),
     (
         1003,
@@ -56,7 +59,8 @@ VALUES
         'Python, SQL, Java, Machine Learning, Spring Boot',
         'Built recommendation prototypes and batch data pipelines.',
         'BSc Data Science, HCMUS',
-        'TensorFlow Developer Certificate'
+        'TensorFlow Developer Certificate',
+        'https://files.example.com/cv/le-minh-chau.pdf'
     )
 ON CONFLICT (id) DO UPDATE
 SET
@@ -67,7 +71,8 @@ SET
     skills = EXCLUDED.skills,
     experience = EXCLUDED.experience,
     education = EXCLUDED.education,
-    certifications = EXCLUDED.certifications;
+    certifications = EXCLUDED.certifications,
+    cv_file_url = EXCLUDED.cv_file_url;
 
 INSERT INTO users (
     id,
@@ -169,6 +174,7 @@ INSERT INTO recruiters (
     industry,
     website,
     logo_url,
+    cover_image_url,
     contact_email,
     contact_phone,
     tax_code,
@@ -186,6 +192,7 @@ VALUES
         'Software Development',
         'https://technova.example.com',
         'https://technova.example.com/logo.png',
+        'https://technova.example.com/cover.png',
         'hr@technova.example.com',
         '+84900000101',
         'TAX-TN-1001',
@@ -202,6 +209,7 @@ VALUES
         'Artificial Intelligence',
         'https://greenlabs.example.com',
         'https://greenlabs.example.com/logo.png',
+        'https://greenlabs.example.com/cover.png',
         'talent@greenlabs.example.com',
         '+84900000102',
         'TAX-GL-1002',
@@ -218,6 +226,7 @@ VALUES
         'Cloud Infrastructure',
         'https://cloudbridge.example.com',
         'https://cloudbridge.example.com/logo.png',
+        'https://cloudbridge.example.com/cover.png',
         'jobs@cloudbridge.example.com',
         '+84900000103',
         'TAX-CB-1003',
@@ -234,6 +243,7 @@ SET
     industry = EXCLUDED.industry,
     website = EXCLUDED.website,
     logo_url = EXCLUDED.logo_url,
+    cover_image_url = EXCLUDED.cover_image_url,
     contact_email = EXCLUDED.contact_email,
     contact_phone = EXCLUDED.contact_phone,
     tax_code = EXCLUDED.tax_code,
