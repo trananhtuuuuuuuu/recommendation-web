@@ -10,6 +10,7 @@ import { fetchApplicants, type Applicant } from "@/lib/jobsApi";
 
 const statusColors: Record<string, string> = {
   OpenToWork: "bg-success/10 text-success",
+  Normal: "bg-muted text-muted-foreground",
   Archived: "bg-muted text-muted-foreground",
 };
 

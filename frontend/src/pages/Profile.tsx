@@ -52,7 +52,25 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-type TextListField = "skills" | "experience" | "education" | "certifications";
+type TextListField = "skills" | "education" | "certifications";
+
+type ExperienceEntry = {
+  companyName: string;
+  position: string;
+  time: string;
+  description: string;
+  skills: string;
+  certificates: string;
+};
+
+const createEmptyExperience = (): ExperienceEntry => ({
+  companyName: "",
+  position: "",
+  time: "",
+  description: "",
+  skills: "",
+  certificates: "",
+});
 
 const emptyApplicantForm = {
   userName: "",
@@ -91,13 +109,13 @@ const emptyCvForm = {
   phone: "",
   objective: "",
   skills: [""],
-  experience: [""],
+  experience: [createEmptyExperience()],
   education: [""],
   certifications: [""],
   cvFileUrl: "",
 };
 
-type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "objective" | "cvFile";
+type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "experience" | "objective" | "cvFile";
 
 export default function Profile() {
   const { user: authUser, role } = useAuth();
@@ -126,7 +144,7 @@ export default function Profile() {
           setRecruiter(next);
           setRecruiterForm({
             userName: next.userName || authUser.userName || "",
-            email: next.email || "",
+            email: next.email || authUser.email || "",
             phone: next.phone || "",
             address: next.address || "",
             companyName: next.companyName || "",
@@ -157,15 +175,15 @@ export default function Profile() {
             status: next.status || "",
           });
           setCvForm({
-            fullName: next.cv?.fullName || next.fullName || "",
-            address: next.cv?.address || next.address || "",
-            phone: next.cv?.phone || next.phone || "",
-            objective: next.cv?.objective || "",
+            fullName: next.cv?.fullName ?? next.fullName ?? "",
+            address: next.cv?.address ?? next.address ?? "",
+            phone: next.cv?.phone ?? next.phone ?? "",
+            objective: next.cv?.objective ?? "",
             skills: toList(next.cv?.skills),
-            experience: toList(next.cv?.experience),
+            experience: toExperienceList(next.cv?.experience),
             education: toList(next.cv?.education),
             certifications: toList(next.cv?.certifications),
-            cvFileUrl: next.cv?.cvFileUrl || "",
+            cvFileUrl: next.cv?.cvFileUrl ?? "",
           });
           setSelectedCvFile(null);
           setActiveApplicantEditor(null);
@@ -181,13 +199,13 @@ export default function Profile() {
     return () => {
       active = false;
     };
-  }, [authUser?.id, authUser?.userName, role]);
+  }, [authUser?.email, authUser?.id, authUser?.userName, role]);
 
   const applicantHighlights = useMemo(() => {
     const cv = applicant?.cv;
     return [
       { label: "Skills", value: toList(cv?.skills).filter(Boolean).length },
-      { label: "Experience", value: toList(cv?.experience).filter(Boolean).length },
+      { label: "Experience", value: toExperienceList(cv?.experience).filter(hasExperienceValue).length },
       { label: "Education", value: toList(cv?.education).filter(Boolean).length },
       { label: "Certificates", value: toList(cv?.certifications).filter(Boolean).length },
     ];
@@ -197,7 +215,7 @@ export default function Profile() {
     if (!applicant) return;
     setApplicantForm({
       userName: applicant.userName || authUser?.userName || "",
-      email: applicant.email || "",
+    email: applicant.email || authUser?.email || "",
       phone: applicant.phone || "",
       address: applicant.address || "",
       fullName: applicant.fullName || "",
@@ -205,15 +223,15 @@ export default function Profile() {
       status: applicant.status || "",
     });
     setCvForm({
-      fullName: applicant.cv?.fullName || applicant.fullName || "",
-      address: applicant.cv?.address || applicant.address || "",
-      phone: applicant.cv?.phone || applicant.phone || "",
-      objective: applicant.cv?.objective || "",
+      fullName: applicant.cv?.fullName ?? applicant.fullName ?? "",
+      address: applicant.cv?.address ?? applicant.address ?? "",
+      phone: applicant.cv?.phone ?? applicant.phone ?? "",
+      objective: applicant.cv?.objective ?? "",
       skills: toList(applicant.cv?.skills),
-      experience: toList(applicant.cv?.experience),
+      experience: toExperienceList(applicant.cv?.experience),
       education: toList(applicant.cv?.education),
       certifications: toList(applicant.cv?.certifications),
-      cvFileUrl: applicant.cv?.cvFileUrl || "",
+      cvFileUrl: applicant.cv?.cvFileUrl ?? "",
     });
     setSelectedCvFile(null);
   };
@@ -228,12 +246,12 @@ export default function Profile() {
       } else {
         const updated = await updateApplicant(authUser.id, applicantForm);
         const formData = new FormData();
-        formData.append("fullName", cvForm.fullName || applicantForm.fullName);
-        formData.append("address", cvForm.address || applicantForm.address);
-        formData.append("phone", cvForm.phone || applicantForm.phone);
+        formData.append("fullName", cvForm.fullName);
+        formData.append("address", cvForm.address);
+        formData.append("phone", cvForm.phone);
         formData.append("objective", cvForm.objective);
         formData.append("skills", fromList(cvForm.skills));
-        formData.append("experience", fromList(cvForm.experience));
+        formData.append("experience", fromExperienceList(cvForm.experience));
         formData.append("education", fromList(cvForm.education));
         formData.append("certifications", fromList(cvForm.certifications));
         formData.append("cvFileUrl", cvForm.cvFileUrl);
@@ -276,7 +294,16 @@ export default function Profile() {
   }
 
   return (
-    <ProfileFrame editing={editing} saving={saving} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={handleSave}>
+    <ProfileFrame
+      editing={editing}
+      saving={saving}
+      onEdit={() => {
+        resetApplicantDraft();
+        setEditing(true);
+      }}
+      onCancel={() => setEditing(false)}
+      onSave={handleSave}
+    >
       {editing ? (
         <ApplicantEditForm
           applicantForm={applicantForm}
@@ -391,6 +418,9 @@ function ApplicantView({
   const setList = (field: TextListField, values: string[]) => {
     setCvForm((current) => ({ ...current, [field]: values }));
   };
+  const setExperience = (values: ExperienceEntry[]) => {
+    setCvForm((current) => ({ ...current, experience: values }));
+  };
 
   return (
     <div className="grid xl:grid-cols-[300px_1fr] gap-5">
@@ -461,7 +491,7 @@ function ApplicantView({
             label="Open To Work"
             value={applicant?.status}
             editing={activeEditor === "status"}
-            editor={<SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "NotOpenToWork"]} hideLabel />}
+            editor={<SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} hideLabel />}
             onEdit={() => onEdit("status")}
             onCancel={onCancel}
             onSave={onSave}
@@ -515,7 +545,7 @@ function ApplicantView({
         </Panel>
 
         <LinkedInListPanel icon={<CheckCircle2 />} title="Skills" values={toList(cv?.skills)} editKey="skills" editing={activeEditor === "skills"} editValues={cvForm.skills} onEdit={() => onEdit("skills")} onChange={(values) => setList("skills", values)} onCancel={onCancel} onSave={onSave} saving={saving} placeholder="Java, Spring Boot, React" />
-        <LinkedInListPanel icon={<Briefcase />} title="Experience" values={toList(cv?.experience)} editKey="experience" editing={activeEditor === "experience"} editValues={cvForm.experience} onEdit={() => onEdit("experience")} onChange={(values) => setList("experience", values)} onCancel={onCancel} onSave={onSave} saving={saving} placeholder="Backend Engineering Intern - Company - 2025 - Present" />
+        <ExperiencePanel values={toExperienceList(cv?.experience)} editing={activeEditor === "experience"} editValues={cvForm.experience} onEdit={() => onEdit("experience")} onChange={setExperience} onCancel={onCancel} onSave={onSave} saving={saving} />
         <LinkedInListPanel icon={<GraduationCap />} title="Education" values={toList(cv?.education)} editKey="education" editing={activeEditor === "education"} editValues={cvForm.education} onEdit={() => onEdit("education")} onChange={(values) => setList("education", values)} onCancel={onCancel} onSave={onSave} saving={saving} placeholder="VNUHCM - University of Science - Bachelor of Computer Science" />
         <LinkedInListPanel icon={<Award />} title="Certificates" values={toList(cv?.certifications)} editKey="certifications" editing={activeEditor === "certifications"} editValues={cvForm.certifications} onEdit={() => onEdit("certifications")} onChange={(values) => setList("certifications", values)} onCancel={onCancel} onSave={onSave} saving={saving} placeholder="AWS Cloud Practitioner" />
       </div>
@@ -663,6 +693,9 @@ function ApplicantEditForm({
   const setList = (field: TextListField, values: string[]) => {
     setCvForm((current) => ({ ...current, [field]: values }));
   };
+  const setExperience = (values: ExperienceEntry[]) => {
+    setCvForm((current) => ({ ...current, experience: values }));
+  };
 
   return (
     <div className="space-y-5">
@@ -674,7 +707,7 @@ function ApplicantEditForm({
           <Field label="Phone" value={applicantForm.phone} onChange={(value) => setApplicantField("phone", value)} />
           <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
           <SelectField label="Gender" value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} options={["Male", "Female", "Other"]} />
-          <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "NotOpenToWork"]} />
+          <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} />
         </div>
       </Panel>
 
@@ -706,7 +739,7 @@ function ApplicantEditForm({
       </Panel>
 
       <EditableList title="Skills" values={cvForm.skills} onChange={(values) => setList("skills", values)} placeholder="Java, Spring Boot, React" />
-      <EditableList title="Experience" values={cvForm.experience} onChange={(values) => setList("experience", values)} placeholder="Backend Engineering Intern - Company - 2025 - Present" />
+      <EditableExperience title="Experience" values={cvForm.experience} onChange={setExperience} />
       <EditableList title="Education" values={cvForm.education} onChange={(values) => setList("education", values)} placeholder="VNUHCM - University of Science - Bachelor of Computer Science" />
       <EditableList title="Certificates" values={cvForm.certifications} onChange={(values) => setList("certifications", values)} placeholder="AWS Cloud Practitioner" />
     </div>
@@ -818,6 +851,129 @@ function EditableListFields({
   );
 }
 
+function EditableExperience({
+  title,
+  values,
+  onChange,
+}: {
+  title: string;
+  values: ExperienceEntry[];
+  onChange: (values: ExperienceEntry[]) => void;
+}) {
+  return (
+    <Panel title={title}>
+      <EditableExperienceFields values={values} onChange={onChange} />
+    </Panel>
+  );
+}
+
+function EditableExperienceFields({
+  values,
+  onChange,
+}: {
+  values: ExperienceEntry[];
+  onChange: (values: ExperienceEntry[]) => void;
+}) {
+  const entries = values.length > 0 ? values : [createEmptyExperience()];
+  const updateAt = (index: number, field: keyof ExperienceEntry, value: string) => {
+    onChange(entries.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
+  };
+  const removeAt = (index: number) => {
+    onChange(entries.length === 1 ? [createEmptyExperience()] : entries.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      {entries.map((entry, index) => (
+        <div key={index} className="border-l pl-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">Experience {index + 1}</p>
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeAt(index)} aria-label="Remove experience">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="mt-3 grid md:grid-cols-2 gap-3">
+            <Field label="Company Name" value={entry.companyName} onChange={(value) => updateAt(index, "companyName", value)} />
+            <Field label="Position" value={entry.position} onChange={(value) => updateAt(index, "position", value)} />
+            <Field label="Time" value={entry.time} onChange={(value) => updateAt(index, "time", value)} />
+            <Field label="Skills Learned" value={entry.skills} onChange={(value) => updateAt(index, "skills", value)} />
+          </div>
+          <div className="mt-3 space-y-2">
+            <Label>Description</Label>
+            <Textarea value={entry.description} onChange={(event) => updateAt(index, "description", event.target.value)} />
+          </div>
+          <div className="mt-3">
+            <Field label="Certificates" value={entry.certificates} onChange={(value) => updateAt(index, "certificates", value)} />
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => onChange([...entries, createEmptyExperience()])}>
+        <Plus className="w-4 h-4" /> Add Experience
+      </Button>
+    </div>
+  );
+}
+
+function ExperiencePanel({
+  values,
+  editing,
+  editValues,
+  onEdit,
+  onChange,
+  onCancel,
+  onSave,
+  saving,
+}: {
+  values: ExperienceEntry[];
+  editing: boolean;
+  editValues: ExperienceEntry[];
+  onEdit: () => void;
+  onChange: (values: ExperienceEntry[]) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const filtered = values.filter(hasExperienceValue);
+  return (
+    <Panel
+      title="Experience"
+      action={
+        !editing && <div className="flex gap-1">
+          <IconButton label="Add Experience" onClick={onEdit} icon={<Plus />} />
+          <IconButton label="Edit Experience" onClick={onEdit} icon={<Pencil />} />
+        </div>
+      }
+    >
+      {editing ? (
+        <InlineEditorActions onCancel={onCancel} onSave={onSave} saving={saving}>
+          <EditableExperienceFields values={editValues} onChange={onChange} />
+        </InlineEditorActions>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No experience added yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((item, index) => (
+            <div key={`${item.companyName}-${item.position}-${index}`} className="flex items-start gap-3">
+              <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border bg-secondary text-primary">
+                <Briefcase className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold text-foreground break-words">
+                  {[item.position, item.companyName].filter(Boolean).join(" at ") || "Experience"}
+                </p>
+                {item.time && <p className="text-xs text-muted-foreground">{item.time}</p>}
+                {item.description && <p className="text-sm leading-6 text-muted-foreground whitespace-pre-line">{item.description}</p>}
+                {item.skills && <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Skills:</span> {item.skills}</p>}
+                {item.certificates && <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Certificates:</span> {item.certificates}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function LinkedInListPanel({
   icon,
   title,
@@ -926,18 +1082,25 @@ function SelectField({
   return (
     <div className="space-y-2">
       {!hideLabel && <Label>{label}</Label>}
-      <Select value={value || undefined} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex gap-2">
+        <Select value={value || undefined} onValueChange={onChange}>
+          <SelectTrigger>
+            <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {value && (
+          <Button type="button" variant="outline" size="icon" aria-label={`Clear ${label}`} onClick={() => onChange("")}>
+            <X className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1063,6 +1226,48 @@ function toList(value?: string | null) {
 
 function fromList(values: string[]) {
   return values.map((item) => item.trim()).filter(Boolean).join("\n");
+}
+
+function toExperienceList(value?: string | null): ExperienceEntry[] {
+  if (!value?.trim()) return [createEmptyExperience()];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const entries = parsed.map((item) => ({
+        companyName: String(item?.companyName ?? ""),
+        position: String(item?.position ?? ""),
+        time: String(item?.time ?? ""),
+        description: String(item?.description ?? ""),
+        skills: Array.isArray(item?.skills) ? item.skills.join(", ") : String(item?.skills ?? ""),
+        certificates: Array.isArray(item?.certificates) ? item.certificates.join(", ") : String(item?.certificates ?? ""),
+      }));
+      return entries.length > 0 ? entries : [createEmptyExperience()];
+    }
+  } catch {
+    // Plain text experience from older CVs is converted into one editable entry.
+  }
+  const legacyEntries = toList(value)
+    .filter(Boolean)
+    .map((description) => ({ ...createEmptyExperience(), description }));
+  return legacyEntries.length > 0 ? legacyEntries : [createEmptyExperience()];
+}
+
+function fromExperienceList(values: ExperienceEntry[]) {
+  const entries = values
+    .map((item) => ({
+      companyName: item.companyName.trim(),
+      position: item.position.trim(),
+      time: item.time.trim(),
+      description: item.description.trim(),
+      skills: item.skills.trim(),
+      certificates: item.certificates.trim(),
+    }))
+    .filter(hasExperienceValue);
+  return entries.length > 0 ? JSON.stringify(entries) : "";
+}
+
+function hasExperienceValue(value: ExperienceEntry) {
+  return Object.values(value).some((item) => item.trim().length > 0);
 }
 
 function firstLine(value: string) {

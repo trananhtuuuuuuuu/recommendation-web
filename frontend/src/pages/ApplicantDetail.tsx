@@ -57,7 +57,7 @@ export default function ApplicantDetail() {
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h2 className="font-display text-xl font-bold text-foreground">{applicant.fullName ?? applicant.userName ?? "Applicant"}</h2>
               <Badge className="bg-primary/10 text-primary text-[10px]"><Shield className="w-3 h-3 mr-1" />ID: {applicant.id}</Badge>
-              {applicant.status && <Badge className="bg-success/10 text-success text-[10px]">{applicant.status}</Badge>}
+              {applicant.status && <Badge className={`${applicant.status === "OpenToWork" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"} text-[10px]`}>{applicant.status}</Badge>}
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               {canSeeContact && applicant.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {applicant.email}</span>}
@@ -87,7 +87,7 @@ export default function ApplicantDetail() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>Objective: <span className="text-foreground">{applicant.cv.objective || "N/A"}</span></p>
               <p>Skills: <span className="text-foreground">{applicant.cv.skills || "N/A"}</span></p>
-              <p>Experience: <span className="text-foreground">{applicant.cv.experience || "N/A"}</span></p>
+              <p>Experience: <span className="text-foreground whitespace-pre-line">{formatExperience(applicant.cv.experience)}</span></p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No CV uploaded yet.</p>
@@ -96,4 +96,21 @@ export default function ApplicantDetail() {
       </div>
     </div>
   );
+}
+
+function formatExperience(value?: string | null) {
+  if (!value) return "N/A";
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const formatted = parsed
+        .map((item) => [item.position, item.companyName, item.time].filter(Boolean).join(" - "))
+        .filter(Boolean)
+        .join("\n");
+      return formatted || "N/A";
+    }
+  } catch {
+    return value;
+  }
+  return value;
 }

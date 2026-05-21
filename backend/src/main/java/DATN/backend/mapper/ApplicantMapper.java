@@ -56,21 +56,36 @@ public class ApplicantMapper {
                 applicant
                                 .setStatus(request.getStatus() == null || request.getStatus().isBlank()
                                                 ? ApplicantStatusEnum.OpenToWork
-                                                : ApplicantStatusEnum.valueOf(request.getStatus()));
+                                                : toApplicantStatus(request.getStatus()));
                 return applicant;
         }
 
         public static Applicant updateApplicant(Applicant applicant, UpdateApplicantRequest request) {
                 applicant.setAddress(request.getAddress());
-                applicant.setEmail(request.getEmail());
+                if (request.getEmail() != null && !request.getEmail().isBlank()) {
+                        applicant.setEmail(request.getEmail());
+                }
                 applicant.setPhone(request.getPhone());
-                applicant.setUserName(request.getUserName());
-                applicant.setFullName(request.getFullName());
-                applicant.setGender(request.getGender() == null || request.getGender().isBlank() ? applicant.getGender()
-                                : GenderEnum.valueOf(request.getGender()));
-                applicant.setStatus(request.getStatus() == null || request.getStatus().isBlank() ? applicant.getStatus()
-                                : ApplicantStatusEnum.valueOf(request.getStatus()));
+                if (request.getUserName() != null && !request.getUserName().isBlank()) {
+                        applicant.setUserName(request.getUserName());
+                }
+                if (request.getFullName() != null && !request.getFullName().isBlank()) {
+                        applicant.setFullName(request.getFullName());
+                }
+                if (request.getGender() != null) {
+                        applicant.setGender(request.getGender().isBlank() ? null : GenderEnum.valueOf(request.getGender()));
+                }
+                if (request.getStatus() != null) {
+                        applicant.setStatus(request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
+                }
                 return applicant;
+        }
+
+        private static ApplicantStatusEnum toApplicantStatus(String status) {
+                if ("NotOpenToWork".equals(status) || "Archived".equals(status)) {
+                        return ApplicantStatusEnum.Normal;
+                }
+                return ApplicantStatusEnum.valueOf(status);
         }
 
         public static Cv toCv(UploadCvRequest request) {

@@ -24,7 +24,7 @@ public class Cv extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long Id;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String fullName;
 
     @Column(nullable = true)

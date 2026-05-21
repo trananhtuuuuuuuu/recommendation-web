@@ -13,6 +13,7 @@ import {
 export interface AuthUser {
   id: string | null;
   userName: string | null;
+  email?: string | null;
   role: Role | null;
 }
 
@@ -95,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleName?: string;
       userId?: string | number;
       userName?: string;
+      email?: string;
     }>(
       "/api/v1/auth",
       { method: "POST", body: input, auth: false }
@@ -106,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u: AuthUser = {
       id: data?.userId !== undefined ? String(data.userId) : extractUserId(claims),
       userName: data?.userName ?? input.userName,
+      email: data?.email ?? null,
       role: extractRole(claims) ?? (((data?.roleName ?? data?.role)?.toUpperCase() as Role) || null),
     };
     writeStoredUser(u);

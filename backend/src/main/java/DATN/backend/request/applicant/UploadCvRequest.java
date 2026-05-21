@@ -1,6 +1,5 @@
 package DATN.backend.request.applicant;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +12,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Setter
 public class UploadCvRequest {
 
-    @NotBlank(message = "Full name is required")
     private String fullName;
 
     private String address;

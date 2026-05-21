@@ -91,7 +91,7 @@ class BackendEndpointsIntegrationTests {
                                                   "address": "Hanoi",
                                                   "email": "applicant@example.com",
                                                   "password": "secret123",
-                                                  "phone": "+84901234567",
+                                                  "phone": "0787549324",
                                                   "userName": "applicant01",
                                                   "fullName": "Applicant One"
                                                 }
@@ -126,7 +126,7 @@ class BackendEndpointsIntegrationTests {
                                                   "address": "Hanoi",
                                                   "email": "login@example.com",
                                                   "password": "secret123",
-                                                  "phone": "+84901234567",
+                                                  "phone": "0787549324",
                                                   "userName": "loginuser",
                                                   "fullName": "Login User"
                                                 }
@@ -187,16 +187,19 @@ class BackendEndpointsIntegrationTests {
                                                 {
                                                   "address": "Da Nang",
                                                   "email": "updated-applicant@example.com",
-                                                  "phone": "+84901234567",
+                                                  "phone": "0787549324",
                                                   "userName": "updatedapplicant",
-                                                  "fullName": "Updated Applicant",
+                                                  "fullName": "",
                                                   "gender": "Female",
-                                                  "status": "OpenToWork"
+                                                  "status": "Normal"
                                                 }
                                                 """))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.data.userName").value("updatedapplicant"))
-                                .andExpect(jsonPath("$.data.address").value("Da Nang"));
+                                .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
+                                .andExpect(jsonPath("$.data.phone").value("0787549324"))
+                                .andExpect(jsonPath("$.data.address").value("Da Nang"))
+                                .andExpect(jsonPath("$.data.status").value("Normal"));
 
                 mockMvc.perform(post("/api/v1/applicants/save/job")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -237,16 +240,18 @@ class BackendEndpointsIntegrationTests {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "fullName": "Updated Applicant",
+                                                  "fullName": "",
                                                   "address": "Da Nang",
                                                   "phone": "+84901234567",
                                                   "objective": "Build good software",
                                                                                                                                 "skills": "Java, Spring Boot",
+                                                                                                                                "experience": "[{\\"companyName\\":\\"Acme\\",\\"position\\":\\"Backend Intern\\",\\"time\\":\\"2025\\",\\"description\\":\\"Built APIs\\",\\"skills\\":\\"Java\\",\\"certificates\\":\\"Spring Certificate\\"}]",
                                                                                                                                 "cvFileUrl": "https://example.com/cv/updated-applicant.pdf"
                                                 }
                                                 """))
                                 .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.data.fullName").value("Updated Applicant"))
+                                .andExpect(jsonPath("$.data.fullName").value(""))
+                                .andExpect(jsonPath("$.data.experience").value("[{\"companyName\":\"Acme\",\"position\":\"Backend Intern\",\"time\":\"2025\",\"description\":\"Built APIs\",\"skills\":\"Java\",\"certificates\":\"Spring Certificate\"}]"))
                                 .andExpect(jsonPath("$.data.cvFileUrl")
                                                 .value("https://example.com/cv/updated-applicant.pdf"));
         }

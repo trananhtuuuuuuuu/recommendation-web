@@ -31,7 +31,7 @@ public class Applicant extends User {
     @Enumerated(EnumType.ORDINAL)
     private GenderEnum gender;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String fullName;
 
     public Applicant(String address, String email, String fullName, String password, String phone,
