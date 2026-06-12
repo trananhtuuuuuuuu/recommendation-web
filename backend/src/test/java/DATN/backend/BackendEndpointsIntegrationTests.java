@@ -2,10 +2,13 @@ package DATN.backend;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -18,7 +21,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import DATN.backend.Enum.ApplicantStatusEnum;
 import DATN.backend.Enum.GenderEnum;
@@ -36,6 +41,9 @@ import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
 import DATN.backend.security.InforInsideToken;
 import DATN.backend.security.JwtService;
+import DATN.backend.response.cv.CvAnalysisResponse;
+import DATN.backend.response.cv.CvExperienceResponse;
+import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,6 +60,9 @@ class BackendEndpointsIntegrationTests {
         private final JobDescriptionRepository jobDescriptionRepository;
         private final PasswordEncoder passwordEncoder;
         private final JwtService jwtService;
+
+        @MockitoBean
+        private InterfaceCvAiService cvAiService;
 
         BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
                         ApplicantRepository applicantRepository,
@@ -292,6 +303,52 @@ class BackendEndpointsIntegrationTests {
                                 .save(new ApplicantJobDescription(applicant, job, "SAVED"));
                 mockMvc.perform(delete("/api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}",
                                 applicant.getId(), protectedRelation.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherApplicant)))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.errors[0]")
+                                                .value("You can only manage jobs in your own applicant account"));
+        }
+
+        @Test
+        void applicantShouldAnalyzeCvWithAuthenticatedAiEndpoint() throws Exception {
+                Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+                Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
+                MockMultipartFile cvFile = new MockMultipartFile(
+                                "cvFile",
+                                "applicant.pdf",
+                                MediaType.APPLICATION_PDF_VALUE,
+                                "sample cv".getBytes());
+                when(cvAiService.analyzeCv(any())).thenReturn(new CvAnalysisResponse(
+                                "Applicant One",
+                                "applicant@example.com",
+                                "+84901234567",
+                                "Ho Chi Minh City",
+                                "Backend engineer",
+                                java.util.List.of("Java", "Spring Boot"),
+                                java.util.List.of(new CvExperienceResponse(
+                                                "Example Corp",
+                                                "Backend Engineer",
+                                                "2024 - Present",
+                                                "Built secure APIs",
+                                                "Java",
+                                                "")),
+                                java.util.List.of("HCMUS - Computer Science"),
+                                java.util.List.of("AWS Cloud Practitioner"),
+                                "layoutlmv3",
+                                0.94,
+                                java.util.List.of()));
+
+                mockMvc.perform(multipart("/api/v1/applicants/{applicantId}/analyze-cv", applicant.getId())
+                                .file(cvFile)
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.message").value("CV analyzed successfully"))
+                                .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
+                                .andExpect(jsonPath("$.data.skills[0]").value("Java"))
+                                .andExpect(jsonPath("$.data.extractionMode").value("layoutlmv3"));
+
+                mockMvc.perform(multipart("/api/v1/applicants/{applicantId}/analyze-cv", applicant.getId())
+                                .file(cvFile)
                                 .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherApplicant)))
                                 .andExpect(status().isForbidden())
                                 .andExpect(jsonPath("$.errors[0]")

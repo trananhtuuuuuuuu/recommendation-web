@@ -220,9 +220,15 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (contentType != null && !List.of(
                 "application/pdf",
                 "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/bmp",
+                "image/tiff")
                 .contains(contentType)) {
-            throw new IllegalArgumentException("CV file must be a PDF, DOC, or DOCX file");
+            throw new IllegalArgumentException(
+                    "CV file must be a PDF, DOC, DOCX, PNG, JPG, WebP, BMP, or TIFF file");
         }
 
         String extension = "";

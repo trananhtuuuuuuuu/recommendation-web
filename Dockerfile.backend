@@ -21,7 +21,10 @@ FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
 
 # Create a non-root user for security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+RUN addgroup --system appgroup \
+    && adduser --system --ingroup appgroup appuser \
+    && mkdir -p /app/uploads/cvs \
+    && chown -R appuser:appgroup /app/uploads
 
 COPY --from=builder /app/target/*.jar app.jar
 

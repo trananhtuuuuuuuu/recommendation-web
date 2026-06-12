@@ -1,0 +1,32 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+ARG AI_WITH_MODEL=false
+ENV AI_WITH_MODEL=${AI_WITH_MODEL}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        antiword \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        tesseract-ocr-vie \
+    && if [ "$AI_WITH_MODEL" = "true" ]; then \
+        apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1; \
+    fi \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ai/requirements.txt ai/requirements-ml.txt ./
+RUN pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt
+RUN if [ "$AI_WITH_MODEL" = "true" ]; then \
+        pip install --no-cache-dir --default-timeout=1000 --retries 10 \
+            torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu \
+        && pip install --no-cache-dir --default-timeout=1000 --retries 10 \
+            -r requirements-ml.txt; \
+    fi
+
+COPY ai/app ./app
+
+EXPOSE 8001
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

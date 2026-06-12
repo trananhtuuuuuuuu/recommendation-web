@@ -18,6 +18,41 @@ services:
   #     interval: 10s
   #     timeout: 5s
   #     retries: 5
+  # LayoutLMv3 CV extraction service. Put the exported notebook model in
+  # ai/model, or set AI_MODEL_HOST_PATH to another local model directory.
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+      args:
+        AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+    container_name: rw-ai
+    restart: unless-stopped
+    networks:
+      - rw-network
+    environment:
+      AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+      AI_MODEL_DIR: /models/layoutlmv3
+      AI_MAX_PAGES: ${AI_MAX_PAGES:-3}
+      AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
+      AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}
+    volumes:
+      - ${AI_MODEL_HOST_PATH:-./ai/model}:/models/layoutlmv3:ro
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ── Spring Boot Backend ──────────────────────────────────────────────────
   # Connects to the EXTERNAL postgres-db container already running on host port 8386.
   # host.docker.internal resolves to the host machine from inside Docker (Linux needs
@@ -38,8 +73,15 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-123456}
       SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      AI_CV_BASE_URL: http://ai:8001
+      AI_CV_ENABLED: ${AI_CV_ENABLED:-true}
     ports:
       - "8000:8081"
+    volumes:
+      - cv_uploads:/app/uploads
+    depends_on:
+      ai:
+        condition: service_healthy
 
   # ── React / Vite Frontend ────────────────────────────────────────────────
   # localhost:3000 (your machine) → :3001 (inside container, nginx)
@@ -61,12 +103,14 @@ services:
       - backend
 
 # ── Shared Bridge Network ────────────────────────────────────────────────────
-# All three services join "rw-network" so they can reach each other
-# by container/service name (e.g. "db", "backend", "frontend") instead of IP.
+# All services join "rw-network" so they can reach each other
+# by container/service name instead of IP.
 networks:
   rw-network:
     driver: bridge
 
 volumes:
   pg_data:
+    driver: local
+  cv_uploads:
     driver: local

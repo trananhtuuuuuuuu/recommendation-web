@@ -22,6 +22,7 @@ import {
   Plus,
   Save,
   ShieldCheck,
+  Sparkles,
   Trash2,
   User,
   X,
@@ -32,10 +33,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchApplicant,
   fetchRecruiter,
+  analyzeCv,
   updateApplicant,
   updateRecruiter,
   uploadCv,
   type Applicant,
+  type CvAnalysis,
+  type CvExperienceSuggestion,
   type Recruiter,
 } from "@/lib/jobsApi";
 import { API_BASE_URL, ApiError } from "@/lib/api";
@@ -136,6 +140,8 @@ export default function Profile() {
   const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
   const [cvForm, setCvForm] = useState(emptyCvForm);
   const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null);
+  const [analyzingCv, setAnalyzingCv] = useState(false);
+  const [cvAnalysis, setCvAnalysis] = useState<CvAnalysis | null>(null);
   const [activeApplicantEditor, setActiveApplicantEditor] = useState<ApplicantInlineEditor | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
 
@@ -195,6 +201,7 @@ export default function Profile() {
             cvFileUrl: next.cv?.cvFileUrl ?? "",
           });
           setSelectedCvFile(null);
+          setCvAnalysis(null);
           setActiveApplicantEditor(null);
         }
       })
@@ -266,10 +273,54 @@ export default function Profile() {
       cvFileUrl: applicant.cv?.cvFileUrl ?? "",
     });
     setSelectedCvFile(null);
+    setCvAnalysis(null);
+  };
+
+  const handleCvFileChange = async (file: File | null) => {
+    setSelectedCvFile(file);
+    setCvAnalysis(null);
+    if (!file || !authUser?.id) return;
+
+    setAnalyzingCv(true);
+    try {
+      const analysis = await analyzeCv(authUser.id, file);
+      setCvAnalysis(analysis);
+      setApplicantForm((current) => ({
+        ...current,
+        fullName: preferExisting(current.fullName, analysis.fullName),
+        email: preferExisting(current.email, analysis.detectedEmail),
+        phone: preferExisting(current.phone, analysis.phone),
+        address: preferExisting(current.address, analysis.address),
+      }));
+      setCvForm((current) => ({
+        ...current,
+        fullName: preferExisting(current.fullName, analysis.fullName),
+        phone: preferExisting(current.phone, analysis.phone),
+        address: preferExisting(current.address, analysis.address),
+        objective: preferExisting(current.objective, analysis.objective),
+        skills: mergeDetectedList(current.skills, analysis.skills),
+        experience: mergeDetectedExperience(current.experience, analysis.experience),
+        education: mergeDetectedList(current.education, analysis.education),
+        certifications: mergeDetectedList(current.certifications, analysis.certifications),
+      }));
+      toast.success(
+        analysis.extractionMode === "layoutlmv3"
+          ? "CV analyzed with LayoutLMv3. Review the suggested profile fields."
+          : "CV text analyzed. Review the suggested profile fields.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError
+          ? `${error.message}. You can still complete the fields manually.`
+          : "Automatic CV analysis failed. You can still upload and complete the fields manually.",
+      );
+    } finally {
+      setAnalyzingCv(false);
+    }
   };
 
   const handleSave = async () => {
-    if (!authUser?.id) return;
+    if (!authUser?.id || analyzingCv) return;
     setSaving(true);
     try {
       if (role === "RECRUITER") {
@@ -294,6 +345,7 @@ export default function Profile() {
         const refreshed = await fetchApplicant(authUser.id);
         setApplicant(refreshed || updated);
         setSelectedCvFile(null);
+        setCvAnalysis(null);
       }
       setEditing(false);
       setActiveApplicantEditor(null);
@@ -334,7 +386,7 @@ export default function Profile() {
   return (
     <ProfileFrame
       editing={editing}
-      saving={saving}
+      saving={saving || analyzingCv}
       onEdit={() => {
         resetApplicantDraft();
         setEditing(true);
@@ -349,7 +401,9 @@ export default function Profile() {
           cvForm={cvForm}
           setCvForm={setCvForm}
           selectedCvFile={selectedCvFile}
-          setSelectedCvFile={setSelectedCvFile}
+          onCvFileChange={handleCvFileChange}
+          analyzingCv={analyzingCv}
+          cvAnalysis={cvAnalysis}
         />
       ) : (
         <ApplicantView
@@ -363,7 +417,9 @@ export default function Profile() {
           cvForm={cvForm}
           setCvForm={setCvForm}
           selectedCvFile={selectedCvFile}
-          setSelectedCvFile={setSelectedCvFile}
+          onCvFileChange={handleCvFileChange}
+          analyzingCv={analyzingCv}
+          cvAnalysis={cvAnalysis}
           activeEditor={activeApplicantEditor}
           onEdit={(field) => setActiveApplicantEditor(field)}
           onCancel={() => {
@@ -371,7 +427,7 @@ export default function Profile() {
             setActiveApplicantEditor(null);
           }}
           onSave={handleSave}
-          saving={saving}
+          saving={saving || analyzingCv}
         />
       )}
     </ProfileFrame>
@@ -488,7 +544,9 @@ function ApplicantView({
   cvForm,
   setCvForm,
   selectedCvFile,
-  setSelectedCvFile,
+  onCvFileChange,
+  analyzingCv,
+  cvAnalysis,
   activeEditor,
   onEdit,
   onCancel,
@@ -505,7 +563,9 @@ function ApplicantView({
   cvForm: typeof emptyCvForm;
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
-  setSelectedCvFile: React.Dispatch<React.SetStateAction<File | null>>;
+  onCvFileChange: (file: File | null) => void;
+  analyzingCv: boolean;
+  cvAnalysis: CvAnalysis | null;
   activeEditor: ApplicantInlineEditor | null;
   onEdit: (field: ApplicantInlineEditor) => void;
   onCancel: () => void;
@@ -634,8 +694,9 @@ function ApplicantView({
             <InlineEditorActions onCancel={onCancel} onSave={onSave} saving={saving}>
               <Input
                 type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={(event) => setSelectedCvFile(event.target.files?.[0] ?? null)}
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+                disabled={analyzingCv}
+                onChange={(event) => onCvFileChange(event.target.files?.[0] ?? null)}
               />
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <FileText className="w-4 h-4 text-primary" />
@@ -643,6 +704,7 @@ function ApplicantView({
                   {selectedCvFile?.name || fileNameFromPath(cvForm.cvFileUrl) || "No CV file selected yet."}
                 </span>
               </div>
+              <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
             </InlineEditorActions>
           ) : cv?.cvFileUrl ? (
             <a href={toAssetUrl(cv.cvFileUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
@@ -803,14 +865,18 @@ function ApplicantEditForm({
   cvForm,
   setCvForm,
   selectedCvFile,
-  setSelectedCvFile,
+  onCvFileChange,
+  analyzingCv,
+  cvAnalysis,
 }: {
   applicantForm: typeof emptyApplicantForm;
   setApplicantForm: React.Dispatch<React.SetStateAction<typeof emptyApplicantForm>>;
   cvForm: typeof emptyCvForm;
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
-  setSelectedCvFile: React.Dispatch<React.SetStateAction<File | null>>;
+  onCvFileChange: (file: File | null) => void;
+  analyzingCv: boolean;
+  cvAnalysis: CvAnalysis | null;
 }) {
   const setApplicantField = (field: keyof typeof emptyApplicantForm, value: string) => {
     setApplicantForm((current) => ({ ...current, [field]: value }));
@@ -854,8 +920,9 @@ function ApplicantEditForm({
           <Input
             id="cv-file"
             type="file"
-            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(event) => setSelectedCvFile(event.target.files?.[0] ?? null)}
+            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+            disabled={analyzingCv}
+            onChange={(event) => onCvFileChange(event.target.files?.[0] ?? null)}
           />
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <FileText className="w-4 h-4 text-primary" />
@@ -863,6 +930,7 @@ function ApplicantEditForm({
               {selectedCvFile?.name || fileNameFromPath(cvForm.cvFileUrl) || "No CV file selected yet."}
             </span>
           </div>
+          <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
         </div>
       </Panel>
 
@@ -1379,6 +1447,112 @@ function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
       <p className="text-sm">{title}</p>
     </div>
   );
+}
+
+function CvAnalysisNotice({
+  analyzing,
+  analysis,
+}: {
+  analyzing: boolean;
+  analysis: CvAnalysis | null;
+}) {
+  if (analyzing) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        Analyzing your CV and preparing profile suggestions...
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Selecting a CV suggests values for empty profile fields. Existing information is preserved.
+      </p>
+    );
+  }
+
+  const modeLabel = analysis.extractionMode === "layoutlmv3" ? "LayoutLMv3" : "Text extraction";
+  const confidenceLabel =
+    typeof analysis.confidence === "number"
+      ? `${Math.round(analysis.confidence * 100)}% confidence`
+      : null;
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <span className="font-medium text-foreground">CV suggestions applied to empty fields</span>
+        <Badge variant="secondary">{modeLabel}</Badge>
+        {confidenceLabel && <span className="text-muted-foreground">{confidenceLabel}</span>}
+      </div>
+      {analysis.warnings && analysis.warnings.length > 0 && (
+        <p className="mt-2 text-muted-foreground">{analysis.warnings.join(" ")}</p>
+      )}
+    </div>
+  );
+}
+
+function preferExisting(current: string, detected?: string | null) {
+  return current.trim() ? current : detected?.trim() ?? "";
+}
+
+function mergeDetectedList(existing: string[], detected?: string[] | null) {
+  const result = existing.map((value) => value.trim()).filter(Boolean);
+  const knownValues = new Set(result.map((value) => value.toLowerCase()));
+
+  for (const value of detected ?? []) {
+    const cleanedValue = value.trim();
+    const normalizedValue = cleanedValue.toLowerCase();
+    if (cleanedValue && !knownValues.has(normalizedValue)) {
+      result.push(cleanedValue);
+      knownValues.add(normalizedValue);
+    }
+  }
+
+  return result.length ? result : [""];
+}
+
+function mergeDetectedExperience(
+  existing: ExperienceEntry[],
+  detected?: CvExperienceSuggestion[] | null,
+) {
+  const result = existing
+    .map((entry) => ({
+      companyName: entry.companyName.trim(),
+      position: entry.position.trim(),
+      time: entry.time.trim(),
+      description: entry.description.trim(),
+      skills: entry.skills.trim(),
+      certificates: entry.certificates.trim(),
+    }))
+    .filter(hasExperienceValue);
+  const knownValues = new Set(result.map(experienceKey));
+
+  for (const entry of detected ?? []) {
+    const suggestion: ExperienceEntry = {
+      companyName: entry.companyName?.trim() ?? "",
+      position: entry.position?.trim() ?? "",
+      time: entry.time?.trim() ?? "",
+      description: entry.description?.trim() ?? "",
+      skills: entry.skills?.trim() ?? "",
+      certificates: entry.certificates?.trim() ?? "",
+    };
+    const key = experienceKey(suggestion);
+    if (hasExperienceValue(suggestion) && !knownValues.has(key)) {
+      result.push(suggestion);
+      knownValues.add(key);
+    }
+  }
+
+  return result.length ? result : [createEmptyExperience()];
+}
+
+function experienceKey(entry: ExperienceEntry) {
+  return Object.values(entry)
+    .map((value) => value.trim().toLowerCase())
+    .join("|");
 }
 
 function toList(value?: string | null) {

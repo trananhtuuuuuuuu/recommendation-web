@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
@@ -21,6 +23,7 @@ import DATN.backend.response.ApiResponse;
 import DATN.backend.exception.ForbiddenException;
 import DATN.backend.security.InforInsideToken;
 import DATN.backend.service.InterfaceService.InterfaceApplicantService;
+import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,6 +39,7 @@ import org.springframework.security.core.Authentication;
 @Tag(name = "Applicant", description = "Applicant profile, saved job, and CV APIs")
 public class ApplicantController {
     private final InterfaceApplicantService applicantService;
+    private final InterfaceCvAiService cvAiService;
 
     @Operation(summary = "Get all applicants")
     @GetMapping
@@ -119,6 +123,24 @@ public class ApplicantController {
         verifyApplicantAccess(applicantId, authentication);
         return ResponseEntity.ok(ApiResponse.success("Application withdrawn successfully", HttpStatus.OK,
                 applicantService.withdrawApplication(applicantId, applicantJobId)));
+    }
+
+    /**
+     * Analyzes a CV and returns suggested applicant profile fields without
+     * persisting them.
+     *
+     * @param applicantId applicant owner identifier
+     * @param cvFile uploaded CV document
+     * @param authentication current JWT authentication
+     * @return standard API response containing extracted fields
+     */
+    @Operation(summary = "Analyze a CV and suggest applicant profile fields")
+    @PostMapping(value = "/{applicantId}/analyze-cv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse> analyzeCv(@PathVariable Long applicantId,
+            @RequestPart("cvFile") MultipartFile cvFile, Authentication authentication) {
+        verifyApplicantAccess(applicantId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("CV analyzed successfully", HttpStatus.OK,
+                cvAiService.analyzeCv(cvFile)));
     }
 
     @Operation(summary = "Upload CV for applicant")

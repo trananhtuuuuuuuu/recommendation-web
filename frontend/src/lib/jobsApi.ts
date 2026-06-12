@@ -114,6 +114,30 @@ export interface ApplicationField {
   options?: string[];
 }
 
+export interface CvExperienceSuggestion {
+  companyName?: string;
+  position?: string;
+  time?: string;
+  description?: string;
+  skills?: string;
+  certificates?: string;
+}
+
+export interface CvAnalysis {
+  fullName?: string;
+  detectedEmail?: string;
+  phone?: string;
+  address?: string;
+  objective?: string;
+  skills?: string[];
+  experience?: CvExperienceSuggestion[];
+  education?: string[];
+  certifications?: string[];
+  extractionMode?: "layoutlmv3" | "heuristic" | string;
+  confidence?: number | null;
+  warnings?: string[];
+}
+
 export const getJobId = (j: Job | SavedJob): string => String(j.jobId ?? j.id ?? j.jobDescriptionId ?? "");
 export const getJobTitle = (j: Job): string => j.jobTitle ?? j.title ?? "Untitled";
 
@@ -212,3 +236,13 @@ export const uploadCv = (applicantId: string | number, body: FormData | Record<s
     body,
     isForm: body instanceof FormData,
   });
+
+export const analyzeCv = (applicantId: string | number, cvFile: File) => {
+  const body = new FormData();
+  body.append("cvFile", cvFile);
+  return apiRequest<CvAnalysis>(`/api/v1/applicants/${applicantId}/analyze-cv`, {
+    method: "POST",
+    body,
+    isForm: true,
+  });
+};
