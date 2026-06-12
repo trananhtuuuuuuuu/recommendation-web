@@ -160,14 +160,7 @@ public class ImplApplicantService implements InterfaceApplicantService {
             throw new ResourcesNotFoundException("Applicant not found");
         }
         return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, SAVED_ACTION).stream()
-                .map(relation -> new SavedJobResponse(
-                        relation.getId(),
-                        relation.getApplicant().getId(),
-                        relation.getJobDescription().getId(),
-                        relation.getJobDescription().getJobTitle(),
-                        relation.getJobDescription().getRecruiter() == null ? null
-                                : relation.getJobDescription().getRecruiter().getCompanyName(),
-                        relation.getJobDescription().getLocation()))
+                .map(this::toSavedJobResponse)
                 .toList();
     }
 
@@ -177,15 +170,26 @@ public class ImplApplicantService implements InterfaceApplicantService {
             throw new ResourcesNotFoundException("Applicant not found");
         }
         return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION).stream()
-                .map(relation -> new SavedJobResponse(
-                        relation.getId(),
-                        relation.getApplicant().getId(),
-                        relation.getJobDescription().getId(),
-                        relation.getJobDescription().getJobTitle(),
-                        relation.getJobDescription().getRecruiter() == null ? null
-                                : relation.getJobDescription().getRecruiter().getCompanyName(),
-                        relation.getJobDescription().getLocation()))
+                .map(this::toSavedJobResponse)
                 .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public SavedJobResponse removeSavedJob(Long applicantId, Long applicantJobId) {
+        return removeApplicantJobRelation(applicantId, applicantJobId, SAVED_ACTION, "Saved job not found");
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public SavedJobResponse withdrawApplication(Long applicantId, Long applicantJobId) {
+        return removeApplicantJobRelation(applicantId, applicantJobId, APPLIED_ACTION, "Job application not found");
     }
 
     @Override
@@ -235,5 +239,30 @@ public class ImplApplicantService implements InterfaceApplicantService {
         } catch (IOException exception) {
             throw new IllegalArgumentException("Unable to store CV file");
         }
+    }
+
+    private SavedJobResponse removeApplicantJobRelation(Long applicantId, Long applicantJobId, String actionType,
+            String notFoundMessage) {
+        if (!applicantRepository.existsById(applicantId)) {
+            throw new ResourcesNotFoundException("Applicant not found");
+        }
+
+        ApplicantJobDescription relation = applicantJobDescriptionRepository
+                .findByIdAndApplicant_IdAndActionType(applicantJobId, applicantId, actionType)
+                .orElseThrow(() -> new ResourcesNotFoundException(notFoundMessage));
+        SavedJobResponse response = toSavedJobResponse(relation);
+        applicantJobDescriptionRepository.delete(relation);
+        return response;
+    }
+
+    private SavedJobResponse toSavedJobResponse(ApplicantJobDescription relation) {
+        JobDescription jobDescription = relation.getJobDescription();
+        return new SavedJobResponse(
+                relation.getId(),
+                relation.getApplicant().getId(),
+                jobDescription.getId(),
+                jobDescription.getJobTitle(),
+                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
+                jobDescription.getLocation());
     }
 }

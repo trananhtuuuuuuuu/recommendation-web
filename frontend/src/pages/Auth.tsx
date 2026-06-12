@@ -8,6 +8,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import AuthPageShell from "@/components/AuthPageShell";
 
 export default function Auth() {
   const { login } = useAuth();
@@ -49,12 +50,22 @@ export default function Auth() {
   };
 
   return (
-    <div className="max-w-md mx-auto pt-12">
+    <AuthPageShell
+      eyebrow="Private by design"
+      title="Pick up your job search without giving up control."
+      description="Sign in to manage saved roles, applications, recruiter activity, and the profile information you choose to share."
+      icon={LogIn}
+      points={[
+        "One secure account for applicants, recruiters, and administrators.",
+        "Role-aware navigation keeps each workspace focused.",
+        "Expired sessions are cleared automatically before protected pages load.",
+      ]}
+    >
       <motion.form
         onSubmit={handleSubmit}
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-card rounded-xl p-6 space-y-5"
+        className="glass-card mx-auto max-w-md space-y-5 rounded-xl p-6 sm:p-8"
       >
         <div className="text-center space-y-2">
           <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mx-auto">
@@ -122,6 +133,6 @@ export default function Auth() {
           </div>
         </div>
       </motion.form>
-    </div>
+    </AuthPageShell>
   );
 }

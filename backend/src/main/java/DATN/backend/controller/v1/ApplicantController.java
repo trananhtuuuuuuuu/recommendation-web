@@ -5,6 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,8 @@ import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.response.ApiResponse;
+import DATN.backend.exception.ForbiddenException;
+import DATN.backend.security.InforInsideToken;
 import DATN.backend.service.InterfaceService.InterfaceApplicantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +27,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/applicants")
@@ -83,6 +87,40 @@ public class ApplicantController {
                 HttpStatus.CREATED, applicantService.applyJob(request)));
     }
 
+    /**
+     * Removes a saved job owned by the authenticated applicant.
+     *
+     * @param applicantId applicant owner identifier
+     * @param applicantJobId saved relation identifier
+     * @param authentication current JWT authentication
+     * @return standard API response containing the removed relation
+     */
+    @Operation(summary = "Remove a job from an applicant's saved list")
+    @DeleteMapping("/{applicantId}/saved-jobs/{applicantJobId}")
+    public ResponseEntity<ApiResponse> removeSavedJob(@PathVariable Long applicantId,
+            @PathVariable Long applicantJobId, Authentication authentication) {
+        verifyApplicantAccess(applicantId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("Saved job removed successfully", HttpStatus.OK,
+                applicantService.removeSavedJob(applicantId, applicantJobId)));
+    }
+
+    /**
+     * Withdraws a submitted application owned by the authenticated applicant.
+     *
+     * @param applicantId applicant owner identifier
+     * @param applicantJobId applied relation identifier
+     * @param authentication current JWT authentication
+     * @return standard API response containing the withdrawn relation
+     */
+    @Operation(summary = "Withdraw an applicant's submitted job application")
+    @DeleteMapping("/{applicantId}/applied-jobs/{applicantJobId}")
+    public ResponseEntity<ApiResponse> withdrawApplication(@PathVariable Long applicantId,
+            @PathVariable Long applicantJobId, Authentication authentication) {
+        verifyApplicantAccess(applicantId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("Application withdrawn successfully", HttpStatus.OK,
+                applicantService.withdrawApplication(applicantId, applicantJobId)));
+    }
+
     @Operation(summary = "Upload CV for applicant")
     @PostMapping(value = "/upload-cv/{applicantId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse> uploadCv(@PathVariable Long applicantId,
@@ -97,6 +135,15 @@ public class ApplicantController {
             @Valid @RequestBody UploadCvRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("CV uploaded successfully",
                 HttpStatus.CREATED, applicantService.uploadCv(applicantId, request)));
+    }
+
+    private void verifyApplicantAccess(Long applicantId, Authentication authentication) {
+        if (authentication == null
+                || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)
+                || !"APPLICANT".equalsIgnoreCase(tokenInformation.getRoleName())
+                || !applicantId.equals(tokenInformation.getUserId())) {
+            throw new ForbiddenException("You can only manage jobs in your own applicant account");
+        }
     }
 
 }

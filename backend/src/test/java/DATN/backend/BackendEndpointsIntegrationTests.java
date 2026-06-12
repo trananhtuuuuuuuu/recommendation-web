@@ -1,6 +1,7 @@
 package DATN.backend;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +34,8 @@ import DATN.backend.repository.JobDescriptionRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
+import DATN.backend.security.InforInsideToken;
+import DATN.backend.security.JwtService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,12 +51,14 @@ class BackendEndpointsIntegrationTests {
         private final RoleRepository roleRepository;
         private final JobDescriptionRepository jobDescriptionRepository;
         private final PasswordEncoder passwordEncoder;
+        private final JwtService jwtService;
 
         BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
                         ApplicantRepository applicantRepository,
                         ApplicantJobDescriptionRepository applicantJobDescriptionRepository, CvRepository cvRepository,
                         RecruiterRepository recruiterRepository, RoleRepository roleRepository,
-                        JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder) {
+                        JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
+                        JwtService jwtService) {
                 this.mockMvc = mockMvc;
                 this.userRepository = userRepository;
                 this.applicantRepository = applicantRepository;
@@ -62,6 +68,7 @@ class BackendEndpointsIntegrationTests {
                 this.roleRepository = roleRepository;
                 this.jobDescriptionRepository = jobDescriptionRepository;
                 this.passwordEncoder = passwordEncoder;
+                this.jwtService = jwtService;
         }
 
         @BeforeEach
@@ -257,6 +264,41 @@ class BackendEndpointsIntegrationTests {
         }
 
         @Test
+        void applicantShouldRemoveSavedJobAndWithdrawApplication() throws Exception {
+                Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+                Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
+                Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+                JobDescription job = seedJob(recruiter, "Backend Engineer");
+                ApplicantJobDescription savedRelation = applicantJobDescriptionRepository
+                                .save(new ApplicantJobDescription(applicant, job, "SAVED"));
+                ApplicantJobDescription appliedRelation = applicantJobDescriptionRepository
+                                .save(new ApplicantJobDescription(applicant, job, "APPLIED"));
+
+                mockMvc.perform(delete("/api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}",
+                                applicant.getId(), savedRelation.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.message").value("Saved job removed successfully"))
+                                .andExpect(jsonPath("$.data.applicantJobId").value(savedRelation.getId()));
+
+                mockMvc.perform(delete("/api/v1/applicants/{applicantId}/applied-jobs/{applicantJobId}",
+                                applicant.getId(), appliedRelation.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.message").value("Application withdrawn successfully"))
+                                .andExpect(jsonPath("$.data.applicantJobId").value(appliedRelation.getId()));
+
+                ApplicantJobDescription protectedRelation = applicantJobDescriptionRepository
+                                .save(new ApplicantJobDescription(applicant, job, "SAVED"));
+                mockMvc.perform(delete("/api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}",
+                                applicant.getId(), protectedRelation.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherApplicant)))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.errors[0]")
+                                                .value("You can only manage jobs in your own applicant account"));
+        }
+
+        @Test
         void recruiterAndJobEndpointsShouldReadCreateAndUpdateJobs() throws Exception {
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
                 JobDescription existingJob = seedJob(recruiter, "Backend Engineer");
@@ -392,5 +434,14 @@ class BackendEndpointsIntegrationTests {
                 jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));
                 jobDescription.setRecruiter(recruiter);
                 return jobDescriptionRepository.save(jobDescription);
+        }
+
+        private String authorizationHeader(Applicant applicant) {
+                String token = jwtService.generateToken(new InforInsideToken(
+                                applicant.getId(),
+                                applicant.getUserName(),
+                                applicant.getEmail(),
+                                "APPLICANT"));
+                return "Bearer " + token;
         }
 }

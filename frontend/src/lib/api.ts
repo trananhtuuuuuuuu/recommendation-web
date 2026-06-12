@@ -122,9 +122,9 @@ export async function apiRequest<T = unknown>(
 
   // Login response: token may be on header OR in body data.token
   const data = (json?.data ?? json) as T & { token?: string };
-  if (authHeader && data && typeof data === "object" && !(data as any).token) {
+  if (authHeader && data && typeof data === "object" && !data.token) {
     const headerToken = authHeader.replace(/^Bearer\s+/i, "");
-    (data as any).token = headerToken;
+    data.token = headerToken;
   }
   return data;
 }

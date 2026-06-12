@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, Shield, MapPin, Eye, Mail, Loader2, AlertCircle, Inbox, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Contact,
+  Eye,
+  FileCheck2,
+  Inbox,
+  Loader2,
+  Mail,
+  MapPin,
+  Search,
+  Shield,
+  User,
+  UserRoundCheck,
+  Users,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@/lib/api";
 import { fetchApplicants, type Applicant } from "@/lib/jobsApi";
+import MetricCard from "@/components/MetricCard";
 
 const statusColors: Record<string, string> = {
   OpenToWork: "bg-success/10 text-success",
@@ -40,6 +55,12 @@ export default function Applicants() {
     );
   }, [applicants, query]);
 
+  const summary = useMemo(() => ({
+    openToWork: applicants.filter((applicant) => applicant.status?.toLowerCase() === "opentowork").length,
+    withCv: applicants.filter((applicant) => applicant.cvId || applicant.cv).length,
+    withContact: applicants.filter((applicant) => applicant.email || applicant.phone).length,
+  }), [applicants]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -52,6 +73,15 @@ export default function Applicants() {
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search applicants..." className="pl-9" />
         </div>
       </div>
+
+      {!loading && !error ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard icon={Users} label="Total applicants" value={applicants.length} hint="All candidate accounts" />
+          <MetricCard icon={UserRoundCheck} label="Open to work" value={summary.openToWork} hint="Available candidates" />
+          <MetricCard icon={FileCheck2} label="CV profiles" value={summary.withCv} hint="Profiles with CV data" />
+          <MetricCard icon={Contact} label="Contact ready" value={summary.withContact} hint="Email or phone provided" />
+        </div>
+      ) : null}
 
       {loading && <div className="text-center py-10"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>}
 

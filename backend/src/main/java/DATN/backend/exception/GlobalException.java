@@ -32,6 +32,21 @@ public class GlobalException {
                 List.of(exception.getMessage())));
     }
 
+    /**
+     * Converts authorization failures into the common API response format.
+     *
+     * @param exception authorization failure
+     * @return forbidden response with the message included in {@code errors}
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse> handleForbiddenException(ForbiddenException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(
+                exception.getMessage(),
+                HttpStatus.FORBIDDEN,
+                exception.getMessage(),
+                List.of(exception.getMessage())));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {

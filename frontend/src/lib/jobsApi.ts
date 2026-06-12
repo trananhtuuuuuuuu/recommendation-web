@@ -23,7 +23,7 @@ export interface Job {
   recruiterId?: string | number;
   recruiterName?: string;
   customApplicationFields?: string;
-  [k: string]: any;
+  [k: string]: unknown;
 }
 
 export interface Applicant {
@@ -48,7 +48,7 @@ export interface Applicant {
     certifications?: string;
     cvFileUrl?: string;
   } | null;
-  [k: string]: any;
+  [k: string]: unknown;
 }
 
 export interface Recruiter {
@@ -71,7 +71,7 @@ export interface Recruiter {
   companyType?: string;
   address?: string;
   phone?: string;
-  [k: string]: any;
+  [k: string]: unknown;
 }
 
 export interface SavedJob {
@@ -82,7 +82,13 @@ export interface SavedJob {
   companyName?: string;
   location?: string;
   salaryRange?: string;
-  [k: string]: any;
+  [k: string]: unknown;
+}
+
+export interface HomeSummary {
+  jobsPosted?: number;
+  recruiters?: number;
+  activeApplicants?: number;
 }
 
 export interface JobApplicantsCount {
@@ -111,7 +117,7 @@ export interface ApplicationField {
 export const getJobId = (j: Job | SavedJob): string => String(j.jobId ?? j.id ?? j.jobDescriptionId ?? "");
 export const getJobTitle = (j: Job): string => j.jobTitle ?? j.title ?? "Untitled";
 
-export const fetchHome = () => apiRequest<any>("/api/v1/home", { auth: false });
+export const fetchHome = () => apiRequest<HomeSummary>("/api/v1/home", { auth: false });
 
 export const fetchJobs = () =>
   apiRequest<Job[]>("/api/v1/browse-jobs", { auth: false });
@@ -145,6 +151,16 @@ export const applyJob = (applicantId: string | number, jobId: string | number, b
 export const fetchAppliedJobs = (applicantId: string | number) =>
   apiRequest<SavedJob[]>(`/api/v1/applicants/applied-jobs?applicantId=${applicantId}`);
 
+export const removeSavedJob = (applicantId: string | number, applicantJobId: string | number) =>
+  apiRequest<SavedJob>(`/api/v1/applicants/${applicantId}/saved-jobs/${applicantJobId}`, {
+    method: "DELETE",
+  });
+
+export const withdrawApplication = (applicantId: string | number, applicantJobId: string | number) =>
+  apiRequest<SavedJob>(`/api/v1/applicants/${applicantId}/applied-jobs/${applicantJobId}`, {
+    method: "DELETE",
+  });
+
 export const fetchRecruiterJobs = (recruiterId: string | number) =>
   apiRequest<Job[]>(`/api/v1/recruiters/jobs/${recruiterId}`);
 
@@ -176,22 +192,22 @@ export const fetchRecruiter = (id: string | number) =>
 export const updateRecruiter = (id: string | number, body: Partial<Recruiter>) =>
   apiRequest<Recruiter>(`/api/v1/recruiters/${id}`, { method: "PUT", body });
 
-export const registerApplicant = (body: any) =>
-  apiRequest<any>("/api/v1/registrations/applicant", {
+export const registerApplicant = (body: Record<string, unknown>) =>
+  apiRequest<unknown>("/api/v1/registrations/applicant", {
     method: "POST",
     body,
     auth: false,
   });
 
-export const registerRecruiter = (body: any) =>
-  apiRequest<any>("/api/v1/registrations/recruiters", {
+export const registerRecruiter = (body: Record<string, unknown>) =>
+  apiRequest<unknown>("/api/v1/registrations/recruiters", {
     method: "POST",
     body,
     auth: false,
   });
 
-export const uploadCv = (applicantId: string | number, body: any) =>
-  apiRequest<any>(`/api/v1/applicants/upload-cv/${applicantId}`, {
+export const uploadCv = (applicantId: string | number, body: FormData | Record<string, unknown>) =>
+  apiRequest<unknown>(`/api/v1/applicants/upload-cv/${applicantId}`, {
     method: "POST",
     body,
     isForm: body instanceof FormData,

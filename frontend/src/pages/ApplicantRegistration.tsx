@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { registerApplicant } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
+import AuthPageShell from "@/components/AuthPageShell";
 
 export default function ApplicantRegistration() {
   const navigate = useNavigate();
@@ -69,9 +70,19 @@ export default function ApplicantRegistration() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center">
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-8 shadow-lg">
+    <AuthPageShell
+      eyebrow="Applicant onboarding"
+      title="Build a profile once, then use it across your search."
+      description="Create your applicant account to save opportunities, submit applications, and maintain a reusable career profile."
+      icon={User}
+      points={[
+        "Keep saved and applied jobs together in one workspace.",
+        "Upload and update your CV from your protected profile.",
+        "Control the contact information visible to other roles.",
+      ]}
+    >
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-lg">
+        <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-6 shadow-lg sm:p-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
               <Shield className="w-5 h-5 text-primary" />
@@ -179,6 +190,6 @@ export default function ApplicantRegistration() {
           </p>
         </form>
       </motion.div>
-    </div>
+    </AuthPageShell>
   );
 }

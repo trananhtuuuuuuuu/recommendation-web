@@ -24,4 +24,15 @@ public interface ApplicantJobDescriptionRepository extends JpaRepository<Applica
     Optional<ApplicantJobDescription> findByApplicant_IdAndJobDescription_IdAndActionType(Long applicantId,
             Long jobDescriptionId, String actionType);
 
+    /**
+     * Finds a saved or applied relation owned by an applicant.
+     *
+     * @param id relation identifier
+     * @param applicantId applicant owner identifier
+     * @param actionType relation action type
+     * @return matching relation when it exists
+     */
+    Optional<ApplicantJobDescription> findByIdAndApplicant_IdAndActionType(Long id, Long applicantId,
+            String actionType);
+
 }

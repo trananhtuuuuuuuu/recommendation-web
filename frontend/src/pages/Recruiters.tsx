@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, MapPin, Briefcase, Shield, ExternalLink, Loader2, AlertCircle, Inbox, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Briefcase,
+  Building2,
+  ExternalLink,
+  Globe2,
+  Inbox,
+  Layers3,
+  Loader2,
+  MapPin,
+  MapPinned,
+  Search,
+  Shield,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@/lib/api";
 import { fetchRecruiters, type Recruiter } from "@/lib/jobsApi";
+import MetricCard from "@/components/MetricCard";
 
 export default function Recruiters() {
   const navigate = useNavigate();
@@ -34,6 +48,12 @@ export default function Recruiters() {
     );
   }, [recruiters, query]);
 
+  const summary = useMemo(() => ({
+    industries: new Set(recruiters.map((recruiter) => recruiter.industry).filter(Boolean)).size,
+    withWebsite: recruiters.filter((recruiter) => recruiter.website).length,
+    withLocation: recruiters.filter((recruiter) => recruiter.companyLocation || recruiter.address).length,
+  }), [recruiters]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -46,6 +66,15 @@ export default function Recruiters() {
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search recruiters..." className="pl-9" />
         </div>
       </div>
+
+      {!loading && !error ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard icon={Building2} label="Recruiter accounts" value={recruiters.length} hint="Companies in the directory" />
+          <MetricCard icon={Layers3} label="Industries" value={summary.industries} hint="Distinct hiring sectors" />
+          <MetricCard icon={Globe2} label="Company websites" value={summary.withWebsite} hint="Profiles with external sites" />
+          <MetricCard icon={MapPinned} label="Locations listed" value={summary.withLocation} hint="Profiles with an address" />
+        </div>
+      ) : null}
 
       {loading && <div className="text-center py-10"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>}
 

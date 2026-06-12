@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { registerRecruiter } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
+import AuthPageShell from "@/components/AuthPageShell";
 
 const initial = {
   // account
@@ -81,9 +82,20 @@ export default function RecruiterRegistration() {
   );
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-6">
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-8 shadow-lg space-y-6">
+    <AuthPageShell
+      eyebrow="Recruiter onboarding"
+      title="Create a credible company presence before publishing roles."
+      description="Company details collected here support richer job posts, clearer candidate context, and a more trustworthy hiring experience."
+      icon={Building2}
+      points={[
+        "Manage company identity and hiring contacts together.",
+        "Publish structured roles with custom applicant questions.",
+        "Review candidates from a recruiter-only workspace.",
+      ]}
+      wide
+    >
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-lg sm:p-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
               <Building2 className="w-5 h-5 text-accent" />
@@ -148,6 +160,6 @@ export default function RecruiterRegistration() {
           </p>
         </form>
       </motion.div>
-    </div>
+    </AuthPageShell>
   );
 }

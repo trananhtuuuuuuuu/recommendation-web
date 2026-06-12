@@ -6,11 +6,17 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchJobs, getJobId, getJobTitle, saveJob, type Job } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Label } from "@/components/ui/label";
 
 interface Analysis { matchPercent: number; pros: string[]; cons: string[]; suggestions: string[] }
 function mockAnalysis(seed: string): Analysis {
@@ -26,6 +32,7 @@ function mockAnalysis(seed: string): Analysis {
 
 export default function Jobs() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, role, isAuthenticated } = useAuth();
 
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -35,6 +42,7 @@ export default function Jobs() {
   const [locationFilter, setLocationFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [compareAll, setCompareAll] = useState(false);
   const [comparingAll, setComparingAll] = useState(false);
@@ -55,6 +63,10 @@ export default function Jobs() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    setQuery(searchParams.get("q") ?? "");
+  }, [searchParams]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return jobs.filter((j) =>
@@ -72,6 +84,14 @@ export default function Jobs() {
     types: Array.from(new Set(jobs.map((j) => j.jobType).filter(Boolean))) as string[],
     industries: Array.from(new Set(jobs.map((j) => j.industry).filter(Boolean))) as string[],
   }), [jobs]);
+
+  const activeFilterCount = [locationFilter, typeFilter, industryFilter].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setLocationFilter("");
+    setTypeFilter("");
+    setIndustryFilter("");
+  };
 
   const handleSave = async (job: Job) => {
     const id = getJobId(job);
@@ -119,50 +139,100 @@ export default function Jobs() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="rounded-lg border bg-card p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Job Listings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Browse open opportunities</p>
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <div className="rounded-lg border bg-card p-5">
+          <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-foreground">Job Listings</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {loading ? "Loading open opportunities..." : `${filtered.length} of ${jobs.length} opportunities shown`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-auto">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search title, company..."
+                  className="w-full rounded-lg bg-secondary px-3 py-2 pr-9 text-sm outline-none focus:ring-2 focus:ring-primary/30 sm:w-56"
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    aria-label="Clear job search"
+                    onClick={() => setQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
+              {(compareAll || Object.keys(singleResults).length > 0) && (
+                <Button variant="ghost" size="sm" onClick={clearAll} className="gap-1 text-xs text-muted-foreground">
+                  <X className="w-3 h-3" /> Clear AI
+                </Button>
+              )}
+              {role === "APPLICANT" && (
+                <Button onClick={handleCompareAll} disabled={comparingAll || loading || filtered.length === 0}
+                  className="gap-2 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
+                  {comparingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {comparingAll ? "Analyzing..." : "AI Compare All"}
+                </Button>
+              )}
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant={activeFilterCount > 0 ? "secondary" : "outline"}
+                  className="gap-2"
+                  aria-expanded={filtersOpen}
+                >
+                  <Filter className="w-4 h-4" />
+                  Filters
+                  {activeFilterCount > 0 ? (
+                    <Badge className="h-5 min-w-5 justify-center rounded-full px-1.5 text-[10px]">
+                      {activeFilterCount}
+                    </Badge>
+                  ) : null}
+                  {filtersOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+          </div>
+
+          <CollapsibleContent>
+            <div className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+              <FilterSelect
+                label="Location"
+                value={locationFilter}
+                onChange={setLocationFilter}
+                options={filterOptions.locations}
+                placeholder="All locations"
+              />
+              <FilterSelect
+                label="Job type"
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={filterOptions.types}
+                placeholder="All job types"
+              />
+              <FilterSelect
+                label="Industry"
+                value={industryFilter}
+                onChange={setIndustryFilter}
+                options={filterOptions.industries}
+                placeholder="All industries"
+              />
+              <Button
+                variant="ghost"
+                onClick={clearFilters}
+                disabled={activeFilterCount === 0}
+                className="justify-self-start gap-2 text-muted-foreground xl:justify-self-end"
+              >
+                <X className="h-4 w-4" /> Clear filters
+              </Button>
+            </div>
+          </CollapsibleContent>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, company..."
-            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30 w-56"
-          />
-          <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
-            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="">All locations</option>
-            {filterOptions.locations.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="">All types</option>
-            {filterOptions.types.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-          <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}
-            className="px-3 py-2 text-sm bg-secondary rounded-lg outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="">All industries</option>
-            {filterOptions.industries.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-          {(compareAll || Object.keys(singleResults).length > 0) && (
-            <Button variant="ghost" size="sm" onClick={clearAll} className="gap-1 text-xs text-muted-foreground">
-              <X className="w-3 h-3" /> Clear AI
-            </Button>
-          )}
-          {role === "APPLICANT" && (
-            <Button onClick={handleCompareAll} disabled={comparingAll || loading || filtered.length === 0}
-              className="gap-2 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
-              {comparingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {comparingAll ? "Analyzing..." : "AI Compare All"}
-            </Button>
-          )}
-          <Button variant="outline" className="gap-2" onClick={() => { setQuery(""); setLocationFilter(""); setTypeFilter(""); setIndustryFilter(""); }}>
-            <Filter className="w-4 h-4" /> Filters <ChevronDown className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
+      </Collapsible>
 
       {loading && (
         <div className="space-y-3">
@@ -293,6 +363,34 @@ export default function Jobs() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{label}</Label>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   Briefcase,
   Building2,
   Calendar,
+  Camera,
   Check,
   CheckCircle2,
   ExternalLink,
@@ -51,6 +52,13 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  avatarFileToDataUrl,
+  readProfileAvatar,
+  removeProfileAvatar,
+  storeProfileAvatar,
+} from "@/lib/profileAvatar";
 
 type TextListField = "skills" | "education" | "certifications";
 
@@ -129,6 +137,7 @@ export default function Profile() {
   const [cvForm, setCvForm] = useState(emptyCvForm);
   const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null);
   const [activeApplicantEditor, setActiveApplicantEditor] = useState<ApplicantInlineEditor | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   useEffect(() => {
     if (!authUser?.id) return;
@@ -200,6 +209,29 @@ export default function Profile() {
       active = false;
     };
   }, [authUser?.email, authUser?.id, authUser?.userName, role]);
+
+  useEffect(() => {
+    setAvatarUrl(readProfileAvatar(role, authUser?.id));
+  }, [authUser?.id, role]);
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!authUser?.id || !role) return;
+    try {
+      const nextAvatar = await avatarFileToDataUrl(file);
+      storeProfileAvatar(role, authUser.id, nextAvatar);
+      setAvatarUrl(nextAvatar);
+      toast.success("Profile image updated on this browser.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update profile image.");
+    }
+  };
+
+  const handleAvatarRemove = () => {
+    if (!authUser?.id || !role) return;
+    removeProfileAvatar(role, authUser.id);
+    setAvatarUrl("");
+    toast.success("Profile image removed.");
+  };
 
   const applicantHighlights = useMemo(() => {
     const cv = applicant?.cv;
@@ -287,7 +319,13 @@ export default function Profile() {
         {editing ? (
           <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
         ) : (
-          <RecruiterView recruiter={recruiter} onEdit={() => setEditing(true)} />
+          <RecruiterView
+            recruiter={recruiter}
+            avatarUrl={avatarUrl}
+            onAvatarUpload={handleAvatarUpload}
+            onAvatarRemove={handleAvatarRemove}
+            onEdit={() => setEditing(true)}
+          />
         )}
       </ProfileFrame>
     );
@@ -316,6 +354,9 @@ export default function Profile() {
       ) : (
         <ApplicantView
           applicant={applicant}
+          avatarUrl={avatarUrl}
+          onAvatarUpload={handleAvatarUpload}
+          onAvatarRemove={handleAvatarRemove}
           highlights={applicantHighlights}
           applicantForm={applicantForm}
           setApplicantForm={setApplicantForm}
@@ -378,8 +419,69 @@ function ProfileFrame({
   );
 }
 
+function ProfileAvatar({
+  imageUrl,
+  name,
+  icon,
+}: {
+  imageUrl?: string;
+  name: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-primary [&_svg]:h-7 [&_svg]:w-7">
+      {imageUrl ? <img src={imageUrl} alt={`${name} profile`} className="h-full w-full object-cover" /> : icon}
+    </div>
+  );
+}
+
+function AvatarActions({
+  id,
+  hasAvatar,
+  onUpload,
+  onRemove,
+}: {
+  id: string;
+  hasAvatar: boolean;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      <Input
+        id={id}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onUpload(file);
+          event.target.value = "";
+        }}
+      />
+      <Button asChild size="sm" variant="outline" className="gap-2">
+        <label htmlFor={id} className="cursor-pointer">
+          <Camera className="h-4 w-4" />
+          {hasAvatar ? "Replace avatar" : "Upload avatar"}
+        </label>
+      </Button>
+      {hasAvatar ? (
+        <Button type="button" size="sm" variant="ghost" onClick={onRemove} className="text-muted-foreground">
+          Remove
+        </Button>
+      ) : null}
+      <p className="w-full text-[11px] leading-4 text-muted-foreground">
+        PNG, JPG, WebP, or GIF up to 1.5 MB. Stored only in this browser.
+      </p>
+    </div>
+  );
+}
+
 function ApplicantView({
   applicant,
+  avatarUrl,
+  onAvatarUpload,
+  onAvatarRemove,
   highlights,
   applicantForm,
   setApplicantForm,
@@ -394,6 +496,9 @@ function ApplicantView({
   saving,
 }: {
   applicant: Applicant | null;
+  avatarUrl: string;
+  onAvatarUpload: (file: File) => void;
+  onAvatarRemove: () => void;
   highlights: { label: string; value: number }[];
   applicantForm: typeof emptyApplicantForm;
   setApplicantForm: React.Dispatch<React.SetStateAction<typeof emptyApplicantForm>>;
@@ -427,14 +532,18 @@ function ApplicantView({
       <div className="space-y-5">
         <section className="rounded-lg border bg-card p-5">
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <User className="w-7 h-7 text-primary" />
-            </div>
+            <ProfileAvatar imageUrl={avatarUrl} name={title} icon={<User />} />
             <div className="min-w-0">
               <h1 className="font-display text-2xl font-bold text-foreground break-words">{title}</h1>
               <p className="text-sm text-muted-foreground mt-1">{applicant?.status || "Career profile"}</p>
             </div>
           </div>
+          <AvatarActions
+            id="applicant-avatar"
+            hasAvatar={Boolean(avatarUrl)}
+            onUpload={onAvatarUpload}
+            onRemove={onAvatarRemove}
+          />
           <div className="mt-4 flex flex-wrap gap-2">
             {applicant?.gender && <Badge variant="outline">{applicant.gender}</Badge>}
             {applicant?.status && <Badge>{applicant.status}</Badge>}
@@ -480,7 +589,7 @@ function ApplicantView({
             label="Gender"
             value={applicant?.gender}
             editing={activeEditor === "gender"}
-            editor={<SelectField label="Gender" value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} options={["Male", "Female", "Other"]} hideLabel />}
+            editor={<GenderToggle value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} />}
             onEdit={() => onEdit("gender")}
             onCancel={onCancel}
             onSave={onSave}
@@ -553,7 +662,19 @@ function ApplicantView({
   );
 }
 
-function RecruiterView({ recruiter, onEdit }: { recruiter: Recruiter | null; onEdit: () => void }) {
+function RecruiterView({
+  recruiter,
+  avatarUrl,
+  onAvatarUpload,
+  onAvatarRemove,
+  onEdit,
+}: {
+  recruiter: Recruiter | null;
+  avatarUrl: string;
+  onAvatarUpload: (file: File) => void;
+  onAvatarRemove: () => void;
+  onEdit: () => void;
+}) {
   const companyName = recruiter?.companyName || "Recruiter Company";
   const location = recruiter?.companyLocation || recruiter?.address || "Location not provided";
   const description = recruiter?.companyDescription || "No company overview has been added yet.";
@@ -566,9 +687,9 @@ function RecruiterView({ recruiter, onEdit }: { recruiter: Recruiter | null; onE
         />
         <div className="px-5 pb-5">
           <div className="-mt-16 flex items-start justify-between gap-4">
-            <div className="w-28 h-28 rounded-sm border-4 border-card bg-secondary overflow-hidden shadow-sm flex items-center justify-center shrink-0">
-              {recruiter?.logoUrl ? (
-                <img src={recruiter.logoUrl} alt={companyName} className="w-full h-full object-cover" />
+            <div className="w-28 h-28 rounded-xl border-4 border-card bg-secondary overflow-hidden shadow-sm flex items-center justify-center shrink-0">
+              {avatarUrl || recruiter?.logoUrl ? (
+                <img src={avatarUrl || recruiter?.logoUrl} alt={companyName} className="w-full h-full object-cover" />
               ) : (
                 <Building2 className="w-11 h-11 text-primary" />
               )}
@@ -586,6 +707,13 @@ function RecruiterView({ recruiter, onEdit }: { recruiter: Recruiter | null; onE
               {[recruiter?.industry, location, recruiter?.companySize].filter(Boolean).join(" - ") || "Company details not provided"}
             </p>
           </div>
+
+          <AvatarActions
+            id="recruiter-avatar"
+            hasAvatar={Boolean(avatarUrl)}
+            onUpload={onAvatarUpload}
+            onRemove={onAvatarRemove}
+          />
 
           <div className="mt-5 flex flex-wrap gap-2">
             <Button className="gap-2 rounded-full">
@@ -706,7 +834,7 @@ function ApplicantEditForm({
           <Field label="Email" value={applicantForm.email} onChange={(value) => setApplicantField("email", value)} />
           <Field label="Phone" value={applicantForm.phone} onChange={(value) => setApplicantField("phone", value)} />
           <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
-          <SelectField label="Gender" value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} options={["Male", "Female", "Other"]} />
+          <GenderToggle value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} showLabel />
           <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} />
         </div>
       </Panel>
@@ -1062,6 +1190,43 @@ function Field({ label, value, onChange }: { label: string; value?: string; onCh
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Input id={id} value={value || ""} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function GenderToggle({
+  value,
+  onChange,
+  showLabel = false,
+}: {
+  value?: string;
+  onChange: (value: string) => void;
+  showLabel?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {showLabel ? <Label>Gender</Label> : null}
+      <ToggleGroup
+        type="single"
+        value={value || ""}
+        onValueChange={(nextValue) => {
+          if (nextValue) onChange(nextValue);
+        }}
+        variant="outline"
+        className="grid w-full grid-cols-3 rounded-lg bg-secondary/40 p-1"
+        aria-label="Choose gender"
+      >
+        {["Male", "Female", "Other"].map((option) => (
+          <ToggleGroupItem
+            key={option}
+            value={option}
+            aria-label={option}
+            className="w-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+          >
+            {option}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }

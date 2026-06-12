@@ -24,7 +24,7 @@ function applicantAnalysis(applicantName: string, jobTitle: string): Analysis {
 export default function JobApplicants() {
   const { jobId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<JobApplicant[]>([]);
@@ -36,7 +36,8 @@ export default function JobApplicants() {
     if (!jobId) return;
     let active = true;
     setLoading(true);
-    Promise.all([fetchJob(jobId), fetchJobApplicantCount(jobId), fetchJobApplicants(jobId, user?.id)])
+    const recruiterId = role === "RECRUITER" ? user?.id : undefined;
+    Promise.all([fetchJob(jobId), fetchJobApplicantCount(jobId), fetchJobApplicants(jobId, recruiterId)])
       .then(([jobData, countData, applicantData]) => {
         if (!active) return;
         setJob(jobData);
@@ -46,7 +47,7 @@ export default function JobApplicants() {
       .catch((e) => { if (active) setError(e instanceof ApiError ? e.message : "Failed to load applicants"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [jobId, user?.id]);
+  }, [jobId, role, user?.id]);
 
   if (loading) {
     return <div className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;

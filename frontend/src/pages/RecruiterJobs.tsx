@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Briefcase, Plus, Edit, Eye, Users, Loader2, AlertCircle, Inbox, BarChart3 } from "lucide-react";
+import {
+  AlertCircle,
+  Briefcase,
+  Edit,
+  Eye,
+  FileCheck2,
+  Inbox,
+  Layers3,
+  Loader2,
+  Plus,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { fetchRecruiterJobs, getJobId, getJobTitle, type Job } from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
+import MetricCard from "@/components/MetricCard";
 
 export default function RecruiterJobs() {
   const navigate = useNavigate();
@@ -23,6 +35,12 @@ export default function RecruiterJobs() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user?.id]);
+
+  const completeJobs = jobs.filter((job) =>
+    Boolean(getJobTitle(job) && job.jobDescription && job.requirements && job.location)
+  ).length;
+  const jobsWithDeadline = jobs.filter((job) => job.applicationDeadline).length;
+  const industryCount = new Set(jobs.map((job) => job.industry).filter(Boolean)).size;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 min-h-[calc(100vh-7rem)]">
@@ -55,9 +73,9 @@ export default function RecruiterJobs() {
 
       {!loading && !error && jobs.length > 0 && (
         <div className="grid sm:grid-cols-3 gap-4">
-          <Stat icon={<Briefcase />} label="Active Jobs" value={jobs.length} />
-          <Stat icon={<Users />} label="Applicant Queues" value={jobs.length} />
-          <Stat icon={<BarChart3 />} label="Industries" value={new Set(jobs.map((job) => job.industry).filter(Boolean)).size || 1} />
+          <MetricCard icon={Briefcase} label="Published jobs" value={jobs.length} hint="Roles in your workspace" />
+          <MetricCard icon={FileCheck2} label="Complete listings" value={`${completeJobs}/${jobs.length}`} hint="Core details provided" />
+          <MetricCard icon={Layers3} label="Industries" value={industryCount || 1} hint={`${jobsWithDeadline} with deadlines`} />
         </div>
       )}
 
@@ -89,18 +107,6 @@ export default function RecruiterJobs() {
             </motion.div>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <div className="rounded-lg border bg-card p-4 flex items-center gap-3">
-      <span className="text-primary [&_svg]:w-5 [&_svg]:h-5">{icon}</span>
-      <div>
-        <p className="text-xl font-bold text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </div>
   );

@@ -29,6 +29,24 @@ public interface InterfaceApplicantService {
 
     List<SavedJobResponse> getAppliedJobs(Long applicantId);
 
+    /**
+     * Removes a job from an applicant's saved list.
+     *
+     * @param applicantId applicant owner identifier
+     * @param applicantJobId saved relation identifier
+     * @return removed saved-job relation
+     */
+    SavedJobResponse removeSavedJob(Long applicantId, Long applicantJobId);
+
+    /**
+     * Withdraws an applicant's submitted job application.
+     *
+     * @param applicantId applicant owner identifier
+     * @param applicantJobId applied relation identifier
+     * @return removed application relation
+     */
+    SavedJobResponse withdrawApplication(Long applicantId, Long applicantJobId);
+
     CvResponse uploadCv(Long applicantId, UploadCvRequest request);
 
 }
