@@ -1,0 +1,12 @@
+{
+  "SKILL": 0.20,
+  "SOFT_SKILL": 0.04,
+  "LANGUAGE": 0.07,
+  "CERTIFICATION": 0.08,
+  "JOB_TITLE": 0.15,
+  "COMPANY": 0.03,
+  "EDUCATION": 0.10,
+  "SUMMARY": 0.10,
+  "EXPERIENCE": 0.15,
+  "PROJECT": 0.08
+}
