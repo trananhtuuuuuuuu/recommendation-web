@@ -399,18 +399,20 @@ SET
 INSERT INTO applicant_job_descriptions (
     id,
     applicant_id,
-    job_description_id
+    job_description_id,
+    action_type
 )
 VALUES
-    (4001, 2201, 3001),
-    (4002, 2201, 3004),
-    (4003, 2202, 3002),
-    (4004, 2203, 3003),
-    (4005, 2203, 3005)
+    (4001, 2201, 3001, 'APPLIED'),
+    (4002, 2201, 3004, 'SAVED'),
+    (4003, 2202, 3002, 'APPLIED'),
+    (4004, 2203, 3003, 'APPLIED'),
+    (4005, 2203, 3005, 'SAVED')
 ON CONFLICT (id) DO UPDATE
 SET
     applicant_id = EXCLUDED.applicant_id,
-    job_description_id = EXCLUDED.job_description_id;
+    job_description_id = EXCLUDED.job_description_id,
+    action_type = EXCLUDED.action_type;
 
 INSERT INTO permissions (id, endpoint, method, description)
 VALUES

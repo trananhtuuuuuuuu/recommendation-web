@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { fetchJobs, getJobId, getJobTitle, saveJob, type Job } from "@/lib/jobsApi";
+import { fetchJobs, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -18,15 +18,21 @@ import {
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 
-interface Analysis { matchPercent: number; pros: string[]; cons: string[]; suggestions: string[] }
-function mockAnalysis(seed: string): Analysis {
-  const n = [...seed].reduce((a, c) => a + c.charCodeAt(0), 0);
-  const pct = 40 + (n % 55);
+interface Analysis {
+  matchPercent: number;
+  passedFilter: boolean;
+  reason: string;
+  suggestions: string[];
+  hardFilterReasons: string[];
+}
+
+function toAnalysis(match: CvJobMatch): Analysis {
   return {
-    matchPercent: pct,
-    pros: ["Strong overall fit with your skill set", "Compensation aligns with market"],
-    cons: ["Some required tools not on your CV", "Limited domain experience"],
-    suggestions: ["Tailor your CV summary to this role", "Add 1-2 highlighted projects matching keywords"],
+    matchPercent: match.matchPercent ?? Math.round((match.matchScore ?? 0) * 100),
+    passedFilter: match.passedFilter ?? true,
+    reason: match.reason ?? "",
+    suggestions: match.suggestions ?? [],
+    hardFilterReasons: match.hardFilterReasons ?? [],
   };
 }
 
@@ -110,28 +116,49 @@ export default function Jobs() {
     }
   };
 
-  const handleCompareAll = () => {
+  const handleCompareAll = async () => {
+    if (!user?.id) { toast.error("Missing applicant ID in session."); return; }
+    const applicantId = user.id;
     setComparingAll(true);
     setSingleResults({});
     setExpandedSuggestion(null);
-    setTimeout(() => {
+    try {
+      const entries = await Promise.all(
+        filtered.map(async (j) => {
+          const jobId = getJobId(j);
+          try { return [jobId, toAnalysis(await matchCvToJob(applicantId, jobId))] as const; }
+          catch { return [jobId, null] as const; }
+        })
+      );
       const results: Record<string, Analysis> = {};
-      filtered.forEach((j) => { results[getJobId(j)] = mockAnalysis(getJobId(j) + getJobTitle(j)); });
+      entries.forEach(([jobId, analysis]) => { if (analysis) results[jobId] = analysis; });
       setAllResults(results);
       setCompareAll(true);
+      if (Object.keys(results).length === 0) {
+        toast.error("Could not match these jobs. Make sure your CV is uploaded.");
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to compare jobs");
+    } finally {
       setComparingAll(false);
-    }, 800);
+    }
   };
 
-  const handleSingleSuggestion = (job: Job) => {
+  const handleSingleSuggestion = async (job: Job) => {
     const id = getJobId(job);
     if (singleResults[id]) { setExpandedSuggestion(expandedSuggestion === id ? null : id); return; }
+    if (!user?.id) { toast.error("Missing applicant ID in session."); return; }
     setSingleLoading(id);
-    setTimeout(() => {
-      setSingleResults((prev) => ({ ...prev, [id]: mockAnalysis(id + getJobTitle(job)) }));
+    try {
+      // Single job -> richer Ollama (qwen2.5:3b) suggestions; "Compare All" stays fast (llm:false).
+      const analysis = toAnalysis(await matchCvToJob(user.id, id, { llm: true }));
+      setSingleResults((prev) => ({ ...prev, [id]: analysis }));
       setExpandedSuggestion(id);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to analyze match. Upload a CV first?");
+    } finally {
       setSingleLoading(null);
-    }, 600);
+    }
   };
 
   const getResult = (id: string) => compareAll ? allResults[id] : singleResults[id];
@@ -284,13 +311,19 @@ export default function Jobs() {
                       {getJobTitle(job)}
                     </h3>
                     {result && (
-                      <Badge className={`text-[10px] font-bold ${
-                        result.matchPercent >= 80 ? "bg-success/15 text-success" :
-                        result.matchPercent >= 60 ? "bg-warning/15 text-warning" :
-                        "bg-destructive/15 text-destructive"
-                      }`}>
-                        <Sparkles className="w-3 h-3 mr-1" /> {result.matchPercent}% Match
-                      </Badge>
+                      result.passedFilter ? (
+                        <Badge className={`text-[10px] font-bold ${
+                          result.matchPercent >= 60 ? "bg-success/15 text-success" :
+                          result.matchPercent >= 35 ? "bg-warning/15 text-warning" :
+                          "bg-destructive/15 text-destructive"
+                        }`}>
+                          <Sparkles className="w-3 h-3 mr-1" /> {result.matchPercent}% Match
+                        </Badge>
+                      ) : (
+                        <Badge className="text-[10px] font-bold bg-muted text-muted-foreground">
+                          Chưa đạt điều kiện
+                        </Badge>
+                      )
                     )}
                   </div>
                   {job.jobDescription || job.description ? (
@@ -342,19 +375,25 @@ export default function Jobs() {
                 {result && isExpanded && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    <div className="mt-4 pt-4 border-t border-border grid sm:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-success">Pros</h4>
-                        <ul className="space-y-1">{result.pros.map((p, i) => <li key={i} className="text-xs text-muted-foreground">• {p}</li>)}</ul>
-                      </div>
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-destructive">Cons</h4>
-                        <ul className="space-y-1">{result.cons.map((c, i) => <li key={i} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
-                      </div>
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-semibold text-primary">Suggestions</h4>
-                        <ul className="space-y-1">{result.suggestions.map((s, i) => <li key={i} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
-                      </div>
+                    <div className="mt-4 pt-4 border-t border-border space-y-3">
+                      {result.reason && (
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-semibold text-foreground">Lý do</h4>
+                          <p className="text-xs text-muted-foreground">{result.reason}</p>
+                        </div>
+                      )}
+                      {!result.passedFilter && result.hardFilterReasons.length > 0 && (
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-semibold text-destructive">Chưa đạt điều kiện lọc</h4>
+                          <ul className="space-y-1">{result.hardFilterReasons.map((c, idx) => <li key={idx} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
+                        </div>
+                      )}
+                      {result.suggestions.length > 0 && (
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-semibold text-primary">Gợi ý cải thiện</h4>
+                          <ul className="space-y-1">{result.suggestions.map((s, idx) => <li key={idx} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}

@@ -1,0 +1,3 @@
+# Optional: only needed for the Word2Vec + WMD comparison baseline (Group 3
+# thesis evaluation). The primary TF-IDF path does not require gensim.
+gensim==4.3.3

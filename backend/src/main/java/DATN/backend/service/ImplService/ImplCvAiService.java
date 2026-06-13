@@ -1,7 +1,9 @@
 package DATN.backend.service.ImplService;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import DATN.backend.exception.AiServiceUnavailableException;
 import DATN.backend.response.cv.CvAnalysisResponse;
+import DATN.backend.response.cv.CvMatchAiResponse;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 
 /**
@@ -100,6 +103,50 @@ public class ImplCvAiService implements InterfaceCvAiService {
             throw new AiServiceUnavailableException("Automatic CV analysis is temporarily unavailable");
         } catch (ResourceAccessException | IOException exception) {
             throw new AiServiceUnavailableException("Automatic CV analysis is temporarily unavailable");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CvMatchAiResponse matchCvToJob(Map<String, Object> cv, Map<String, Object> jd, boolean llm, String method) {
+        if (!enabled) {
+            throw new AiServiceUnavailableException("CV matching is currently disabled");
+        }
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("llm", llm);
+        if (method != null && !method.isBlank()) {
+            options.put("method", method);
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("cv", cv);
+        body.put("jd", jd);
+        body.put("options", options);
+
+        try {
+            CvMatchAiResponse response = restClient.post()
+                    .uri("/match")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(CvMatchAiResponse.class);
+            if (response == null) {
+                throw new AiServiceUnavailableException("The CV matching service returned an empty response");
+            }
+            return response;
+        } catch (RestClientResponseException exception) {
+            LOGGER.warn(
+                    "CV matching service rejected the request with status {}: {}",
+                    exception.getStatusCode(),
+                    exception.getResponseBodyAsString());
+            if (exception.getStatusCode().is4xxClientError()) {
+                throw new IllegalArgumentException("The CV could not be matched against the job description");
+            }
+            throw new AiServiceUnavailableException("CV matching is temporarily unavailable");
+        } catch (ResourceAccessException exception) {
+            throw new AiServiceUnavailableException("CV matching is temporarily unavailable");
         }
     }
 
