@@ -58,3 +58,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 bun-debug.log*
+
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Local AI model weights
+ai/model/*.safetensors
