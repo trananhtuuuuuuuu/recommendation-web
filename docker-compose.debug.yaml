@@ -37,13 +37,13 @@ services:
       AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
       # ai/model is mounted at /app/model so BOTH the LayoutLMv3 dir and the
       # recommender_svm*.joblib files (config.MODEL_DIR=/app/model) are found.
-      AI_MODEL_DIR: /app/model/layoutlmv3
+      AI_MODEL_DIR: /app/model
       AI_MAX_PAGES: ${AI_MAX_PAGES:-3}
       AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
       AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}
       AI_OCR_ENGINE: ${AI_OCR_ENGINE:-paddle}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
       - ${AI_MODEL_HOST_PATH:-./ai/model}:/app/model:ro
     ports:
@@ -54,6 +54,25 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  ollama:
+    image: ollama/ollama
+    container_name: rw-ollama
+    restart: unless-stopped
+    networks:
+      - rw-network
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # This automatically pulls the model if it doesn't exist, then runs the server
+    entrypoint: /bin/sh
+    command: -c "ollama serve & sleep 5 && ollama pull ${OLLAMA_MODEL:-qwen2.5:3b} && wait"
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # ── Spring Boot Backend ──────────────────────────────────────────────────
   # Connects to the db service inside this compose project.
@@ -73,7 +92,7 @@ services:
       # Hibernate creates the schema from the entities; spring.sql.init then runs
       # the ALTERs + seed (continue-on-error tolerates rows from older schema).
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_MODE: never
       SPRING_SQL_INIT_DATA_LOCATIONS: classpath:db/seed-postgres.sql
       SPRING_SQL_INIT_CONTINUE_ON_ERROR: "true"
       AI_CV_BASE_URL: http://ai:8001
@@ -87,6 +106,8 @@ services:
       ai:
         condition: service_healthy
       db:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
 
   # ── React / Vite Frontend ────────────────────────────────────────────────
@@ -120,3 +141,4 @@ volumes:
     driver: local
   cv_uploads:
     driver: local
+  ollama_data:

@@ -12,7 +12,7 @@ from .parser import CvParser, UnsupportedDocumentError
 
 
 class MatchOptions(BaseModel):
-    llm: bool = False
+    llm: bool = True
     method: str = "embedding"
 
 
