@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16
-    container_name: postgres-db
+    container_name: postgres-rw-db
     restart: unless-stopped
     networks:
       - rw-network
@@ -10,14 +10,15 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
     ports:
-      - "8386:5432"
+      - "${DB_HOST_PORT:-8386}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-rw-db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-rw-db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
+
   # LayoutLMv3 CV extraction service. Put the exported notebook model in
   # ai/model, or set AI_MODEL_HOST_PATH to another local model directory.
   ai:
@@ -48,22 +49,14 @@ services:
     ports:
       - "8001:8001"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')",
-        ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" ]
       interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   # ── Spring Boot Backend ──────────────────────────────────────────────────
-  # Connects to the EXTERNAL postgres-db container already running on host port 8386.
-  # host.docker.internal resolves to the host machine from inside Docker (Linux needs
-  # extra_hosts: host.docker.internal:host-gateway for this to work).
+  # Connects to the db service inside this compose project.
   backend:
     build:
       context: .
@@ -72,8 +65,6 @@ services:
     restart: unless-stopped
     networks:
       - rw-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       SERVER_PORT: 8081
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME:-rw-db}
