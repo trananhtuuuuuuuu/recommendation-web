@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
@@ -24,6 +25,7 @@ import DATN.backend.exception.ForbiddenException;
 import DATN.backend.security.InforInsideToken;
 import DATN.backend.service.InterfaceService.InterfaceApplicantService;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
+import DATN.backend.service.InterfaceService.InterfaceCvMatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,6 +42,7 @@ import org.springframework.security.core.Authentication;
 public class ApplicantController {
     private final InterfaceApplicantService applicantService;
     private final InterfaceCvAiService cvAiService;
+    private final InterfaceCvMatchService cvMatchService;
 
     @Operation(summary = "Get all applicants")
     @GetMapping
@@ -141,6 +144,26 @@ public class ApplicantController {
         verifyApplicantAccess(applicantId, authentication);
         return ResponseEntity.ok(ApiResponse.success("CV analyzed successfully", HttpStatus.OK,
                 cvAiService.analyzeCv(cvFile)));
+    }
+
+    /**
+     * Matches the authenticated applicant's stored CV against a job and returns a
+     * score plus Vietnamese improvement suggestions.
+     *
+     * @param applicantId applicant owner identifier
+     * @param jobId job description identifier
+     * @param request optional matching options (LLM toggle, scoring method)
+     * @param authentication current JWT authentication
+     * @return standard API response containing the match result
+     */
+    @Operation(summary = "Match the applicant's CV against a job (score + suggestions)")
+    @PostMapping("/{applicantId}/match/{jobId}")
+    public ResponseEntity<ApiResponse> matchJob(@PathVariable Long applicantId, @PathVariable Long jobId,
+            @RequestBody(required = false) CvJobMatchRequest request, Authentication authentication) {
+        verifyApplicantAccess(applicantId, authentication);
+        CvJobMatchRequest options = request == null ? new CvJobMatchRequest() : request;
+        return ResponseEntity.ok(ApiResponse.success("CV matched successfully", HttpStatus.OK,
+                cvMatchService.matchApplicantToJob(applicantId, jobId, options)));
     }
 
     @Operation(summary = "Upload CV for applicant")

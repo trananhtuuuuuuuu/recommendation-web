@@ -1,2 +1,11 @@
-numpy==1.26.4
+# Heavy ML deps for the "with model" image (AI_WITH_MODEL=true). torch is installed
+# separately in Dockerfile.ai (CPU wheel) before this file.
+numpy==2.3.5
 transformers==4.52.4
+# Group 4/3 semantic scoring -- the default match method is now "embedding".
+sentence-transformers==5.5.1
+# Inference OCR that matches how the LayoutLMv3 model was trained (the notebook
+# used PaddleOCR). paddlepaddle 3.x needs FLAGS_use_mkldnn=0 +
+# FLAGS_enable_pir_in_executor=0, which the parser sets before loading the engine.
+paddlepaddle==3.3.1
+paddleocr==3.7.0

@@ -246,3 +246,27 @@ export const analyzeCv = (applicantId: string | number, cvFile: File) => {
     isForm: true,
   });
 };
+
+export interface CvJobMatch {
+  applicantId?: string | number;
+  jobId?: string | number;
+  passedFilter?: boolean;
+  matchScore?: number;
+  matchPercent?: number;
+  reason?: string;
+  suggestions?: string[];
+  perFieldScores?: Record<string, number>;
+  hardFilterReasons?: string[];
+  scoringMethod?: string;
+  modelUsed?: string;
+}
+
+export const matchCvToJob = (
+  applicantId: string | number,
+  jobId: string | number,
+  options: { llm?: boolean; method?: string } = {},
+) =>
+  apiRequest<CvJobMatch>(`/api/v1/applicants/${applicantId}/match/${jobId}`, {
+    method: "POST",
+    body: options,
+  });
