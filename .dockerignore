@@ -1,0 +1,10 @@
+.git
+.codex
+.serena
+.vscode
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/dist
+**/target
+ai/model/*

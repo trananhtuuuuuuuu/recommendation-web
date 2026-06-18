@@ -47,6 +47,21 @@ public class GlobalException {
                 List.of(exception.getMessage())));
     }
 
+    /**
+     * Converts CV analysis outages into the common API response format.
+     *
+     * @param exception AI service availability failure
+     * @return service-unavailable response with the message in {@code errors}
+     */
+    @ExceptionHandler(AiServiceUnavailableException.class)
+    public ResponseEntity<ApiResponse> handleAiServiceUnavailableException(AiServiceUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.failure(
+                exception.getMessage(),
+                HttpStatus.SERVICE_UNAVAILABLE,
+                exception.getMessage(),
+                List.of(exception.getMessage())));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {

@@ -25,4 +25,9 @@ logging:
   level:
     root: WARN
 server:
-  port: 8000 
+  port: 8000
+
+app:
+  ai:
+    enabled: ${AI_CV_ENABLED:true}
+    base-url: ${AI_CV_BASE_URL:http://localhost:8001}
