@@ -197,16 +197,29 @@ public class ImplApplicantService implements InterfaceApplicantService {
     public CvResponse uploadCv(Long applicantId, UploadCvRequest request) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+
         MultipartFile cvFile = request.getCvFile();
         if (cvFile != null && !cvFile.isEmpty()) {
             request.setCvFileUrl(storeCvFile(cvFile));
-        } else if ((request.getCvFileUrl() == null || request.getCvFileUrl().isBlank()) && applicant.getCv() != null) {
+        } else if ((request.getCvFileUrl() == null || request.getCvFileUrl().isBlank())
+                && applicant.getCv() != null) {
+            // Keep the previously stored file URL when no new file is provided
             request.setCvFileUrl(applicant.getCv().getCvFileUrl());
         }
-        Cv cv = ApplicantMapper.toCv(request);
+
+        Cv cv = applicant.getCv();
+        if (cv == null) {
+            // First upload — create and link a new CV entity
+            cv = ApplicantMapper.toCv(request);
+            Cv savedCv = cvRepository.save(cv);
+            applicant.setCv(savedCv);
+            applicantRepository.save(applicant);
+            return ApplicantMapper.toCvResponse(savedCv);
+        }
+
+        // Subsequent upload — update the existing CV row in-place (no new INSERT)
+        ApplicantMapper.updateCv(cv, request);
         Cv savedCv = cvRepository.save(cv);
-        applicant.setCv(savedCv);
-        applicantRepository.save(applicant);
         return ApplicantMapper.toCvResponse(savedCv);
     }
 

@@ -58,6 +58,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   avatarFileToDataUrl,
   readProfileAvatar,
   removeProfileAvatar,
@@ -144,6 +154,7 @@ export default function Profile() {
   const [cvAnalysis, setCvAnalysis] = useState<CvAnalysis | null>(null);
   const [activeApplicantEditor, setActiveApplicantEditor] = useState<ApplicantInlineEditor | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
 
   useEffect(() => {
     if (!authUser?.id) return;
@@ -287,21 +298,31 @@ export default function Profile() {
       setCvAnalysis(analysis);
       setApplicantForm((current) => ({
         ...current,
-        fullName: preferExisting(current.fullName, analysis.fullName),
-        email: preferExisting(current.email, analysis.detectedEmail),
-        phone: preferExisting(current.phone, analysis.phone),
-        address: preferExisting(current.address, analysis.address),
+        fullName: analysis.fullName || current.fullName,
+        email: analysis.detectedEmail || current.email,
+        phone: analysis.phone || current.phone,
+        address: analysis.address || current.address,
       }));
       setCvForm((current) => ({
         ...current,
-        fullName: preferExisting(current.fullName, analysis.fullName),
-        phone: preferExisting(current.phone, analysis.phone),
-        address: preferExisting(current.address, analysis.address),
-        objective: preferExisting(current.objective, analysis.objective),
-        skills: mergeDetectedList(current.skills, analysis.skills),
-        experience: mergeDetectedExperience(current.experience, analysis.experience),
-        education: mergeDetectedList(current.education, analysis.education),
-        certifications: mergeDetectedList(current.certifications, analysis.certifications),
+        fullName: analysis.fullName || current.fullName,
+        phone: analysis.phone || current.phone,
+        address: analysis.address || current.address,
+        objective: analysis.objective || "",
+        skills: analysis.skills && analysis.skills.length > 0 ? analysis.skills : [""],
+        experience: analysis.experience && analysis.experience.length > 0
+          ? analysis.experience.map((e) => ({
+              companyName: e.companyName || "",
+              position: e.position || "",
+              time: e.time || "",
+              description: e.description || "",
+              skills: e.skills || "",
+              certificates: e.certificates || "",
+            }))
+          : [createEmptyExperience()],
+        education: analysis.education && analysis.education.length > 0 ? analysis.education : [""],
+        certifications: analysis.certifications && analysis.certifications.length > 0 ? analysis.certifications : [""],
+        cvFileUrl: current.cvFileUrl,
       }));
       toast.success(
         analysis.extractionMode === "layoutlmv3"
@@ -319,8 +340,14 @@ export default function Profile() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (force?: boolean) => {
     if (!authUser?.id || analyzingCv) return;
+
+    if (role === "APPLICANT" && selectedCvFile && applicant?.cv?.cvFileUrl && force !== true) {
+      setShowOverwriteWarning(true);
+      return;
+    }
+
     setSaving(true);
     try {
       if (role === "RECRUITER") {
@@ -384,53 +411,75 @@ export default function Profile() {
   }
 
   return (
-    <ProfileFrame
-      editing={editing}
-      saving={saving || analyzingCv}
-      onEdit={() => {
-        resetApplicantDraft();
-        setEditing(true);
-      }}
-      onCancel={() => setEditing(false)}
-      onSave={handleSave}
-    >
-      {editing ? (
-        <ApplicantEditForm
-          applicantForm={applicantForm}
-          setApplicantForm={setApplicantForm}
-          cvForm={cvForm}
-          setCvForm={setCvForm}
-          selectedCvFile={selectedCvFile}
-          onCvFileChange={handleCvFileChange}
-          analyzingCv={analyzingCv}
-          cvAnalysis={cvAnalysis}
-        />
-      ) : (
-        <ApplicantView
-          applicant={applicant}
-          avatarUrl={avatarUrl}
-          onAvatarUpload={handleAvatarUpload}
-          onAvatarRemove={handleAvatarRemove}
-          highlights={applicantHighlights}
-          applicantForm={applicantForm}
-          setApplicantForm={setApplicantForm}
-          cvForm={cvForm}
-          setCvForm={setCvForm}
-          selectedCvFile={selectedCvFile}
-          onCvFileChange={handleCvFileChange}
-          analyzingCv={analyzingCv}
-          cvAnalysis={cvAnalysis}
-          activeEditor={activeApplicantEditor}
-          onEdit={(field) => setActiveApplicantEditor(field)}
-          onCancel={() => {
-            resetApplicantDraft();
-            setActiveApplicantEditor(null);
-          }}
-          onSave={handleSave}
-          saving={saving || analyzingCv}
-        />
-      )}
-    </ProfileFrame>
+    <>
+      <ProfileFrame
+        editing={editing}
+        saving={saving || analyzingCv}
+        onEdit={() => {
+          resetApplicantDraft();
+          setEditing(true);
+        }}
+        onCancel={() => setEditing(false)}
+        onSave={handleSave}
+      >
+        {editing ? (
+          <ApplicantEditForm
+            applicantForm={applicantForm}
+            setApplicantForm={setApplicantForm}
+            cvForm={cvForm}
+            setCvForm={setCvForm}
+            selectedCvFile={selectedCvFile}
+            onCvFileChange={handleCvFileChange}
+            analyzingCv={analyzingCv}
+            cvAnalysis={cvAnalysis}
+          />
+        ) : (
+          <ApplicantView
+            applicant={applicant}
+            avatarUrl={avatarUrl}
+            onAvatarUpload={handleAvatarUpload}
+            onAvatarRemove={handleAvatarRemove}
+            highlights={applicantHighlights}
+            applicantForm={applicantForm}
+            setApplicantForm={setApplicantForm}
+            cvForm={cvForm}
+            setCvForm={setCvForm}
+            selectedCvFile={selectedCvFile}
+            onCvFileChange={handleCvFileChange}
+            analyzingCv={analyzingCv}
+            cvAnalysis={cvAnalysis}
+            activeEditor={activeApplicantEditor}
+            onEdit={(field) => setActiveApplicantEditor(field)}
+            onCancel={() => {
+              resetApplicantDraft();
+              setActiveApplicantEditor(null);
+            }}
+            onSave={handleSave}
+            saving={saving || analyzingCv}
+          />
+        )}
+      </ProfileFrame>
+
+      <AlertDialog open={showOverwriteWarning} onOpenChange={setShowOverwriteWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace Existing CV?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Everything related to the first cv would be deleted. Do you want continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowOverwriteWarning(false);
+              handleSave(true);
+            }}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -679,7 +728,24 @@ function ApplicantView({
       </div>
 
       <div className="space-y-5">
-        <Panel title="Objective" action={activeEditor !== "objective" && <IconButton label="Edit objective" onClick={() => onEdit("objective")} icon={<Pencil />} />}>
+        <Panel
+          title="Objective"
+          action={
+            activeEditor !== "objective" ? (
+              <IconButton label="Edit objective" onClick={() => onEdit("objective")} icon={<Pencil />} />
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+                onClick={() => setCvField("objective", "")}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear
+              </Button>
+            )
+          }
+        >
           {activeEditor === "objective" ? (
             <InlineEditorActions onCancel={onCancel} onSave={onSave} saving={saving}>
               <Textarea value={cvForm.objective} onChange={(event) => setCvField("objective", event.target.value)} />
@@ -912,7 +978,18 @@ function ApplicantEditForm({
           <Field label="CV Address" value={cvForm.address} onChange={(value) => setCvField("address", value)} />
         </div>
         <div className="mt-4 space-y-2">
-          <Label>Objective</Label>
+          <div className="flex items-center justify-between">
+            <Label>Objective</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 h-7 text-xs"
+              onClick={() => setCvField("objective", "")}
+            >
+              <Trash2 className="w-3 h-3" /> Clear
+            </Button>
+          </div>
           <Textarea value={cvForm.objective} onChange={(event) => setCvField("objective", event.target.value)} />
         </div>
         <div className="mt-4 space-y-2">
@@ -1004,7 +1081,20 @@ function EditableList({
   placeholder: string;
 }) {
   return (
-    <Panel title={title}>
+    <Panel
+      title={title}
+      action={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+          onClick={() => onChange([""])}
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Clear All
+        </Button>
+      }
+    >
       <EditableListFields values={values} onChange={onChange} placeholder={placeholder} title={title} />
     </Panel>
   );
@@ -1057,7 +1147,20 @@ function EditableExperience({
   onChange: (values: ExperienceEntry[]) => void;
 }) {
   return (
-    <Panel title={title}>
+    <Panel
+      title={title}
+      action={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+          onClick={() => onChange([createEmptyExperience()])}
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Clear All
+        </Button>
+      }
+    >
       <EditableExperienceFields values={values} onChange={onChange} />
     </Panel>
   );
@@ -1134,10 +1237,22 @@ function ExperiencePanel({
     <Panel
       title="Experience"
       action={
-        !editing && <div className="flex gap-1">
-          <IconButton label="Add Experience" onClick={onEdit} icon={<Plus />} />
-          <IconButton label="Edit Experience" onClick={onEdit} icon={<Pencil />} />
-        </div>
+        !editing ? (
+          <div className="flex gap-1">
+            <IconButton label="Add Experience" onClick={onEdit} icon={<Plus />} />
+            <IconButton label="Edit Experience" onClick={onEdit} icon={<Pencil />} />
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+            onClick={() => onChange([createEmptyExperience()])}
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Clear All
+          </Button>
+        )
       }
     >
       {editing ? (
@@ -1201,10 +1316,22 @@ function LinkedInListPanel({
     <Panel
       title={title}
       action={
-        !editing && <div className="flex gap-1">
-          <IconButton label={`Add ${title}`} onClick={onEdit} icon={<Plus />} />
-          <IconButton label={`Edit ${title}`} onClick={onEdit} icon={<Pencil />} />
-        </div>
+        !editing ? (
+          <div className="flex gap-1">
+            <IconButton label={`Add ${title}`} onClick={onEdit} icon={<Plus />} />
+            <IconButton label={`Edit ${title}`} onClick={onEdit} icon={<Pencil />} />
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+            onClick={() => onChange([""])}
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Clear All
+          </Button>
+        )
       }
     >
       {editing ? (

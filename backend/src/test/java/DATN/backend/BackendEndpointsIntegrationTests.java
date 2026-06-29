@@ -43,7 +43,9 @@ import DATN.backend.security.InforInsideToken;
 import DATN.backend.security.JwtService;
 import DATN.backend.response.cv.CvAnalysisResponse;
 import DATN.backend.response.cv.CvExperienceResponse;
+import DATN.backend.response.applicant.CvJobMatchResponse;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
+import DATN.backend.service.InterfaceService.InterfaceCvMatchService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,12 +66,15 @@ class BackendEndpointsIntegrationTests {
         @MockitoBean
         private InterfaceCvAiService cvAiService;
 
+        @MockitoBean
+        private InterfaceCvMatchService cvMatchService;
+
         BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
                         ApplicantRepository applicantRepository,
                         ApplicantJobDescriptionRepository applicantJobDescriptionRepository, CvRepository cvRepository,
                         RecruiterRepository recruiterRepository, RoleRepository roleRepository,
                         JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
-                        JwtService jwtService) {
+                        JwtService jwtService, InterfaceCvMatchService cvMatchService) {
                 this.mockMvc = mockMvc;
                 this.userRepository = userRepository;
                 this.applicantRepository = applicantRepository;
@@ -80,6 +85,7 @@ class BackendEndpointsIntegrationTests {
                 this.jobDescriptionRepository = jobDescriptionRepository;
                 this.passwordEncoder = passwordEncoder;
                 this.jwtService = jwtService;
+                this.cvMatchService = cvMatchService;
         }
 
         @BeforeEach
@@ -450,6 +456,59 @@ class BackendEndpointsIntegrationTests {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.data[0].applicant.userName").value("applicant01"))
                                 .andExpect(jsonPath("$.data[0].applicationAnswers").exists());
+        }
+
+        @Test
+        void applicantShouldMatchCvToJobWithAuthenticatedEndpoint() throws Exception {
+                Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+                Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
+                Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+                JobDescription job = seedJob(recruiter, "Backend Engineer");
+
+                CvJobMatchResponse mockResult = new CvJobMatchResponse(
+                                applicant.getId(),
+                                job.getId(),
+                                true,
+                                0.82,
+                                82,
+                                "Khuyến nghị chủ yếu nhờ độ phù hợp cao về Kỹ năng (0.88).",
+                                java.util.List.of("Bổ sung chứng chỉ AWS."),
+                                java.util.Map.of("SKILL", 0.88, "EXPERIENCE", 0.70),
+                                java.util.List.of(),
+                                "tfidf",
+                                "svm");
+                when(cvMatchService.matchApplicantToJob(any(), any(), any())).thenReturn(mockResult);
+
+                // Happy path: owner token → 200 with match data
+                mockMvc.perform(post("/api/v1/applicants/{applicantId}/match/{jobId}",
+                                applicant.getId(), job.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"llm\":false,\"method\":\"tfidf\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.message").value("CV matched successfully"))
+                                .andExpect(jsonPath("$.data.matchPercent").value(82))
+                                .andExpect(jsonPath("$.data.passedFilter").value(true))
+                                .andExpect(jsonPath("$.data.scoringMethod").value("tfidf"))
+                                .andExpect(jsonPath("$.data.modelUsed").value("svm"))
+                                .andExpect(jsonPath("$.data.suggestions[0]").value("Bổ sung chứng chỉ AWS."));
+
+                // Body omitted (default options) → still 200
+                mockMvc.perform(post("/api/v1/applicants/{applicantId}/match/{jobId}",
+                                applicant.getId(), job.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data.matchScore").value(0.82));
+
+                // Other applicant's token → 403 Forbidden
+                mockMvc.perform(post("/api/v1/applicants/{applicantId}/match/{jobId}",
+                                applicant.getId(), job.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherApplicant))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.errors[0]")
+                                                .value("You can only manage jobs in your own applicant account"));
         }
 
         private Applicant seedApplicant(String userName, String email) {
