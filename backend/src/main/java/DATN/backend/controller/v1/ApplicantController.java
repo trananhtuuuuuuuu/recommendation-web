@@ -172,7 +172,8 @@ public class ApplicantController {
 
         @Operation(summary = "Upload CV for applicant")
         @PostMapping(value = "/upload-cv/{applicantId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-        public ResponseEntity<ApiResponse> uploadCv(@PathVariable Long applicantId,
+        public ResponseEntity<ApiResponse> uploadCv(
+                        @PathVariable Long applicantId,
                         @Valid @ModelAttribute UploadCvRequest request) {
                 return ResponseEntity.status(HttpStatus.CREATED).body(
                                 ApiResponse.success("CV uploaded successfully",
