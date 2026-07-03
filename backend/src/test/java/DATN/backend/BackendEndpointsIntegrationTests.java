@@ -73,13 +73,8 @@ class BackendEndpointsIntegrationTests {
                         ApplicantRepository applicantRepository,
                         ApplicantJobRepository applicantJobRepository, CvRepository cvRepository,
                         RecruiterRepository recruiterRepository, RoleRepository roleRepository,
-<<<<<<< HEAD
-                        JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
-                        JwtService jwtService, InterfaceCvMatchService cvMatchService) {
-=======
                         JobRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
                         JwtService jwtService) {
->>>>>>> fix_entities
                 this.mockMvc = mockMvc;
                 this.userRepository = userRepository;
                 this.applicantRepository = applicantRepository;
@@ -90,7 +85,6 @@ class BackendEndpointsIntegrationTests {
                 this.jobDescriptionRepository = jobDescriptionRepository;
                 this.passwordEncoder = passwordEncoder;
                 this.jwtService = jwtService;
-                this.cvMatchService = cvMatchService;
         }
 
         @BeforeEach
@@ -467,7 +461,7 @@ class BackendEndpointsIntegrationTests {
                 Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
                 Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
-                JobDescription job = seedJob(recruiter, "Backend Engineer");
+                Job job = seedJob(recruiter, "Backend Engineer");
 
                 CvJobMatchResponse mockResult = new CvJobMatchResponse(
                                 applicant.getId(),

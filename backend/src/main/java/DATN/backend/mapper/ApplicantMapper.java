@@ -114,7 +114,8 @@ public class ApplicantMapper {
         /**
          * Updates an existing {@link Cv} entity's fields in-place from the given
          * request. Using this instead of {@link #toCv} on subsequent uploads prevents
-         * JPA from inserting a second CV row and violating the one-to-one FK constraint.
+         * JPA from inserting a second CV row and violating the one-to-one FK
+         * constraint.
          *
          * @param cv      existing managed CV entity
          * @param request upload payload with the new field values
@@ -125,9 +126,6 @@ public class ApplicantMapper {
                 cv.setPhone(request.getPhone());
                 cv.setObjective(request.getObjective());
                 cv.setSkills(request.getSkills());
-                cv.setExperience(request.getExperience());
-                cv.setEducation(request.getEducation());
-                cv.setCertifications(request.getCertifications());
                 if (request.getCvFileUrl() != null && !request.getCvFileUrl().isBlank()) {
                         cv.setCvFileUrl(request.getCvFileUrl());
                 }

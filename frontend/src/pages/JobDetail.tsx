@@ -26,11 +26,8 @@ import {
   applyJob,
   fetchJob,
   fetchJobApplicantCount,
-<<<<<<< HEAD
   matchCvToJob,
-=======
   getApplyingDeadline,
->>>>>>> fix_entities
   saveJob,
   type ApplicationField,
   type CvJobMatch,
