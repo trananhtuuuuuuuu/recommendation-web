@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "job_descriptions")
+@Table(name = "jobs")
 @Getter
 @Setter
 @AllArgsConstructor
@@ -29,9 +29,6 @@ public class JobDescription extends BaseEntity {
 
     @Column(nullable = false)
     private String jobTitle;
-
-    @Column(nullable = true, columnDefinition = "TEXT")
-    private String aboutCompany;
 
     @Column(nullable = true, columnDefinition = "TEXT")
     private String jobDescription;
@@ -61,7 +58,7 @@ public class JobDescription extends BaseEntity {
     private Date postedDate;
 
     @Column(nullable = true)
-    private Date applicationDeadline;
+    private Date applyingDeadline;
 
     @Column(nullable = true)
     private Date startDate;
@@ -72,12 +69,17 @@ public class JobDescription extends BaseEntity {
     @Column(nullable = true, columnDefinition = "TEXT")
     private String customApplicationFields;
 
-    public JobDescription(String jobTitle, String aboutCompany, String jobDescription, String requirements,
+    @Column(name = "yoe", nullable = true)
+    private Integer yoe;
+
+    @Column(name = "custom_application_fields_id", nullable = true)
+    private Long customApplicationFieldsId;
+
+    public JobDescription(String jobTitle, String jobDescription, String requirements,
             String benefits, String location, String salaryRange, String jobType, String experienceLevel,
-            String industry, Date postedDate, Date applicationDeadline, Date startDate, Date endDate) {
+            String industry, Date postedDate, Date applyingDeadline, Date startDate, Date endDate) {
         super();
         this.jobTitle = jobTitle;
-        this.aboutCompany = aboutCompany;
         this.jobDescription = jobDescription;
         this.requirements = requirements;
         this.benefits = benefits;
@@ -87,7 +89,7 @@ public class JobDescription extends BaseEntity {
         this.experienceLevel = experienceLevel;
         this.industry = industry;
         this.postedDate = postedDate;
-        this.applicationDeadline = applicationDeadline;
+        this.applyingDeadline = applyingDeadline;
         this.startDate = startDate;
         this.endDate = endDate;
     }

@@ -12,7 +12,6 @@ import lombok.Setter;
 public class JobDescriptionResponse {
     private Long id;
     private String jobTitle;
-    private String aboutCompany;
     private String jobDescription;
     private String requirements;
     private String benefits;
@@ -22,7 +21,7 @@ public class JobDescriptionResponse {
     private String experienceLevel;
     private String industry;
     private String postedDate;
-    private String applicationDeadline;
+    private String applyingDeadline;
     private String startDate;
     private String endDate;
     private Long recruiterId;

@@ -45,6 +45,10 @@ public class ApplicantJobDescription extends BaseEntity {
     @Column(nullable = true, columnDefinition = "TEXT")
     private String applicationAnswers;
 
+    @ManyToOne
+    @JoinColumn(name = "application_form_id")
+    private ApplicationForm applicationForm;
+
     public ApplicantJobDescription(Applicant applicant, JobDescription jobDescription) {
         super();
         this.applicant = applicant;

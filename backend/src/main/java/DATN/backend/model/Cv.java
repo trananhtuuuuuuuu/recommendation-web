@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -67,4 +69,16 @@ public class Cv extends BaseEntity {
 
     @OneToOne(mappedBy = "cv")
     private Applicant applicant;
+
+    @ManyToOne
+    @JoinColumn(name = "certificate_id")
+    private Certificate certificate;
+
+    @ManyToOne
+    @JoinColumn(name = "education_id")
+    private Education educationObj;
+
+    @ManyToOne
+    @JoinColumn(name = "experience_id")
+    private Experience experienceObj;
 }

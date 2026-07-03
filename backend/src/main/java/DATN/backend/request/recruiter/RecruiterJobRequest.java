@@ -15,7 +15,6 @@ public class RecruiterJobRequest {
     @NotBlank(message = "Job title is required")
     private String jobTitle;
 
-    private String aboutCompany;
     private String jobDescription;
     private String requirements;
     private String benefits;
@@ -25,7 +24,7 @@ public class RecruiterJobRequest {
     private String experienceLevel;
     private String industry;
     private String postedDate;
-    private String applicationDeadline;
+    private String applyingDeadline;
     private String startDate;
     private String endDate;
     private String customApplicationFields;

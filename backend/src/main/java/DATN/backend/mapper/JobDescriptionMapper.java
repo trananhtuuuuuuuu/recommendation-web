@@ -18,7 +18,6 @@ public class JobDescriptionMapper {
         JobDescription jobDescription = new JobDescription();
         jobDescription.setRecruiter(recruiter);
         jobDescription.setJobTitle(request.getJobTitle());
-        jobDescription.setAboutCompany(request.getAboutCompany());
         jobDescription.setJobDescription(request.getJobDescription());
         jobDescription.setRequirements(request.getRequirements());
         jobDescription.setBenefits(request.getBenefits());
@@ -28,7 +27,7 @@ public class JobDescriptionMapper {
         jobDescription.setExperienceLevel(request.getExperienceLevel());
         jobDescription.setIndustry(request.getIndustry());
         jobDescription.setPostedDate(parseDate(request.getPostedDate()));
-        jobDescription.setApplicationDeadline(parseDate(request.getApplicationDeadline()));
+        jobDescription.setApplyingDeadline(parseDate(request.getApplyingDeadline()));
         jobDescription.setStartDate(parseDate(request.getStartDate()));
         jobDescription.setEndDate(parseDate(request.getEndDate()));
         jobDescription.setCustomApplicationFields(request.getCustomApplicationFields());
@@ -37,7 +36,6 @@ public class JobDescriptionMapper {
 
     public static JobDescription updateJobDescription(JobDescription jobDescription, RecruiterJobRequest request) {
         jobDescription.setJobTitle(request.getJobTitle());
-        jobDescription.setAboutCompany(request.getAboutCompany());
         jobDescription.setJobDescription(request.getJobDescription());
         jobDescription.setRequirements(request.getRequirements());
         jobDescription.setBenefits(request.getBenefits());
@@ -47,7 +45,7 @@ public class JobDescriptionMapper {
         jobDescription.setExperienceLevel(request.getExperienceLevel());
         jobDescription.setIndustry(request.getIndustry());
         jobDescription.setPostedDate(parseDate(request.getPostedDate()));
-        jobDescription.setApplicationDeadline(parseDate(request.getApplicationDeadline()));
+        jobDescription.setApplyingDeadline(parseDate(request.getApplyingDeadline()));
         jobDescription.setStartDate(parseDate(request.getStartDate()));
         jobDescription.setEndDate(parseDate(request.getEndDate()));
         jobDescription.setCustomApplicationFields(request.getCustomApplicationFields());
@@ -58,7 +56,6 @@ public class JobDescriptionMapper {
         return new JobDescriptionResponse(
                 jobDescription.getId(),
                 jobDescription.getJobTitle(),
-                jobDescription.getAboutCompany(),
                 jobDescription.getJobDescription(),
                 jobDescription.getRequirements(),
                 jobDescription.getBenefits(),
@@ -68,8 +65,8 @@ public class JobDescriptionMapper {
                 jobDescription.getExperienceLevel(),
                 jobDescription.getIndustry(),
                 jobDescription.getPostedDate() == null ? null : jobDescription.getPostedDate().toString(),
-                jobDescription.getApplicationDeadline() == null ? null
-                        : jobDescription.getApplicationDeadline().toString(),
+                jobDescription.getApplyingDeadline() == null ? null
+                        : jobDescription.getApplyingDeadline().toString(),
                 jobDescription.getStartDate() == null ? null : jobDescription.getStartDate().toString(),
                 jobDescription.getEndDate() == null ? null : jobDescription.getEndDate().toString(),
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getId(),

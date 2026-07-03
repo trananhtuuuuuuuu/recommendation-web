@@ -130,7 +130,7 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
     private Map<String, Object> buildJd(JobDescription job) {
         Map<String, Object> jd = new HashMap<>();
         jd.put("jobTitle", nullToEmpty(job.getJobTitle()));
-        jd.put("aboutCompany", nullToEmpty(job.getAboutCompany()));
+        jd.put("aboutCompany", nullToEmpty(job.getRecruiter() != null ? job.getRecruiter().getCompanyDescription() : ""));
         jd.put("jobDescription", nullToEmpty(job.getJobDescription()));
         jd.put("requirements", nullToEmpty(job.getRequirements()));
         jd.put("benefits", nullToEmpty(job.getBenefits()));
