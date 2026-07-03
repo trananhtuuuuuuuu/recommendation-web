@@ -28,7 +28,9 @@ public class ApplicantRegistrationController {
     @Operation(summary = "Register applicant")
     @PostMapping
     public ResponseEntity<ApiResponse> registerApplicant(@Valid @RequestBody RegistrationApplicantRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Applicant registered successfully",
-                HttpStatus.CREATED, applicantService.registerApplicant(request)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.success("Applicant registered successfully",
+                        HttpStatus.CREATED,
+                        applicantService.registerApplicant(request)));
     }
 }

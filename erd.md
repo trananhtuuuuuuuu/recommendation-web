@@ -1,4 +1,4 @@
-Here's the complete Mermaid ER diagram code — copy this directly into your `.mmd` file or Mermaid-compatible editor:
+Here's the complete Mermaid ER diagram code
 
 ```mermaid
 erDiagram
@@ -35,7 +35,7 @@ erDiagram
 
     CV {
         int id PK
-        text address "Optional - define a class"
+        text address 
         string cv_file_url
         string full_name
         text objective

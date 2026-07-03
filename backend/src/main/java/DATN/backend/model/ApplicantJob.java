@@ -14,12 +14,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "applicant_job_descriptions")
+@Table(name = "applicant_jobs")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
-public class ApplicantJobDescription extends BaseEntity {
+public class ApplicantJob extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,36 +30,27 @@ public class ApplicantJobDescription extends BaseEntity {
     private Applicant applicant;
 
     @ManyToOne
-    @JoinColumn(name = "job_description_id")
-    private JobDescription jobDescription;
+    @JoinColumn(name = "job_id")
+    private Job job;
 
     @Column(nullable = false)
     private String actionType = "APPLIED";
-
-    @Column(nullable = true, columnDefinition = "TEXT")
-    private String coverLetter;
-
-    @Column(nullable = true)
-    private String portfolioUrl;
-
-    @Column(nullable = true, columnDefinition = "TEXT")
-    private String applicationAnswers;
 
     @ManyToOne
     @JoinColumn(name = "application_form_id")
     private ApplicationForm applicationForm;
 
-    public ApplicantJobDescription(Applicant applicant, JobDescription jobDescription) {
+    public ApplicantJob(Applicant applicant, Job job) {
         super();
         this.applicant = applicant;
-        this.jobDescription = jobDescription;
+        this.job = job;
         this.actionType = "APPLIED";
     }
 
-    public ApplicantJobDescription(Applicant applicant, JobDescription jobDescription, String actionType) {
+    public ApplicantJob(Applicant applicant, Job job, String actionType) {
         super();
         this.applicant = applicant;
-        this.jobDescription = jobDescription;
+        this.job = job;
         this.actionType = actionType;
     }
 

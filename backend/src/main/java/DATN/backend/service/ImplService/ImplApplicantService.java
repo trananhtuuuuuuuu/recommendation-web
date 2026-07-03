@@ -17,14 +17,14 @@ import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.mapper.ApplicantMapper;
 import DATN.backend.model.Applicant;
-import DATN.backend.model.ApplicantJobDescription;
+import DATN.backend.model.ApplicantJob;
 import DATN.backend.model.Cv;
-import DATN.backend.model.JobDescription;
+import DATN.backend.model.Job;
 import DATN.backend.model.Role;
-import DATN.backend.repository.ApplicantJobDescriptionRepository;
+import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.CvRepository;
-import DATN.backend.repository.JobDescriptionRepository;
+import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
@@ -47,8 +47,8 @@ public class ImplApplicantService implements InterfaceApplicantService {
     private static final Path CV_UPLOAD_DIR = Path.of("uploads", "cvs");
 
     private final ApplicantRepository applicantRepository;
-    private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
-    private final JobDescriptionRepository jobDescriptionRepository;
+    private final ApplicantJobRepository applicantJobRepository;
+    private final JobRepository jobDescriptionRepository;
     private final CvRepository cvRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
@@ -102,56 +102,59 @@ public class ImplApplicantService implements InterfaceApplicantService {
     @Override
     @Transactional
     public SavedJobResponse saveJob(SaveJobRequest request) {
+        if (request.getApplicantId() == null || request.getJobId() == null) {
+            throw new IllegalArgumentException("Applicant id and job id are required");
+        }
         Applicant applicant = applicantRepository.findById(request.getApplicantId())
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        JobDescription jobDescription = jobDescriptionRepository.findById(request.getJobDescriptionId())
-                .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
+        Job job = jobDescriptionRepository.findById(request.getJobId())
+                .orElseThrow(() -> new ResourcesNotFoundException("Job not found"));
 
-        applicantJobDescriptionRepository.findByApplicant_IdAndJobDescription_IdAndActionType(request.getApplicantId(),
-                request.getJobDescriptionId(), SAVED_ACTION)
+        applicantJobRepository.findByApplicant_IdAndJob_IdAndActionType(request.getApplicantId(),
+                request.getJobId(), SAVED_ACTION)
                 .ifPresent(existing -> {
                     throw new AlreadyExistException("Job already saved by this applicant");
                 });
 
-        ApplicantJobDescription relation = applicantJobDescriptionRepository
-                .save(new ApplicantJobDescription(applicant, jobDescription, SAVED_ACTION));
+        ApplicantJob relation = applicantJobRepository
+                .save(new ApplicantJob(applicant, job, SAVED_ACTION));
 
         return new SavedJobResponse(
                 relation.getId(),
                 applicant.getId(),
-                jobDescription.getId(),
-                jobDescription.getJobTitle(),
-                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
-                jobDescription.getLocation());
+                job.getId(),
+                job.getJobTitle(),
+                job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
+                job.getLocation());
     }
 
     @Override
     @Transactional
     public SavedJobResponse applyJob(SaveJobRequest request) {
+        if (request.getApplicantId() == null || request.getJobId() == null) {
+            throw new IllegalArgumentException("Applicant id and job id are required");
+        }
         Applicant applicant = applicantRepository.findById(request.getApplicantId())
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        JobDescription jobDescription = jobDescriptionRepository.findById(request.getJobDescriptionId())
-                .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
+        Job job = jobDescriptionRepository.findById(request.getJobId())
+                .orElseThrow(() -> new ResourcesNotFoundException("Job not found"));
 
-        applicantJobDescriptionRepository.findByApplicant_IdAndJobDescription_IdAndActionType(request.getApplicantId(),
-                request.getJobDescriptionId(), APPLIED_ACTION)
+        applicantJobRepository.findByApplicant_IdAndJob_IdAndActionType(request.getApplicantId(),
+                request.getJobId(), APPLIED_ACTION)
                 .ifPresent(existing -> {
                     throw new AlreadyExistException("Applicant already applied for this job");
                 });
 
-        ApplicantJobDescription relation = applicantJobDescriptionRepository
-                .save(new ApplicantJobDescription(applicant, jobDescription, APPLIED_ACTION));
-        relation.setCoverLetter(request.getCoverLetter());
-        relation.setPortfolioUrl(request.getPortfolioUrl());
-        relation.setApplicationAnswers(request.getApplicationAnswers());
+        ApplicantJob relation = applicantJobRepository
+                .save(new ApplicantJob(applicant, job, APPLIED_ACTION));
 
         return new SavedJobResponse(
                 relation.getId(),
                 applicant.getId(),
-                jobDescription.getId(),
-                jobDescription.getJobTitle(),
-                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
-                jobDescription.getLocation());
+                job.getId(),
+                job.getJobTitle(),
+                job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
+                job.getLocation());
     }
 
     @Override
@@ -159,7 +162,7 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, SAVED_ACTION).stream()
+        return applicantJobRepository.findByApplicant_IdAndActionType(applicantId, SAVED_ACTION).stream()
                 .map(this::toSavedJobResponse)
                 .toList();
     }
@@ -169,7 +172,7 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        return applicantJobDescriptionRepository.findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION).stream()
+        return applicantJobRepository.findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION).stream()
                 .map(this::toSavedJobResponse)
                 .toList();
     }
@@ -253,22 +256,22 @@ public class ImplApplicantService implements InterfaceApplicantService {
             throw new ResourcesNotFoundException("Applicant not found");
         }
 
-        ApplicantJobDescription relation = applicantJobDescriptionRepository
+        ApplicantJob relation = applicantJobRepository
                 .findByIdAndApplicant_IdAndActionType(applicantJobId, applicantId, actionType)
                 .orElseThrow(() -> new ResourcesNotFoundException(notFoundMessage));
         SavedJobResponse response = toSavedJobResponse(relation);
-        applicantJobDescriptionRepository.delete(relation);
+        applicantJobRepository.delete(relation);
         return response;
     }
 
-    private SavedJobResponse toSavedJobResponse(ApplicantJobDescription relation) {
-        JobDescription jobDescription = relation.getJobDescription();
+    private SavedJobResponse toSavedJobResponse(ApplicantJob relation) {
+        Job job = relation.getJob();
         return new SavedJobResponse(
                 relation.getId(),
                 relation.getApplicant().getId(),
-                jobDescription.getId(),
-                jobDescription.getJobTitle(),
-                jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName(),
-                jobDescription.getLocation());
+                job.getId(),
+                job.getJobTitle(),
+                job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
+                job.getLocation());
     }
 }

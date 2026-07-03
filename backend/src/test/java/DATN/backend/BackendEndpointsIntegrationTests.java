@@ -28,14 +28,14 @@ import org.springframework.mock.web.MockMultipartFile;
 import DATN.backend.Enum.ApplicantStatusEnum;
 import DATN.backend.Enum.GenderEnum;
 import DATN.backend.model.Applicant;
-import DATN.backend.model.ApplicantJobDescription;
-import DATN.backend.model.JobDescription;
+import DATN.backend.model.ApplicantJob;
+import DATN.backend.model.Job;
 import DATN.backend.model.Recruiter;
 import DATN.backend.model.Role;
-import DATN.backend.repository.ApplicantJobDescriptionRepository;
+import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.CvRepository;
-import DATN.backend.repository.JobDescriptionRepository;
+import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
@@ -53,11 +53,11 @@ class BackendEndpointsIntegrationTests {
         private final MockMvc mockMvc;
         private final UserRepository userRepository;
         private final ApplicantRepository applicantRepository;
-        private final ApplicantJobDescriptionRepository applicantJobDescriptionRepository;
+        private final ApplicantJobRepository applicantJobRepository;
         private final CvRepository cvRepository;
         private final RecruiterRepository recruiterRepository;
         private final RoleRepository roleRepository;
-        private final JobDescriptionRepository jobDescriptionRepository;
+        private final JobRepository jobDescriptionRepository;
         private final PasswordEncoder passwordEncoder;
         private final JwtService jwtService;
 
@@ -66,14 +66,14 @@ class BackendEndpointsIntegrationTests {
 
         BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
                         ApplicantRepository applicantRepository,
-                        ApplicantJobDescriptionRepository applicantJobDescriptionRepository, CvRepository cvRepository,
+                        ApplicantJobRepository applicantJobRepository, CvRepository cvRepository,
                         RecruiterRepository recruiterRepository, RoleRepository roleRepository,
-                        JobDescriptionRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
+                        JobRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
                         JwtService jwtService) {
                 this.mockMvc = mockMvc;
                 this.userRepository = userRepository;
                 this.applicantRepository = applicantRepository;
-                this.applicantJobDescriptionRepository = applicantJobDescriptionRepository;
+                this.applicantJobRepository = applicantJobRepository;
                 this.cvRepository = cvRepository;
                 this.recruiterRepository = recruiterRepository;
                 this.roleRepository = roleRepository;
@@ -84,7 +84,7 @@ class BackendEndpointsIntegrationTests {
 
         @BeforeEach
         void cleanDatabase() {
-                applicantJobDescriptionRepository.deleteAll();
+                applicantJobRepository.deleteAll();
                 jobDescriptionRepository.deleteAll();
                 applicantRepository.deleteAll();
                 recruiterRepository.deleteAll();
@@ -189,7 +189,7 @@ class BackendEndpointsIntegrationTests {
         void applicantEndpointsShouldReadUpdateSaveJobAndUploadCv() throws Exception {
                 Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
-                JobDescription job = seedJob(recruiter, "Backend Engineer");
+                Job job = seedJob(recruiter, "Backend Engineer");
 
                 mockMvc.perform(get("/api/v1/applicants"))
                                 .andExpect(status().isOk())
@@ -269,7 +269,8 @@ class BackendEndpointsIntegrationTests {
                                                 """))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.data.fullName").value(""))
-                                .andExpect(jsonPath("$.data.experience").value("[{\"companyName\":\"Acme\",\"position\":\"Backend Intern\",\"time\":\"2025\",\"description\":\"Built APIs\",\"skills\":\"Java\",\"certificates\":\"Spring Certificate\"}]"))
+                                .andExpect(jsonPath("$.data.skills[0]").value("Java"))
+                                .andExpect(jsonPath("$.data.skills[1]").value("Spring Boot"))
                                 .andExpect(jsonPath("$.data.cvFileUrl")
                                                 .value("https://example.com/cv/updated-applicant.pdf"));
         }
@@ -279,11 +280,11 @@ class BackendEndpointsIntegrationTests {
                 Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
                 Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
-                JobDescription job = seedJob(recruiter, "Backend Engineer");
-                ApplicantJobDescription savedRelation = applicantJobDescriptionRepository
-                                .save(new ApplicantJobDescription(applicant, job, "SAVED"));
-                ApplicantJobDescription appliedRelation = applicantJobDescriptionRepository
-                                .save(new ApplicantJobDescription(applicant, job, "APPLIED"));
+                Job job = seedJob(recruiter, "Backend Engineer");
+                ApplicantJob savedRelation = applicantJobRepository
+                                .save(new ApplicantJob(applicant, job, "SAVED"));
+                ApplicantJob appliedRelation = applicantJobRepository
+                                .save(new ApplicantJob(applicant, job, "APPLIED"));
 
                 mockMvc.perform(delete("/api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}",
                                 applicant.getId(), savedRelation.getId())
@@ -299,8 +300,8 @@ class BackendEndpointsIntegrationTests {
                                 .andExpect(jsonPath("$.message").value("Application withdrawn successfully"))
                                 .andExpect(jsonPath("$.data.applicantJobId").value(appliedRelation.getId()));
 
-                ApplicantJobDescription protectedRelation = applicantJobDescriptionRepository
-                                .save(new ApplicantJobDescription(applicant, job, "SAVED"));
+                ApplicantJob protectedRelation = applicantJobRepository
+                                .save(new ApplicantJob(applicant, job, "SAVED"));
                 mockMvc.perform(delete("/api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}",
                                 applicant.getId(), protectedRelation.getId())
                                 .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherApplicant)))
@@ -358,7 +359,7 @@ class BackendEndpointsIntegrationTests {
         @Test
         void recruiterAndJobEndpointsShouldReadCreateAndUpdateJobs() throws Exception {
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
-                JobDescription existingJob = seedJob(recruiter, "Backend Engineer");
+                Job existingJob = seedJob(recruiter, "Backend Engineer");
 
                 mockMvc.perform(get("/api/v1/recruiters"))
                                 .andExpect(status().isOk())
@@ -429,10 +430,9 @@ class BackendEndpointsIntegrationTests {
         void browseJobsEndpointsShouldListDetailAndApplicantCount() throws Exception {
                 Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
                 Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
-                JobDescription jobDescription = seedJob(recruiter, "Backend Engineer");
-                ApplicantJobDescription application = new ApplicantJobDescription(applicant, jobDescription);
-                application.setApplicationAnswers("{\"years_in_role\":\"3\"}");
-                applicantJobDescriptionRepository.save(application);
+                Job jobDescription = seedJob(recruiter, "Backend Engineer");
+                ApplicantJob application = new ApplicantJob(applicant, jobDescription);
+                applicantJobRepository.save(application);
 
                 mockMvc.perform(get("/api/v1/browse-jobs"))
                                 .andExpect(status().isOk())
@@ -448,8 +448,7 @@ class BackendEndpointsIntegrationTests {
 
                 mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.data[0].applicant.userName").value("applicant01"))
-                                .andExpect(jsonPath("$.data[0].applicationAnswers").exists());
+                                .andExpect(jsonPath("$.data[0].applicant.userName").value("applicant01"));
         }
 
         private Applicant seedApplicant(String userName, String email) {
@@ -478,14 +477,15 @@ class BackendEndpointsIntegrationTests {
                 recruiter.setPassword(passwordEncoder.encode("secret123"));
                 recruiter.setPhone("+84909998888");
                 recruiter.setCompanyName("Example Corp");
-                recruiter.setTaxCode("TAX-001");
-                recruiter.setEstablishedDate("2020-01-01");
+                recruiter.setCompanyDesc("Example recruiter");
+                recruiter.setLocation("Hanoi");
+                recruiter.setEstablishedDate(Date.valueOf("2020-01-01"));
                 recruiter.setRole(role);
                 return recruiterRepository.save(recruiter);
         }
 
-        private JobDescription seedJob(Recruiter recruiter, String jobTitle) {
-                JobDescription jobDescription = new JobDescription();
+        private Job seedJob(Recruiter recruiter, String jobTitle) {
+                Job jobDescription = new Job();
                 jobDescription.setJobTitle(jobTitle);
                 jobDescription.setLocation("Remote");
                 jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));

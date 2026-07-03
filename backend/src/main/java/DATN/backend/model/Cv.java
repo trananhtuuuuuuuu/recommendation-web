@@ -1,6 +1,9 @@
 package DATN.backend.model;
 
+import java.util.List;
+
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -13,6 +16,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import DATN.backend.utils.StringListConverter;
 
 @Entity
 @Table(name = "cvs")
@@ -39,31 +43,24 @@ public class Cv extends BaseEntity {
     private String objective;
 
     @Column(nullable = true, columnDefinition = "TEXT")
-    private String skills;
-
-    @Column(nullable = true, columnDefinition = "TEXT")
-    private String experience;
-
-    @Column(nullable = true)
-    private String education;
-
-    @Column(nullable = true, columnDefinition = "TEXT")
-    private String certifications;
+    @Convert(converter = StringListConverter.class)
+    private List<String> skills;
 
     @Column(nullable = true, length = 2048)
     private String cvFileUrl;
 
-    public Cv(String fullName, String address, String phone, String objective, String skills, String experience,
-            String education, String certifications, String cvFileUrl) {
+    public Cv(String fullName,
+            String address,
+            String phone,
+            String objective,
+            List<String> skills,
+            String cvFileUrl) {
         super();
         this.fullName = fullName;
         this.address = address;
         this.phone = phone;
         this.objective = objective;
         this.skills = skills;
-        this.experience = experience;
-        this.education = education;
-        this.certifications = certifications;
         this.cvFileUrl = cvFileUrl;
     }
 

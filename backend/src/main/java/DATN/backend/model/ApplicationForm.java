@@ -26,7 +26,7 @@ public class ApplicationForm extends BaseEntity {
     @Column(nullable = true)
     private String field;
 
-    @Column(nullable = true)
+    @Column(name = "field_value", nullable = true)
     private String value;
 
     @Column(nullable = true)

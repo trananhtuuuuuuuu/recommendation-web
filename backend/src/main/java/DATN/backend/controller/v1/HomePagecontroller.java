@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import DATN.backend.response.ApiResponse;
 import DATN.backend.repository.ApplicantRepository;
-import DATN.backend.repository.JobDescriptionRepository;
+import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RecruiterRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class HomePagecontroller {
 
-    private final JobDescriptionRepository jobDescriptionRepository;
+    private final JobRepository jobDescriptionRepository;
     private final ApplicantRepository applicantRepository;
     private final RecruiterRepository recruiterRepository;
 

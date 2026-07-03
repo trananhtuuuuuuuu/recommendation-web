@@ -274,7 +274,10 @@ function completionPercentage(values: unknown[]) {
   return Math.round((completed / values.length) * 100);
 }
 
-function toList(value?: string | null) {
+function toList(value?: string | string[] | null) {
+  if (Array.isArray(value)) {
+    return value.map((item) => item.trim()).filter(Boolean);
+  }
   return (value || "")
     .split(/\r?\n|,/)
     .map((item) => item.trim())

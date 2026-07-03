@@ -8,20 +8,21 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.model.Applicant;
+import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
-import DATN.backend.model.JobDescription;
+import DATN.backend.model.Education;
+import DATN.backend.model.Experience;
+import DATN.backend.model.Job;
 import DATN.backend.repository.ApplicantRepository;
-import DATN.backend.repository.JobDescriptionRepository;
+import DATN.backend.repository.JobRepository;
 import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.response.applicant.CvJobMatchResponse;
 import DATN.backend.response.cv.CvMatchAiResponse;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 import DATN.backend.service.InterfaceService.InterfaceCvMatchService;
+import DATN.backend.utils.StringListConverter;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -33,9 +34,8 @@ import lombok.RequiredArgsConstructor;
 public class ImplCvMatchService implements InterfaceCvMatchService {
 
     private final ApplicantRepository applicantRepository;
-    private final JobDescriptionRepository jobDescriptionRepository;
+    private final JobRepository jobDescriptionRepository;
     private final InterfaceCvAiService cvAiService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * {@inheritDoc}
@@ -49,7 +49,7 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         if (cv == null) {
             throw new ResourcesNotFoundException("Applicant has no CV to match; upload a CV first");
         }
-        JobDescription job = jobDescriptionRepository.findById(jobId)
+        Job job = jobDescriptionRepository.findById(jobId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Job not found"));
 
         CvMatchAiResponse ai = cvAiService.matchCvToJob(
@@ -78,12 +78,12 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         List<String> companies = new ArrayList<>();
         List<String> dates = new ArrayList<>();
         List<String> descriptions = new ArrayList<>();
-        parseExperience(cv.getExperience(), titles, companies, dates, descriptions);
+        addExperience(cv.getExperienceObj(), titles, companies, dates, descriptions);
 
         Map<String, Object> byLabel = new HashMap<>();
-        byLabel.put("SKILL", splitList(cv.getSkills()));
-        byLabel.put("CERTIFICATION", splitList(cv.getCertifications()));
-        byLabel.put("EDUCATION", splitList(cv.getEducation()));
+        byLabel.put("SKILL", cv.getSkills() == null ? List.of() : cv.getSkills());
+        byLabel.put("CERTIFICATION", certificateList(cv.getCertificate()));
+        byLabel.put("EDUCATION", educationList(cv.getEducationObj()));
         byLabel.put("SUMMARY", textList(cv.getObjective()));
         byLabel.put("CANDIDATE_LOCATION", textList(cv.getAddress()));
         byLabel.put("JOB_TITLE", titles);
@@ -97,67 +97,71 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         return canonical;
     }
 
-    /** The Cv.experience column is a JSON array of {position, companyName, time, description}. */
-    private void parseExperience(String experience, List<String> titles, List<String> companies,
+    private void addExperience(Experience experience, List<String> titles, List<String> companies,
             List<String> dates, List<String> descriptions) {
-        if (experience == null || experience.isBlank()) {
+        if (experience == null) {
             return;
         }
-        try {
-            JsonNode node = objectMapper.readTree(experience);
-            if (node.isArray()) {
-                for (JsonNode item : node) {
-                    addIfPresent(titles, item, "position");
-                    addIfPresent(companies, item, "companyName");
-                    addIfPresent(dates, item, "time");
-                    addIfPresent(descriptions, item, "description");
-                }
-                return;
-            }
-        } catch (Exception ignored) {
-            // Not JSON -> fall through and treat the whole value as one experience blob.
+        addIfPresent(titles, experience.getJobTitle());
+        addIfPresent(companies, experience.getCompanyName());
+        addIfPresent(descriptions, experience.getContribution());
+        if (experience.getStartDate() != null) {
+            dates.add(experience.getStartDate().toString());
         }
-        descriptions.add(experience.trim());
-    }
-
-    private void addIfPresent(List<String> target, JsonNode item, String field) {
-        JsonNode value = item.get(field);
-        if (value != null && !value.asText().isBlank()) {
-            target.add(value.asText().trim());
+        if (experience.getEndDate() != null) {
+            dates.add(experience.getEndDate().toString());
+        } else if (Boolean.TRUE.equals(experience.getIsPresent())) {
+            dates.add("Present");
         }
     }
 
-    private Map<String, Object> buildJd(JobDescription job) {
+    private void addIfPresent(List<String> target, String value) {
+        if (value != null && !value.isBlank()) {
+            target.add(value.trim());
+        }
+    }
+
+    private Map<String, Object> buildJd(Job job) {
         Map<String, Object> jd = new HashMap<>();
         jd.put("jobTitle", nullToEmpty(job.getJobTitle()));
-        jd.put("aboutCompany", nullToEmpty(job.getRecruiter() != null ? job.getRecruiter().getCompanyDescription() : ""));
-        jd.put("jobDescription", nullToEmpty(job.getJobDescription()));
-        jd.put("requirements", nullToEmpty(job.getRequirements()));
-        jd.put("benefits", nullToEmpty(job.getBenefits()));
+        jd.put("aboutCompany", nullToEmpty(job.getRecruiter() != null ? job.getRecruiter().getCompanyDesc() : ""));
+        jd.put("jobDescription", nullToEmpty(job.getJobDesc()));
+        jd.put("requirements", nullToEmpty(StringListConverter.join(job.getRequirements())));
+        jd.put("benefits", nullToEmpty(StringListConverter.join(job.getBenefits())));
         jd.put("location", nullToEmpty(job.getLocation()));
-        jd.put("salaryRange", nullToEmpty(job.getSalaryRange()));
+        jd.put("salaryRange", job.getSalaryRange() == null ? "" : job.getSalaryRange().toString());
         jd.put("jobType", nullToEmpty(job.getJobType()));
-        jd.put("experienceLevel", nullToEmpty(job.getExperienceLevel()));
-        jd.put("industry", nullToEmpty(job.getIndustry()));
+        jd.put("experienceLevel", job.getYoe() == null ? "" : job.getYoe().toString());
+        jd.put("industry", "");
         return jd;
-    }
-
-    private List<String> splitList(String value) {
-        List<String> out = new ArrayList<>();
-        if (value == null || value.isBlank()) {
-            return out;
-        }
-        for (String part : value.split("[,;\\n|]")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
     }
 
     private List<String> textList(String value) {
         return (value == null || value.isBlank()) ? new ArrayList<>() : List.of(value.trim());
+    }
+
+    private List<String> certificateList(Certificate certificate) {
+        if (certificate == null) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        addIfPresent(values, certificate.getName());
+        addIfPresent(values, certificate.getProvider());
+        addIfPresent(values, certificate.getScore());
+        return values;
+    }
+
+    private List<String> educationList(Education education) {
+        if (education == null) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        addIfPresent(values, education.getName());
+        addIfPresent(values, education.getMajor());
+        if (education.getDegree() != null) {
+            values.add(education.getDegree().name());
+        }
+        return values;
     }
 
     private String nullToEmpty(String value) {

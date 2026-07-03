@@ -1,5 +1,6 @@
 package DATN.backend.model;
 
+import java.sql.Date;
 import java.util.List;
 
 import jakarta.persistence.Column;
@@ -22,66 +23,41 @@ public class Recruiter extends User {
     @Column(unique = false, nullable = false)
     private String companyName;
 
-    @Column(length = 2000, nullable = true, columnDefinition = "TEXT")
-    private String companyDescription;
-
-    @Column(length = 2000, nullable = true)
-    private String companyLocation;
-
-    @Column(length = 100, nullable = true)
-    private String companySize;
-
-    @Column(length = 100, nullable = true, columnDefinition = "TEXT")
-    private String industry;
+    @Column(name = "company_desc", length = 2000, nullable = true, columnDefinition = "TEXT")
+    private String companyDesc;
 
     @Column(nullable = true)
-    private String website;
+    private String location;
 
     @Column(nullable = true)
-    private String logoUrl;
+    private Integer companySize;
+
+    @Column(nullable = true)
+    private String industryType;
+
+    @Column(nullable = true)
+    private String contact;
 
     @Column(nullable = true, length = 2048)
-    private String coverImageUrl;
+    private String avatarUrl;
 
     @Column(nullable = true)
-    private String contactEmail;
-
-    @Column(nullable = true)
-    private String contactPhone;
-
-    @Column(nullable = false)
-    private String taxCode;
-
-    @Column(nullable = true)
-    private String businessLicense;
-
-    @Column(nullable = false)
-    private String establishedDate;
-
-    @Column(nullable = true)
-    private String companyType;
+    private Date establishedDate;
 
     public Recruiter(String address, String email, String fullName, String password, String phone, String companyName,
-            String companyDescription, String companyLocation, String companySize, String industry, String website,
-            String logoUrl, String coverImageUrl, String contactEmail, String contactPhone, String taxCode,
-            String businessLicense, String establishedDate, String companyType) {
+            String companyDesc, String location, Integer companySize, String industryType, String contact,
+            String avatarUrl, Date establishedDate) {
         super(address, email, fullName, password, phone);
         this.companyName = companyName;
-        this.companyDescription = companyDescription;
-        this.companyLocation = companyLocation;
+        this.companyDesc = companyDesc;
+        this.location = location;
         this.companySize = companySize;
-        this.industry = industry;
-        this.website = website;
-        this.logoUrl = logoUrl;
-        this.coverImageUrl = coverImageUrl;
-        this.contactEmail = contactEmail;
-        this.contactPhone = contactPhone;
-        this.taxCode = taxCode;
-        this.businessLicense = businessLicense;
+        this.industryType = industryType;
+        this.contact = contact;
+        this.avatarUrl = avatarUrl;
         this.establishedDate = establishedDate;
-        this.companyType = companyType;
     }
 
     @OneToMany(mappedBy = "recruiter")
-    private List<JobDescription> jobs;
+    private List<Job> jobs;
 }

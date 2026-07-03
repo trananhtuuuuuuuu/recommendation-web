@@ -73,10 +73,12 @@ public class ApplicantMapper {
                         applicant.setFullName(request.getFullName());
                 }
                 if (request.getGender() != null) {
-                        applicant.setGender(request.getGender().isBlank() ? null : GenderEnum.valueOf(request.getGender()));
+                        applicant.setGender(
+                                        request.getGender().isBlank() ? null : GenderEnum.valueOf(request.getGender()));
                 }
                 if (request.getStatus() != null) {
-                        applicant.setStatus(request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
+                        applicant.setStatus(
+                                        request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
                 }
                 return applicant;
         }
@@ -95,9 +97,6 @@ public class ApplicantMapper {
                                 request.getPhone(),
                                 request.getObjective(),
                                 request.getSkills(),
-                                request.getExperience(),
-                                request.getEducation(),
-                                request.getCertifications(),
                                 request.getCvFileUrl());
         }
 
@@ -109,9 +108,6 @@ public class ApplicantMapper {
                                 cv.getPhone(),
                                 cv.getObjective(),
                                 cv.getSkills(),
-                                cv.getExperience(),
-                                cv.getEducation(),
-                                cv.getCertifications(),
                                 cv.getCvFileUrl());
         }
 
