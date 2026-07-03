@@ -1,11 +1,15 @@
 package DATN.backend.controller.v1;
 
+import java.beans.PropertyEditorSupport;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +24,9 @@ import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
+import DATN.backend.model.Certificate;
+import DATN.backend.model.Education;
+import DATN.backend.model.Experience;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.exception.ForbiddenException;
 import DATN.backend.security.InforInsideToken;
@@ -43,6 +50,28 @@ public class ApplicantController {
         private final InterfaceApplicantService applicantService;
         private final InterfaceCvAiService cvAiService;
         private final InterfaceCvMatchService cvMatchService;
+
+        @InitBinder
+        public void initBinder(WebDataBinder binder) {
+                binder.registerCustomEditor(Experience.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseExperience(text));
+                        }
+                });
+                binder.registerCustomEditor(Education.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseEducation(text));
+                        }
+                });
+                binder.registerCustomEditor(Certificate.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseCertificate(text));
+                        }
+                });
+        }
 
         @Operation(summary = "Get all applicants")
         @GetMapping
@@ -187,6 +216,15 @@ public class ApplicantController {
                         @Valid @RequestBody UploadCvRequest request) {
                 return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("CV uploaded successfully",
                                 HttpStatus.CREATED, applicantService.uploadCv(applicantId, request)));
+        }
+
+        @Operation(summary = "Delete uploaded CV file for applicant")
+        @DeleteMapping("/{applicantId}/cv-file")
+        public ResponseEntity<ApiResponse> deleteUploadedCvFile(@PathVariable Long applicantId,
+                        Authentication authentication) {
+                verifyApplicantAccess(applicantId, authentication);
+                return ResponseEntity.ok(ApiResponse.success("CV file deleted successfully", HttpStatus.OK,
+                                applicantService.deleteUploadedCvFile(applicantId)));
         }
 
         private void verifyApplicantAccess(Long applicantId, Authentication authentication) {

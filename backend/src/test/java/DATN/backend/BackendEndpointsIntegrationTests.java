@@ -268,9 +268,22 @@ class BackendEndpointsIntegrationTests {
                                                   "phone": "+84901234567",
                                                   "objective": "Build good software",
                                                                                                                                 "skills": "Java, Spring Boot",
-                                                                                                                                "experience": "[{\\"companyName\\":\\"Acme\\",\\"position\\":\\"Backend Intern\\",\\"time\\":\\"2025\\",\\"description\\":\\"Built APIs\\",\\"skills\\":\\"Java\\",\\"certificates\\":\\"Spring Certificate\\"}]",
-                                                                                                                                 "education": "HCMUS - Computer Science",
-                                                                                                                                 "certifications": "AWS Cloud Practitioner",
+                                                                                                                                "experience": {
+                                                                                                                                  "companyName": "Acme",
+                                                                                                                                  "jobTitle": "Backend Intern",
+                                                                                                                                  "field": "Java",
+                                                                                                                                  "contribution": "Built APIs",
+                                                                                                                                  "isPresent": false
+                                                                                                                                },
+                                                                                                                                 "education": {
+                                                                                                                                  "name": "HCMUS - Computer Science",
+                                                                                                                                  "major": "Computer Science",
+                                                                                                                                  "degree": "BSc"
+                                                                                                                                 },
+                                                                                                                                 "certifications": {
+                                                                                                                                  "name": "AWS Cloud Practitioner",
+                                                                                                                                  "provider": "AWS"
+                                                                                                                                 },
                                                                                                                                 "cvFileUrl": "https://example.com/cv/updated-applicant.pdf"
                                                 }
                                                 """))
@@ -278,10 +291,15 @@ class BackendEndpointsIntegrationTests {
                                 .andExpect(jsonPath("$.data.fullName").value(""))
                                 .andExpect(jsonPath("$.data.skills[0]").value("Java"))
                                 .andExpect(jsonPath("$.data.skills[1]").value("Spring Boot"))
-                                .andExpect(jsonPath("$.data.experience").value(
-                                                "[{\"companyName\":\"Acme\",\"position\":\"Backend Intern\",\"time\":\"2025\",\"description\":\"Built APIs\",\"skills\":\"Java\",\"certificates\":\"Spring Certificate\"}]"))
-                                .andExpect(jsonPath("$.data.education").value("HCMUS - Computer Science"))
-                                .andExpect(jsonPath("$.data.certifications").value("AWS Cloud Practitioner"))
+                                .andExpect(jsonPath("$.data.experience.companyName").value("Acme"))
+                                .andExpect(jsonPath("$.data.experience.jobTitle").value("Backend Intern"))
+                                .andExpect(jsonPath("$.data.experience.field").value("Java"))
+                                .andExpect(jsonPath("$.data.experience.contribution").value("Built APIs"))
+                                .andExpect(jsonPath("$.data.education.name").value("HCMUS - Computer Science"))
+                                .andExpect(jsonPath("$.data.education.major").value("Computer Science"))
+                                .andExpect(jsonPath("$.data.education.degree").value("BSc"))
+                                .andExpect(jsonPath("$.data.certifications.name").value("AWS Cloud Practitioner"))
+                                .andExpect(jsonPath("$.data.certifications.provider").value("AWS"))
                                 .andExpect(jsonPath("$.data.cvFileUrl")
                                                 .value("https://example.com/cv/updated-applicant.pdf"));
 
@@ -292,19 +310,25 @@ class BackendEndpointsIntegrationTests {
                                 .param("objective", "Build reliable products")
                                 .param("skills", "React\nTypeScript\nSpring Boot")
                                 .param("experience",
-                                                "[{\"companyName\":\"CloudBridge\",\"position\":\"Frontend Engineer\",\"time\":\"2026\",\"description\":\"Improved profile editing\",\"skills\":\"React\",\"certificates\":\"\"}]")
-                                .param("education", "HCMUS - Software Engineering\nCoursera - Cloud Foundations")
-                                .param("certifications", "AWS Cloud Practitioner\nAzure Fundamentals"))
+                                                "{\"companyName\":\"CloudBridge\",\"jobTitle\":\"Frontend Engineer\",\"field\":\"React\",\"contribution\":\"Improved profile editing\",\"isPresent\":false}")
+                                .param("education", "{\"name\":\"HCMUS - Software Engineering\",\"major\":\"Software Engineering\",\"degree\":\"BSc\"}")
+                                .param("certifications", "{\"name\":\"AWS Cloud Practitioner\",\"provider\":\"AWS\"}"))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.data.skills[0]").value("React"))
                                 .andExpect(jsonPath("$.data.skills[1]").value("TypeScript"))
                                 .andExpect(jsonPath("$.data.skills[2]").value("Spring Boot"))
-                                .andExpect(jsonPath("$.data.experience").value(
-                                                "[{\"companyName\":\"CloudBridge\",\"position\":\"Frontend Engineer\",\"time\":\"2026\",\"description\":\"Improved profile editing\",\"skills\":\"React\",\"certificates\":\"\"}]"))
-                                .andExpect(jsonPath("$.data.education")
-                                                .value("HCMUS - Software Engineering\nCoursera - Cloud Foundations"))
-                                .andExpect(jsonPath("$.data.certifications")
-                                                .value("AWS Cloud Practitioner\nAzure Fundamentals"));
+                                .andExpect(jsonPath("$.data.experience.companyName").value("CloudBridge"))
+                                .andExpect(jsonPath("$.data.experience.jobTitle").value("Frontend Engineer"))
+                                .andExpect(jsonPath("$.data.experience.field").value("React"))
+                                .andExpect(jsonPath("$.data.experience.contribution").value("Improved profile editing"))
+                                .andExpect(jsonPath("$.data.education.name").value("HCMUS - Software Engineering"))
+                                .andExpect(jsonPath("$.data.certifications.name").value("AWS Cloud Practitioner"));
+
+                mockMvc.perform(delete("/api/v1/applicants/{applicantId}/cv-file", applicant.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.message").value("CV file deleted successfully"))
+                                .andExpect(jsonPath("$.data.cvFileUrl").doesNotExist());
         }
 
         @Test

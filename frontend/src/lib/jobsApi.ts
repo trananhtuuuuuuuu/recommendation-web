@@ -27,6 +27,33 @@ export interface Job {
   [k: string]: unknown;
 }
 
+export interface CvExperience {
+  id?: string | number;
+  companyName?: string;
+  jobTitle?: string;
+  field?: string;
+  contribution?: string;
+  startDate?: string;
+  endDate?: string;
+  isPresent?: boolean;
+}
+
+export interface CvEducation {
+  id?: string | number;
+  name?: string;
+  major?: string;
+  degree?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CvCertificate {
+  id?: string | number;
+  name?: string;
+  score?: string;
+  provider?: string;
+}
+
 export interface Applicant {
   id?: string | number;
   userName?: string;
@@ -44,9 +71,9 @@ export interface Applicant {
     phone?: string;
     objective?: string;
     skills?: string | string[];
-    experience?: string;
-    education?: string;
-    certifications?: string;
+    experience?: string | CvExperience | null;
+    education?: string | CvEducation | null;
+    certifications?: string | CvCertificate | null;
     cvFileUrl?: string;
   } | null;
   [k: string]: unknown;
@@ -251,6 +278,11 @@ export const uploadCv = (applicantId: string | number, body: FormData | Record<s
     method: "POST",
     body,
     isForm: body instanceof FormData,
+  });
+
+export const deleteUploadedCvFile = (applicantId: string | number) =>
+  apiRequest<Applicant["cv"]>(`/api/v1/applicants/${applicantId}/cv-file`, {
+    method: "DELETE",
   });
 
 export const analyzeCv = (applicantId: string | number, cvFile: File) => {

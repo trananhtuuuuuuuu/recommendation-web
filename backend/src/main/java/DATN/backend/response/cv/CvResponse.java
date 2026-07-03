@@ -2,6 +2,9 @@ package DATN.backend.response.cv;
 
 import java.util.List;
 
+import DATN.backend.model.Certificate;
+import DATN.backend.model.Education;
+import DATN.backend.model.Experience;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,8 +21,8 @@ public class CvResponse {
     private String phone;
     private String objective;
     private List<String> skills;
-    private String experience;
-    private String education;
-    private String certifications;
+    private Experience experience;
+    private Education education;
+    private Certificate certifications;
     private String cvFileUrl;
 }

@@ -208,12 +208,16 @@ public class ImplApplicantService implements InterfaceApplicantService {
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
 
         MultipartFile cvFile = request.getCvFile();
+        String replacedCvFileUrl = applicant.getCv() == null ? null : applicant.getCv().getCvFileUrl();
         if (cvFile != null && !cvFile.isEmpty()) {
             request.setCvFileUrl(storeCvFile(cvFile));
         } else if ((request.getCvFileUrl() == null || request.getCvFileUrl().isBlank())
                 && applicant.getCv() != null) {
             // Keep the previously stored file URL when no new file is provided
             request.setCvFileUrl(applicant.getCv().getCvFileUrl());
+            replacedCvFileUrl = null;
+        } else {
+            replacedCvFileUrl = null;
         }
 
         Cv cv = applicant.getCv();
@@ -231,7 +235,24 @@ public class ImplApplicantService implements InterfaceApplicantService {
         ApplicantMapper.updateCv(cv, request);
         saveCvRelations(cv);
         Cv savedCv = cvRepository.save(cv);
+        deleteStoredCvFile(replacedCvFileUrl);
         return ApplicantMapper.toCvResponse(savedCv);
+    }
+
+    @Override
+    @Transactional
+    public CvResponse deleteUploadedCvFile(Long applicantId) {
+        Applicant applicant = applicantRepository.findById(applicantId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        Cv cv = applicant.getCv();
+        if (cv == null || cv.getCvFileUrl() == null || cv.getCvFileUrl().isBlank()) {
+            throw new ResourcesNotFoundException("Uploaded CV file not found");
+        }
+
+        String storedCvFileUrl = cv.getCvFileUrl();
+        deleteStoredCvFile(storedCvFileUrl);
+        cv.setCvFileUrl(null);
+        return ApplicantMapper.toCvResponse(cvRepository.save(cv));
     }
 
     private void saveCvRelations(Cv cv) {
@@ -280,6 +301,31 @@ public class ImplApplicantService implements InterfaceApplicantService {
             return "/uploads/cvs/" + fileName;
         } catch (IOException exception) {
             throw new IllegalArgumentException("Unable to store CV file");
+        }
+    }
+
+    private void deleteStoredCvFile(String cvFileUrl) {
+        if (cvFileUrl == null || cvFileUrl.isBlank()) {
+            return;
+        }
+        String normalizedUrl = cvFileUrl.startsWith("/") ? cvFileUrl.substring(1) : cvFileUrl;
+        if (!normalizedUrl.startsWith("uploads/cvs/")) {
+            return;
+        }
+
+        Path fileName = Path.of(normalizedUrl).getFileName();
+        if (fileName == null) {
+            return;
+        }
+        Path filePath = CV_UPLOAD_DIR.resolve(fileName).normalize();
+        if (!filePath.startsWith(CV_UPLOAD_DIR.normalize())) {
+            throw new IllegalArgumentException("Invalid CV file path");
+        }
+
+        try {
+            Files.deleteIfExists(filePath);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Unable to delete CV file");
         }
     }
 

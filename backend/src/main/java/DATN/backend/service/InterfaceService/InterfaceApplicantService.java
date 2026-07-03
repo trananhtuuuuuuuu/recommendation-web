@@ -49,4 +49,6 @@ public interface InterfaceApplicantService {
 
     CvResponse uploadCv(Long applicantId, UploadCvRequest request);
 
+    CvResponse deleteUploadedCvFile(Long applicantId);
+
 }

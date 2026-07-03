@@ -34,6 +34,7 @@ import {
   fetchApplicant,
   fetchRecruiter,
   analyzeCv,
+  deleteUploadedCvFile,
   updateApplicant,
   updateRecruiter,
   uploadCv,
@@ -145,6 +146,7 @@ export default function Profile() {
   const [recruiter, setRecruiter] = useState<Recruiter | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingCvFile, setDeletingCvFile] = useState(false);
   const [editing, setEditing] = useState(false);
   const [applicantForm, setApplicantForm] = useState(emptyApplicantForm);
   const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
@@ -361,9 +363,9 @@ export default function Profile() {
         formData.append("phone", cvForm.phone);
         formData.append("objective", cvForm.objective);
         formData.append("skills", fromList(cvForm.skills));
-        formData.append("experience", fromExperienceList(cvForm.experience));
-        formData.append("education", fromList(cvForm.education));
-        formData.append("certifications", fromList(cvForm.certifications));
+        formData.append("experience", fromExperienceEntity(cvForm.experience));
+        formData.append("education", fromEducationEntity(cvForm.education));
+        formData.append("certifications", fromCertificateEntity(cvForm.certifications));
         formData.append("cvFileUrl", cvForm.cvFileUrl);
         if (selectedCvFile) {
           formData.append("cvFile", selectedCvFile);
@@ -381,6 +383,25 @@ export default function Profile() {
       toast.error(error instanceof ApiError ? error.message : "Unable to save profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteCvFile = async () => {
+    if (!authUser?.id || deletingCvFile) return;
+
+    setDeletingCvFile(true);
+    try {
+      await deleteUploadedCvFile(authUser.id);
+      const refreshed = await fetchApplicant(authUser.id);
+      setApplicant(refreshed);
+      setCvForm((current) => ({ ...current, cvFileUrl: "" }));
+      setSelectedCvFile(null);
+      setCvAnalysis(null);
+      toast.success("Uploaded CV file deleted.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Unable to delete uploaded CV file");
+    } finally {
+      setDeletingCvFile(false);
     }
   };
 
@@ -430,6 +451,8 @@ export default function Profile() {
             setCvForm={setCvForm}
             selectedCvFile={selectedCvFile}
             onCvFileChange={handleCvFileChange}
+            onDeleteCvFile={handleDeleteCvFile}
+            deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
           />
@@ -446,6 +469,8 @@ export default function Profile() {
             setCvForm={setCvForm}
             selectedCvFile={selectedCvFile}
             onCvFileChange={handleCvFileChange}
+            onDeleteCvFile={handleDeleteCvFile}
+            deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
             activeEditor={activeApplicantEditor}
@@ -594,6 +619,8 @@ function ApplicantView({
   setCvForm,
   selectedCvFile,
   onCvFileChange,
+  onDeleteCvFile,
+  deletingCvFile,
   analyzingCv,
   cvAnalysis,
   activeEditor,
@@ -613,6 +640,8 @@ function ApplicantView({
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
   onCvFileChange: (file: File | null) => void;
+  onDeleteCvFile: () => void;
+  deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
   activeEditor: ApplicantInlineEditor | null;
@@ -755,7 +784,30 @@ function ApplicantView({
           )}
         </Panel>
 
-        <Panel title="CV File" action={activeEditor !== "cvFile" && <IconButton label="Edit CV file" onClick={() => onEdit("cvFile")} icon={<Pencil />} />}>
+        <Panel
+          title="CV File"
+          action={
+            activeEditor !== "cvFile" && (
+              <div className="flex gap-1">
+                <IconButton label={cv?.cvFileUrl ? "Replace CV file" : "Upload CV file"} onClick={() => onEdit("cvFile")} icon={cv?.cvFileUrl ? <Pencil /> : <Plus />} />
+                {cv?.cvFileUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete uploaded CV file"
+                    title="Delete uploaded CV file"
+                    disabled={deletingCvFile}
+                    onClick={onDeleteCvFile}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    {deletingCvFile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </Button>
+                ) : null}
+              </div>
+            )
+          }
+        >
           {activeEditor === "cvFile" ? (
             <InlineEditorActions onCancel={onCancel} onSave={onSave} saving={saving}>
               <Input
@@ -773,11 +825,14 @@ function ApplicantView({
               <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
             </InlineEditorActions>
           ) : cv?.cvFileUrl ? (
-            <a href={toAssetUrl(cv.cvFileUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
-              <FileText className="w-4 h-4" /> Open uploaded CV
-            </a>
+            <div className="space-y-3">
+              <a href={toAssetUrl(cv.cvFileUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
+                <FileText className="w-4 h-4" /> Open uploaded CV
+              </a>
+              <UploadCvHoverButton label="Replace CV file" onClick={() => onEdit("cvFile")} />
+            </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No CV file reference has been added yet.</p>
+            <UploadCvHoverButton label="Upload CV file" onClick={() => onEdit("cvFile")} />
           )}
         </Panel>
 
@@ -932,6 +987,8 @@ function ApplicantEditForm({
   setCvForm,
   selectedCvFile,
   onCvFileChange,
+  onDeleteCvFile,
+  deletingCvFile,
   analyzingCv,
   cvAnalysis,
 }: {
@@ -941,6 +998,8 @@ function ApplicantEditForm({
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
   onCvFileChange: (file: File | null) => void;
+  onDeleteCvFile: () => void;
+  deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
 }) {
@@ -1006,7 +1065,23 @@ function ApplicantEditForm({
             <span className="break-all">
               {selectedCvFile?.name || fileNameFromPath(cvForm.cvFileUrl) || "No CV file selected yet."}
             </span>
+            {cvForm.cvFileUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={deletingCvFile}
+                onClick={onDeleteCvFile}
+                className="ml-auto shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
+              >
+                {deletingCvFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
+              </Button>
+            ) : null}
           </div>
+          {!cvForm.cvFileUrl && !selectedCvFile ? (
+            <UploadCvHoverButton label="Move to upload CV" onClick={() => document.getElementById("cv-file")?.click()} />
+          ) : null}
           <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
         </div>
       </Panel>
@@ -1576,6 +1651,25 @@ function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
   );
 }
 
+function UploadCvHoverButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onClick}
+      className="group h-auto w-full justify-start gap-3 border-dashed px-4 py-3 text-left transition hover:border-primary hover:bg-primary/5"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <FileText className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        <span className="block text-xs font-normal text-muted-foreground">PDF, DOC, DOCX, or image file</span>
+      </span>
+    </Button>
+  );
+}
+
 function CvAnalysisNotice({
   analyzing,
   analysis,
@@ -1682,10 +1776,14 @@ function experienceKey(entry: ExperienceEntry) {
     .join("|");
 }
 
-function toList(value?: string | string[] | null) {
+function toList(value?: string | string[] | object | null) {
   if (Array.isArray(value)) {
-    const items = value.map((item) => item.trim()).filter(Boolean);
+    const items = value.map((item) => String(item).trim()).filter(Boolean);
     return items.length > 0 ? items : [""];
+  }
+  if (value && typeof value === "object") {
+    const text = formatCvEntityText(value);
+    return text ? toList(text) : [""];
   }
   const items = (value || "")
     .split(/\r?\n|,/)
@@ -1698,8 +1796,36 @@ function fromList(values: string[]) {
   return values.map((item) => item.trim()).filter(Boolean).join("\n");
 }
 
-function toExperienceList(value?: string | null): ExperienceEntry[] {
+function toExperienceList(value?: string | object | null): ExperienceEntry[] {
+  if (value && typeof value === "object") {
+    const item = value as Record<string, unknown>;
+    const contribution = typeof item.contribution === "string" ? item.contribution : "";
+    const parsedContribution = parseExperienceEntries(contribution);
+    if (parsedContribution.length > 0) return parsedContribution;
+
+    const entry = {
+      companyName: String(item.companyName ?? ""),
+      position: String(item.jobTitle ?? item.position ?? ""),
+      time: formatDateRange(item.startDate, item.endDate, item.isPresent),
+      description: contribution,
+      skills: String(item.field ?? item.skills ?? ""),
+      certificates: String(item.certificates ?? ""),
+    };
+    return hasExperienceValue(entry) ? [entry] : [createEmptyExperience()];
+  }
+
   if (!value?.trim()) return [createEmptyExperience()];
+  const parsedEntries = parseExperienceEntries(value);
+  if (parsedEntries.length > 0) return parsedEntries;
+
+  const legacyEntries = toList(value)
+    .filter(Boolean)
+    .map((description) => ({ ...createEmptyExperience(), description }));
+  return legacyEntries.length > 0 ? legacyEntries : [createEmptyExperience()];
+}
+
+function parseExperienceEntries(value?: string | null): ExperienceEntry[] {
+  if (!value?.trim()) return [];
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
@@ -1711,18 +1837,15 @@ function toExperienceList(value?: string | null): ExperienceEntry[] {
         skills: Array.isArray(item?.skills) ? item.skills.join(", ") : String(item?.skills ?? ""),
         certificates: Array.isArray(item?.certificates) ? item.certificates.join(", ") : String(item?.certificates ?? ""),
       }));
-      return entries.length > 0 ? entries : [createEmptyExperience()];
+      return entries.filter(hasExperienceValue);
     }
   } catch {
     // Plain text experience from older CVs is converted into one editable entry.
   }
-  const legacyEntries = toList(value)
-    .filter(Boolean)
-    .map((description) => ({ ...createEmptyExperience(), description }));
-  return legacyEntries.length > 0 ? legacyEntries : [createEmptyExperience()];
+  return [];
 }
 
-function fromExperienceList(values: ExperienceEntry[]) {
+function fromExperienceEntity(values: ExperienceEntry[]) {
   const entries = values
     .map((item) => ({
       companyName: item.companyName.trim(),
@@ -1733,11 +1856,50 @@ function fromExperienceList(values: ExperienceEntry[]) {
       certificates: item.certificates.trim(),
     }))
     .filter(hasExperienceValue);
-  return entries.length > 0 ? JSON.stringify(entries) : "";
+  if (entries.length === 0) return "";
+
+  const [first] = entries;
+  return JSON.stringify({
+    companyName: first.companyName || "Experience",
+    jobTitle: first.position,
+    field: first.skills,
+    contribution: JSON.stringify(entries),
+    isPresent: false,
+  });
+}
+
+function fromEducationEntity(values: string[]) {
+  const name = fromList(values);
+  return name ? JSON.stringify({ name }) : "";
+}
+
+function fromCertificateEntity(values: string[]) {
+  const name = fromList(values);
+  return name ? JSON.stringify({ name }) : "";
 }
 
 function hasExperienceValue(value: ExperienceEntry) {
   return Object.values(value).some((item) => item.trim().length > 0);
+}
+
+function formatCvEntityText(value: object) {
+  const item = value as Record<string, unknown>;
+  return [
+    item.name,
+    item.major,
+    item.degree,
+    item.provider,
+    item.score,
+  ]
+    .map((item) => (item == null ? "" : String(item).trim()))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatDateRange(startDate: unknown, endDate: unknown, isPresent: unknown) {
+  const start = typeof startDate === "string" ? startDate : "";
+  const end = isPresent ? "Present" : typeof endDate === "string" ? endDate : "";
+  return [start, end].filter(Boolean).join(" - ");
 }
 
 function firstLine(value: string) {
