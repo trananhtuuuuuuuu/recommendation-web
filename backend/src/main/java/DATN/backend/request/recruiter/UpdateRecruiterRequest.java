@@ -28,16 +28,19 @@ public class UpdateRecruiterRequest {
     @NotBlank(message = "Company name is required")
     private String companyName;
 
-    @NotBlank(message = "Tax code is required")
     private String taxCode;
 
-    @NotBlank(message = "Established date is required")
     private String establishedDate;
 
+    private String companyDesc;
     private String companyDescription;
+    private String location;
     private String companyLocation;
     private String companySize;
+    private String industryType;
     private String industry;
+    private String contact;
+    private String avatarUrl;
     private String website;
     private String logoUrl;
     private String coverImageUrl;

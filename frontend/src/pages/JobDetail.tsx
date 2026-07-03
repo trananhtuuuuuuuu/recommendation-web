@@ -26,7 +26,11 @@ import {
   applyJob,
   fetchJob,
   fetchJobApplicantCount,
+<<<<<<< HEAD
   matchCvToJob,
+=======
+  getApplyingDeadline,
+>>>>>>> fix_entities
   saveJob,
   type ApplicationField,
   type CvJobMatch,
@@ -208,7 +212,7 @@ export default function JobDetail() {
               <OverviewRow icon={Briefcase} label="Employment" value={job.jobType} />
               <OverviewRow icon={MapPin} label="Location" value={job.location} />
               <OverviewRow icon={Banknote} label="Salary" value={job.salaryRange} />
-              <OverviewRow icon={Calendar} label="Apply by" value={job.applicationDeadline} />
+              <OverviewRow icon={Calendar} label="Apply by" value={getApplyingDeadline(job)} />
             </div>
 
             <div className="mt-6 grid gap-2">

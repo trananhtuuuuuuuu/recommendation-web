@@ -168,19 +168,13 @@ SET
 INSERT INTO recruiters (
     id,
     company_name,
-    company_description,
-    company_location,
+    company_desc,
+    location,
     company_size,
-    industry,
-    website,
-    logo_url,
-    cover_image_url,
-    contact_email,
-    contact_phone,
-    tax_code,
-    business_license,
-    established_date,
-    company_type
+    industry_type,
+    contact,
+    avatar_url,
+    established_date
 )
 VALUES
     (
@@ -188,68 +182,44 @@ VALUES
         'TechNova Software',
         'TechNova builds enterprise software for finance, retail, and logistics teams.',
         'Ho Chi Minh City',
-        '101-300',
+        300,
         'Software Development',
-        'https://technova.example.com',
-        'https://technova.example.com/logo.png',
-        'https://technova.example.com/cover.png',
         'hr@technova.example.com',
-        '+84900000101',
-        'TAX-TN-1001',
-        'BL-TN-1001',
-        '2018-05-20',
-        'Private Company'
+        'https://technova.example.com/logo.png',
+        DATE '2018-05-20'
     ),
     (
         2102,
         'GreenLabs AI',
         'GreenLabs AI creates analytics and machine learning tools for sustainable operations.',
         'Hanoi',
-        '51-100',
+        100,
         'Artificial Intelligence',
-        'https://greenlabs.example.com',
-        'https://greenlabs.example.com/logo.png',
-        'https://greenlabs.example.com/cover.png',
         'talent@greenlabs.example.com',
-        '+84900000102',
-        'TAX-GL-1002',
-        'BL-GL-1002',
-        '2020-09-12',
-        'Startup'
+        'https://greenlabs.example.com/logo.png',
+        DATE '2020-09-12'
     ),
     (
         2103,
         'CloudBridge Solutions',
         'CloudBridge helps companies modernize infrastructure and cloud-native platforms.',
         'Da Nang',
-        '301-500',
+        500,
         'Cloud Infrastructure',
-        'https://cloudbridge.example.com',
-        'https://cloudbridge.example.com/logo.png',
-        'https://cloudbridge.example.com/cover.png',
         'jobs@cloudbridge.example.com',
-        '+84900000103',
-        'TAX-CB-1003',
-        'BL-CB-1003',
-        '2015-03-02',
-        'Joint Stock Company'
+        'https://cloudbridge.example.com/logo.png',
+        DATE '2015-03-02'
     )
 ON CONFLICT (id) DO UPDATE
 SET
     company_name = EXCLUDED.company_name,
-    company_description = EXCLUDED.company_description,
-    company_location = EXCLUDED.company_location,
+    company_desc = EXCLUDED.company_desc,
+    location = EXCLUDED.location,
     company_size = EXCLUDED.company_size,
-    industry = EXCLUDED.industry,
-    website = EXCLUDED.website,
-    logo_url = EXCLUDED.logo_url,
-    cover_image_url = EXCLUDED.cover_image_url,
-    contact_email = EXCLUDED.contact_email,
-    contact_phone = EXCLUDED.contact_phone,
-    tax_code = EXCLUDED.tax_code,
-    business_license = EXCLUDED.business_license,
-    established_date = EXCLUDED.established_date,
-    company_type = EXCLUDED.company_type;
+    industry_type = EXCLUDED.industry_type,
+    contact = EXCLUDED.contact,
+    avatar_url = EXCLUDED.avatar_url,
+    established_date = EXCLUDED.established_date;
 
 INSERT INTO applicants (
     id,
@@ -269,137 +239,116 @@ SET
     full_name = EXCLUDED.full_name,
     cv_id = EXCLUDED.cv_id;
 
-INSERT INTO job_descriptions (
+INSERT INTO jobs (
     id,
     job_title,
-    about_company,
-    job_description,
-    requirements,
+    job_desc,
+    requirement,
     benefits,
     location,
     salary_range,
     job_type,
-    experience_level,
-    industry,
     posted_date,
-    application_deadline,
-    start_date,
-    end_date,
+    applying_deadline,
+    yoe,
+    custom_application_fields_id,
     recruiter_id
 )
 VALUES
     (
         3001,
         'Backend Engineer',
-        'TechNova Software builds robust business platforms.',
         'Design, build, and maintain Spring Boot APIs for customer-facing services.',
         '2+ years with Java, Spring Boot, REST APIs, PostgreSQL, and Git.',
         'Hybrid work, annual bonus, training budget, health insurance.',
         'Ho Chi Minh City',
-        '1800-2600 USD',
+        2600,
         'Full-time',
-        'Mid-level',
-        'Software Development',
         DATE '2026-05-01',
         DATE '2026-06-15',
-        DATE '2026-07-01',
+        2,
         NULL,
         2101
     ),
     (
         3002,
         'Frontend Developer',
-        'TechNova Software builds robust business platforms.',
         'Develop responsive React and TypeScript interfaces for internal SaaS products.',
         'Strong React, TypeScript, TailwindCSS, component testing, and API integration.',
         'Flexible hours, laptop allowance, mentoring, health insurance.',
         'Remote',
-        '1500-2300 USD',
+        2300,
         'Full-time',
-        'Mid-level',
-        'Software Development',
         DATE '2026-05-03',
         DATE '2026-06-20',
-        DATE '2026-07-10',
+        2,
         NULL,
         2101
     ),
     (
         3003,
         'Machine Learning Engineer',
-        'GreenLabs AI creates practical analytics and AI products.',
         'Build recommendation, forecasting, and classification models for product teams.',
         'Python, SQL, model evaluation, feature engineering, and deployment experience.',
         'Research time, conference budget, flexible working policy.',
         'Hanoi',
-        '2200-3200 USD',
+        3200,
         'Full-time',
-        'Senior',
-        'Artificial Intelligence',
         DATE '2026-05-05',
         DATE '2026-06-25',
-        DATE '2026-07-15',
+        4,
         NULL,
         2102
     ),
     (
         3004,
         'Cloud DevOps Engineer',
-        'CloudBridge Solutions modernizes infrastructure for growing companies.',
         'Operate Kubernetes workloads, CI/CD pipelines, monitoring, and cloud automation.',
         'Linux, Docker, Kubernetes, Terraform, CI/CD, and AWS or GCP experience.',
         'Certification support, on-call allowance, health insurance.',
         'Da Nang',
-        '2000-3000 USD',
+        3000,
         'Full-time',
-        'Senior',
-        'Cloud Infrastructure',
         DATE '2026-05-07',
         DATE '2026-07-01',
-        DATE '2026-07-20',
+        4,
         NULL,
         2103
     ),
     (
         3005,
         'Data Analyst Intern',
-        'GreenLabs AI creates practical analytics and AI products.',
         'Prepare dashboards, clean datasets, and support analytics reporting.',
         'SQL basics, spreadsheet skills, curiosity, and clear communication.',
         'Mentorship, internship allowance, conversion opportunity.',
         'Hanoi',
-        '300-500 USD',
+        500,
         'Internship',
-        'Entry-level',
-        'Data Analytics',
         DATE '2026-05-10',
         DATE '2026-06-10',
-        DATE '2026-06-24',
-        DATE '2026-12-24',
+        0,
+        NULL,
         2102
     )
 ON CONFLICT (id) DO UPDATE
 SET
     job_title = EXCLUDED.job_title,
-    about_company = EXCLUDED.about_company,
-    job_description = EXCLUDED.job_description,
-    requirements = EXCLUDED.requirements,
+    job_desc = EXCLUDED.job_desc,
+    requirement = EXCLUDED.requirement,
     benefits = EXCLUDED.benefits,
     location = EXCLUDED.location,
     salary_range = EXCLUDED.salary_range,
     job_type = EXCLUDED.job_type,
-    experience_level = EXCLUDED.experience_level,
-    industry = EXCLUDED.industry,
     posted_date = EXCLUDED.posted_date,
-    application_deadline = EXCLUDED.application_deadline,
-    start_date = EXCLUDED.start_date,
-    end_date = EXCLUDED.end_date,
+    applying_deadline = EXCLUDED.applying_deadline,
+    yoe = EXCLUDED.yoe,
+    custom_application_fields_id = EXCLUDED.custom_application_fields_id,
     recruiter_id = EXCLUDED.recruiter_id;
 
-INSERT INTO applicant_job_descriptions (
+INSERT INTO applicant_jobs (
     id,
     applicant_id,
-    job_description_id,
+    job_id,
     action_type
 )
 VALUES
@@ -411,7 +360,7 @@ VALUES
 ON CONFLICT (id) DO UPDATE
 SET
     applicant_id = EXCLUDED.applicant_id,
-    job_description_id = EXCLUDED.job_description_id,
+    job_id = EXCLUDED.job_id,
     action_type = EXCLUDED.action_type;
 
 INSERT INTO permissions (id, endpoint, method, description)
@@ -473,8 +422,8 @@ SET
 SELECT setval(pg_get_serial_sequence('roles', 'id'), GREATEST((SELECT MAX(id) FROM roles), 1), true);
 SELECT setval(pg_get_serial_sequence('cvs', 'id'), GREATEST((SELECT MAX(id) FROM cvs), 1), true);
 SELECT setval(pg_get_serial_sequence('users', 'id'), GREATEST((SELECT MAX(id) FROM users), 1), true);
-SELECT setval(pg_get_serial_sequence('job_descriptions', 'id'), GREATEST((SELECT MAX(id) FROM job_descriptions), 1), true);
-SELECT setval(pg_get_serial_sequence('applicant_job_descriptions', 'id'), GREATEST((SELECT MAX(id) FROM applicant_job_descriptions), 1), true);
+SELECT setval(pg_get_serial_sequence('jobs', 'id'), GREATEST((SELECT MAX(id) FROM jobs), 1), true);
+SELECT setval(pg_get_serial_sequence('applicant_jobs', 'id'), GREATEST((SELECT MAX(id) FROM applicant_jobs), 1), true);
 SELECT setval(pg_get_serial_sequence('permissions', 'id'), GREATEST((SELECT MAX(id) FROM permissions), 1), true);
 SELECT setval(pg_get_serial_sequence('permission_role', 'id'), GREATEST((SELECT MAX(id) FROM permission_role), 1), true);
 

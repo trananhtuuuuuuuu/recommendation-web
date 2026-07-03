@@ -1682,7 +1682,11 @@ function experienceKey(entry: ExperienceEntry) {
     .join("|");
 }
 
-function toList(value?: string | null) {
+function toList(value?: string | string[] | null) {
+  if (Array.isArray(value)) {
+    const items = value.map((item) => item.trim()).filter(Boolean);
+    return items.length > 0 ? items : [""];
+  }
   const items = (value || "")
     .split(/\r?\n|,/)
     .map((item) => item.trim())

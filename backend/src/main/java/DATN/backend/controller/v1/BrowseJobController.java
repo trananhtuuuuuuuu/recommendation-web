@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import DATN.backend.response.ApiResponse;
-import DATN.backend.service.InterfaceService.InterfaceJobDescriptionService;
+import DATN.backend.service.InterfaceService.InterfaceJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "Browse Job", description = "Public job browsing APIs")
 public class BrowseJobController {
 
-    private final InterfaceJobDescriptionService jobDescriptionService;
+    private final InterfaceJobService jobDescriptionService;
 
     @Operation(summary = "Get all jobs")
     @GetMapping

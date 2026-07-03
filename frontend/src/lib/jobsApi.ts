@@ -9,13 +9,14 @@ export interface Job {
   jobDescription?: string;
   description?: string;
   requirements?: string;
-  benefits?: string;
+  benefits?: string | string[];
   location?: string;
   salaryRange?: string;
   jobType?: string;
   experienceLevel?: string;
   industry?: string;
   postedDate?: string;
+  applyingDeadline?: string;
   applicationDeadline?: string;
   startDate?: string;
   endDate?: string;
@@ -42,7 +43,7 @@ export interface Applicant {
     address?: string;
     phone?: string;
     objective?: string;
-    skills?: string;
+    skills?: string | string[];
     experience?: string;
     education?: string;
     certifications?: string;
@@ -119,7 +120,7 @@ export interface CvExperienceSuggestion {
   position?: string;
   time?: string;
   description?: string;
-  skills?: string;
+  skills?: string | string[];
   certificates?: string;
 }
 
@@ -140,14 +141,29 @@ export interface CvAnalysis {
 
 export const getJobId = (j: Job | SavedJob): string => String(j.jobId ?? j.id ?? j.jobDescriptionId ?? "");
 export const getJobTitle = (j: Job): string => j.jobTitle ?? j.title ?? "Untitled";
+export const getApplyingDeadline = (j: Job): string | undefined => j.applyingDeadline ?? j.applicationDeadline;
+
+const normalizeJob = (job: Job): Job => ({
+  ...job,
+  benefits: Array.isArray(job.benefits) ? job.benefits.join("\n") : job.benefits,
+  applicationDeadline: job.applicationDeadline ?? job.applyingDeadline,
+  applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
+});
+
+const normalizeJobs = (jobs: Job[]): Job[] => jobs.map(normalizeJob);
+
+const toJobPayload = (job: Job): Job => ({
+  ...job,
+  applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
+});
 
 export const fetchHome = () => apiRequest<HomeSummary>("/api/v1/home", { auth: false });
 
 export const fetchJobs = () =>
-  apiRequest<Job[]>("/api/v1/browse-jobs", { auth: false });
+  apiRequest<Job[]>("/api/v1/browse-jobs", { auth: false }).then(normalizeJobs);
 
 export const fetchJob = (id: string | number) =>
-  apiRequest<Job>(`/api/v1/browse-jobs/${id}`, { auth: false });
+  apiRequest<Job>(`/api/v1/browse-jobs/${id}`, { auth: false }).then(normalizeJob);
 
 export const fetchJobApplicantCount = (id: string | number) =>
   apiRequest<number | JobApplicantsCount>(`/api/v1/browse-jobs/applicants/${id}`);
@@ -186,13 +202,13 @@ export const withdrawApplication = (applicantId: string | number, applicantJobId
   });
 
 export const fetchRecruiterJobs = (recruiterId: string | number) =>
-  apiRequest<Job[]>(`/api/v1/recruiters/jobs/${recruiterId}`);
+  apiRequest<Job[]>(`/api/v1/recruiters/jobs/${recruiterId}`).then(normalizeJobs);
 
 export const createRecruiterJob = (recruiterId: string | number, body: Job) =>
   apiRequest<Job>(`/api/v1/recruiters/jobs/${recruiterId}`, {
     method: "POST",
-    body,
-  });
+    body: toJobPayload(body),
+  }).then(normalizeJob);
 
 export const updateRecruiterJob = (
   recruiterId: string | number,
@@ -201,8 +217,8 @@ export const updateRecruiterJob = (
 ) =>
   apiRequest<Job>(`/api/v1/recruiters/jobs/${recruiterId}/${jobId}`, {
     method: "PUT",
-    body,
-  });
+    body: toJobPayload(body),
+  }).then(normalizeJob);
 
 export const fetchApplicants = () => apiRequest<Applicant[]>("/api/v1/applicants");
 export const fetchApplicant = (id: string | number) =>
