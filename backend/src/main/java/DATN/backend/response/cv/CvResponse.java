@@ -18,5 +18,8 @@ public class CvResponse {
     private String phone;
     private String objective;
     private List<String> skills;
+    private String experience;
+    private String education;
+    private String certifications;
     private String cvFileUrl;
 }

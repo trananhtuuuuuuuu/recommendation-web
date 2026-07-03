@@ -23,7 +23,10 @@ import DATN.backend.model.Job;
 import DATN.backend.model.Role;
 import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.ApplicantRepository;
+import DATN.backend.repository.CertificateRepository;
 import DATN.backend.repository.CvRepository;
+import DATN.backend.repository.EducationRepository;
+import DATN.backend.repository.ExperienceRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
@@ -50,6 +53,9 @@ public class ImplApplicantService implements InterfaceApplicantService {
     private final ApplicantJobRepository applicantJobRepository;
     private final JobRepository jobDescriptionRepository;
     private final CvRepository cvRepository;
+    private final ExperienceRepository experienceRepository;
+    private final EducationRepository educationRepository;
+    private final CertificateRepository certificateRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -214,6 +220,7 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (cv == null) {
             // First upload — create and link a new CV entity
             cv = ApplicantMapper.toCv(request);
+            saveCvRelations(cv);
             Cv savedCv = cvRepository.save(cv);
             applicant.setCv(savedCv);
             applicantRepository.save(applicant);
@@ -222,8 +229,21 @@ public class ImplApplicantService implements InterfaceApplicantService {
 
         // Subsequent upload — update the existing CV row in-place (no new INSERT)
         ApplicantMapper.updateCv(cv, request);
+        saveCvRelations(cv);
         Cv savedCv = cvRepository.save(cv);
         return ApplicantMapper.toCvResponse(savedCv);
+    }
+
+    private void saveCvRelations(Cv cv) {
+        if (cv.getExperienceObj() != null && cv.getExperienceObj().getId() == null) {
+            cv.setExperienceObj(experienceRepository.save(cv.getExperienceObj()));
+        }
+        if (cv.getEducationObj() != null && cv.getEducationObj().getId() == null) {
+            cv.setEducationObj(educationRepository.save(cv.getEducationObj()));
+        }
+        if (cv.getCertificate() != null && cv.getCertificate().getId() == null) {
+            cv.setCertificate(certificateRepository.save(cv.getCertificate()));
+        }
     }
 
     private String storeCvFile(MultipartFile cvFile) {

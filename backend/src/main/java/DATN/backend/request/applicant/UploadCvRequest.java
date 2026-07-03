@@ -25,11 +25,14 @@ public class UploadCvRequest {
     private String phone;
     private String objective;
     private List<String> skills;
+    private String experience;
+    private String education;
+    private String certifications;
     private String cvFileUrl;
     private MultipartFile cvFile;
 
     @JsonSetter("skills")
-    public void setSkillsFromJson(Object skills) {
+    public void setSkills(Object skills) {
         this.skills = StringListConverter.fromAny(skills);
     }
 }
