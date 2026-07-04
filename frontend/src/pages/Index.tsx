@@ -94,7 +94,7 @@ export default function Index() {
     { label: "Jobs Posted", value: String(homeData?.jobsPosted ?? 0), icon: Briefcase },
     { label: "Recruiters", value: String(homeData?.recruiters ?? 0), icon: Shield },
     { label: "Active Applicants", value: String(homeData?.activeApplicants ?? 0), icon: Users },
-    { label: "Data Encrypted", value: "100%", icon: Lock },
+    { label: "Data Privacy", value: "100%", icon: Lock },
   ], [homeData]);
 
   const primaryAction = role === "RECRUITER"
@@ -133,7 +133,7 @@ export default function Index() {
               <span className="text-gradient">Privacy</span>
             </h1>
             <p className="text-primary-foreground/70 text-base lg:text-lg mb-8 max-w-lg">
-              Find your dream job without compromising your personal data. Our privacy-preserving 
+              Find your dream job without compromising your personal data. Our privacy-preserving
               recommendation engine connects you with opportunities securely.
             </p>
             <div className="flex flex-wrap gap-3">

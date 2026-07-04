@@ -117,13 +117,28 @@ export default function JobApplicants() {
                   <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-2">
                     {applicant.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {applicant.email}</span>}
                     {applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {applicant.phone}</span>}
+                    {!applicant.email && !applicant.phone && (
+                      <span>Contact fields hidden by candidate privacy settings.</span>
+                    )}
                     {applicant.status && <Badge variant="outline">{applicant.status}</Badge>}
                   </div>
                 </div>
-                <Badge className="bg-primary/10 text-primary">
-                  Applied
-                </Badge>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  {item.kAnonymityApplied ? (
+                    <Badge variant="outline">
+                      k={item.anonymityK ?? 3}, n={item.anonymityGroupSize ?? applicants.length}
+                    </Badge>
+                  ) : null}
+                  <Badge className="bg-primary/10 text-primary">
+                    Applied
+                  </Badge>
+                </div>
               </div>
+              {(item.privacyNotice || applicant.privacyNotice) && (
+                <div className="rounded-lg border bg-secondary/30 p-3 text-xs text-muted-foreground">
+                  {item.privacyNotice || applicant.privacyNotice}
+                </div>
+              )}
               <div className="grid md:grid-cols-[1fr_auto] gap-4 border-t border-border pt-4">
                 <div className="space-y-2 text-xs text-muted-foreground">
                   {item.coverLetter && <p><span className="font-medium text-foreground">Cover letter:</span> {item.coverLetter}</p>}

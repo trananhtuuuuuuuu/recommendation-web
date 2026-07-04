@@ -33,6 +33,7 @@ import DATN.backend.repository.UserRepository;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
+import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
@@ -82,16 +83,16 @@ public class ImplApplicantService implements InterfaceApplicantService {
     }
 
     @Override
-    public ApplicantResponse getApplicantById(Long applicantId) {
+    public ApplicantResponse getApplicantById(Long applicantId, boolean fullAccess) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        return ApplicantMapper.toApplicantResponse(applicant);
+        return ApplicantMapper.toApplicantResponse(applicant, fullAccess);
     }
 
     @Override
-    public List<ApplicantResponse> getAllApplicants() {
+    public List<ApplicantResponse> getAllApplicants(boolean fullAccess) {
         return applicantRepository.findAll().stream()
-                .map(ApplicantMapper::toApplicantResponse)
+                .map(applicant -> ApplicantMapper.toApplicantResponse(applicant, fullAccess))
                 .toList();
     }
 
@@ -103,6 +104,15 @@ public class ImplApplicantService implements InterfaceApplicantService {
         ApplicantMapper.updateApplicant(applicant, request);
         Applicant savedApplicant = applicantRepository.save(applicant);
         return ApplicantMapper.toApplicantResponse(savedApplicant);
+    }
+
+    @Override
+    @Transactional
+    public ApplicantResponse updateApplicantPrivacy(Long applicantId, UpdateApplicantPrivacyRequest request) {
+        Applicant applicant = applicantRepository.findById(applicantId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        ApplicantMapper.updateApplicantPrivacy(applicant, request);
+        return ApplicantMapper.toApplicantResponse(applicantRepository.save(applicant));
     }
 
     @Override

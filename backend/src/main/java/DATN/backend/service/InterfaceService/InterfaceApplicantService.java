@@ -2,6 +2,7 @@ package DATN.backend.service.InterfaceService;
 
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
+import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.response.applicant.ApplicantResponse;
@@ -15,11 +16,13 @@ public interface InterfaceApplicantService {
 
     RegistrationApplicantResponse registerApplicant(RegistrationApplicantRequest request);
 
-    ApplicantResponse getApplicantById(Long applicantId);
+    ApplicantResponse getApplicantById(Long applicantId, boolean fullAccess);
 
-    List<ApplicantResponse> getAllApplicants();
+    List<ApplicantResponse> getAllApplicants(boolean fullAccess);
 
     ApplicantResponse updateApplicant(Long applicantId, UpdateApplicantRequest request);
+
+    ApplicantResponse updateApplicantPrivacy(Long applicantId, UpdateApplicantPrivacyRequest request);
 
     SavedJobResponse saveJob(SaveJobRequest request);
 

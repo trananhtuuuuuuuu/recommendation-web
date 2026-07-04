@@ -34,6 +34,36 @@ public class Applicant extends User {
     @Column(nullable = true)
     private String fullName;
 
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean profileVisibleToRecruiters = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean showFullName = false;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean showContactInfo = false;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean showAddress = false;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean showCvFile = false;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean showObjective = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean showSkills = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean showExperience = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean showEducation = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean showCertifications = true;
+
     public Applicant(String address, String email, String fullName, String password, String phone,
             ApplicantStatusEnum status, GenderEnum gender) {
         super(address, email, fullName, password, phone);

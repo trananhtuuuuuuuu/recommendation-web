@@ -28,4 +28,8 @@ public class CvJobMatchResponse {
     private List<String> hardFilterReasons;
     private String scoringMethod;
     private String modelUsed;
+    private boolean differentialPrivacyApplied;
+    private Double privacyEpsilon;
+    private Double scoreSensitivity;
+    private String privacyMechanism;
 }

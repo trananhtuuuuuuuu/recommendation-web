@@ -198,11 +198,19 @@ class BackendEndpointsIntegrationTests {
 
                 mockMvc.perform(get("/api/v1/applicants"))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.data[0].userName").value("applicant01"));
+                                .andExpect(jsonPath("$.data[0].userName").doesNotExist())
+                                .andExpect(jsonPath("$.data[0].privacyApplied").value(true));
 
                 mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.data.email").value("applicant@example.com"));
+                                .andExpect(jsonPath("$.data.email").doesNotExist())
+                                .andExpect(jsonPath("$.data.fullName").value("Candidate #" + applicant.getId()));
+
+                mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data.email").value("applicant@example.com"))
+                                .andExpect(jsonPath("$.data.userName").value("applicant01"));
 
                 mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -223,6 +231,33 @@ class BackendEndpointsIntegrationTests {
                                 .andExpect(jsonPath("$.data.phone").value("0787549324"))
                                 .andExpect(jsonPath("$.data.address").value("Da Nang"))
                                 .andExpect(jsonPath("$.data.status").value("Normal"));
+
+                mockMvc.perform(put("/api/v1/applicants/{applicantId}/privacy", applicant.getId())
+                                .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "profileVisibleToRecruiters": true,
+                                                  "showFullName": true,
+                                                  "showContactInfo": false,
+                                                  "showAddress": false,
+                                                  "showCvFile": false,
+                                                  "showObjective": true,
+                                                  "showSkills": true,
+                                                  "showExperience": true,
+                                                  "showEducation": true,
+                                                  "showCertifications": true
+                                                }
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data.showFullName").value(true))
+                                .andExpect(jsonPath("$.data.showContactInfo").value(false));
+
+                mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
+                                .andExpect(jsonPath("$.data.email").doesNotExist())
+                                .andExpect(jsonPath("$.data.phone").doesNotExist());
 
                 mockMvc.perform(post("/api/v1/applicants/save/job")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -504,7 +539,13 @@ class BackendEndpointsIntegrationTests {
 
                 mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.data[0].applicant.userName").value("applicant01"));
+                                .andExpect(jsonPath("$.data[0].kAnonymityApplied").value(true))
+                                .andExpect(jsonPath("$.data[0].kAnonymitySatisfied").value(false))
+                                .andExpect(jsonPath("$.data[0].anonymityGroupSize").value(1))
+                                .andExpect(jsonPath("$.data[0].anonymityK").value(3))
+                                .andExpect(jsonPath("$.data[0].applicant.userName").doesNotExist())
+                                .andExpect(jsonPath("$.data[0].applicant.fullName").value("Candidate"))
+                                .andExpect(jsonPath("$.data[0].applicant.cv").doesNotExist());
         }
 
         @Test
@@ -525,7 +566,11 @@ class BackendEndpointsIntegrationTests {
                                 java.util.Map.of("SKILL", 0.88, "EXPERIENCE", 0.70),
                                 java.util.List.of(),
                                 "tfidf",
-                                "svm");
+                                "svm",
+                                true,
+                                2.0,
+                                0.05,
+                                "Laplace mechanism");
                 when(cvMatchService.matchApplicantToJob(any(), any(), any())).thenReturn(mockResult);
 
                 // Happy path: owner token → 200 with match data
@@ -540,6 +585,8 @@ class BackendEndpointsIntegrationTests {
                                 .andExpect(jsonPath("$.data.passedFilter").value(true))
                                 .andExpect(jsonPath("$.data.scoringMethod").value("tfidf"))
                                 .andExpect(jsonPath("$.data.modelUsed").value("svm"))
+                                .andExpect(jsonPath("$.data.differentialPrivacyApplied").value(true))
+                                .andExpect(jsonPath("$.data.privacyEpsilon").value(2.0))
                                 .andExpect(jsonPath("$.data.suggestions[0]").value("Bổ sung chứng chỉ AWS."));
 
                 // Body omitted (default options) → still 200

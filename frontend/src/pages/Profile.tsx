@@ -36,9 +36,11 @@ import {
   analyzeCv,
   deleteUploadedCvFile,
   updateApplicant,
+  updateApplicantPrivacy,
   updateRecruiter,
   uploadCv,
   type Applicant,
+  type ApplicantPrivacySettings,
   type CvAnalysis,
   type CvExperienceSuggestion,
   type Recruiter,
@@ -57,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   AlertDialog,
@@ -138,6 +141,22 @@ const emptyCvForm = {
   cvFileUrl: "",
 };
 
+const defaultPrivacyForm = {
+  profileVisibleToRecruiters: true,
+  showFullName: false,
+  showContactInfo: false,
+  showAddress: false,
+  showCvFile: false,
+  showObjective: true,
+  showSkills: true,
+  showExperience: true,
+  showEducation: true,
+  showCertifications: true,
+} satisfies Required<ApplicantPrivacySettings>;
+
+type PrivacyForm = typeof defaultPrivacyForm;
+type PrivacyField = keyof PrivacyForm;
+
 type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "experience" | "objective" | "cvFile";
 
 export default function Profile() {
@@ -151,6 +170,7 @@ export default function Profile() {
   const [applicantForm, setApplicantForm] = useState(emptyApplicantForm);
   const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
   const [cvForm, setCvForm] = useState(emptyCvForm);
+  const [privacyForm, setPrivacyForm] = useState<PrivacyForm>(defaultPrivacyForm);
   const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null);
   const [analyzingCv, setAnalyzingCv] = useState(false);
   const [cvAnalysis, setCvAnalysis] = useState<CvAnalysis | null>(null);
@@ -213,6 +233,7 @@ export default function Profile() {
             certifications: toList(next.cv?.certifications),
             cvFileUrl: next.cv?.cvFileUrl ?? "",
           });
+          setPrivacyForm(toPrivacyForm(next));
           setSelectedCvFile(null);
           setCvAnalysis(null);
           setActiveApplicantEditor(null);
@@ -285,6 +306,7 @@ export default function Profile() {
       certifications: toList(applicant.cv?.certifications),
       cvFileUrl: applicant.cv?.cvFileUrl ?? "",
     });
+    setPrivacyForm(toPrivacyForm(applicant));
     setSelectedCvFile(null);
     setCvAnalysis(null);
   };
@@ -357,6 +379,7 @@ export default function Profile() {
         setRecruiter(updated);
       } else {
         const updated = await updateApplicant(authUser.id, applicantForm);
+        await updateApplicantPrivacy(authUser.id, privacyForm);
         const formData = new FormData();
         formData.append("fullName", cvForm.fullName);
         formData.append("address", cvForm.address);
@@ -455,6 +478,8 @@ export default function Profile() {
             deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
+            privacyForm={privacyForm}
+            setPrivacyForm={setPrivacyForm}
           />
         ) : (
           <ApplicantView
@@ -473,6 +498,7 @@ export default function Profile() {
             deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
+            privacyForm={privacyForm}
             activeEditor={activeApplicantEditor}
             onEdit={(field) => setActiveApplicantEditor(field)}
             onCancel={() => {
@@ -623,6 +649,7 @@ function ApplicantView({
   deletingCvFile,
   analyzingCv,
   cvAnalysis,
+  privacyForm,
   activeEditor,
   onEdit,
   onCancel,
@@ -644,6 +671,7 @@ function ApplicantView({
   deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
+  privacyForm: PrivacyForm;
   activeEditor: ApplicantInlineEditor | null;
   onEdit: (field: ApplicantInlineEditor) => void;
   onCancel: () => void;
@@ -745,6 +773,8 @@ function ApplicantView({
             saving={saving}
           />
         </Panel>
+
+        <PrivacySummary privacyForm={privacyForm} />
 
         <div className="grid grid-cols-2 gap-3">
           {highlights.map((item) => (
@@ -991,6 +1021,8 @@ function ApplicantEditForm({
   deletingCvFile,
   analyzingCv,
   cvAnalysis,
+  privacyForm,
+  setPrivacyForm,
 }: {
   applicantForm: typeof emptyApplicantForm;
   setApplicantForm: React.Dispatch<React.SetStateAction<typeof emptyApplicantForm>>;
@@ -1002,6 +1034,8 @@ function ApplicantEditForm({
   deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
+  privacyForm: PrivacyForm;
+  setPrivacyForm: React.Dispatch<React.SetStateAction<PrivacyForm>>;
 }) {
   const setApplicantField = (field: keyof typeof emptyApplicantForm, value: string) => {
     setApplicantForm((current) => ({ ...current, [field]: value }));
@@ -1015,6 +1049,9 @@ function ApplicantEditForm({
   const setExperience = (values: ExperienceEntry[]) => {
     setCvForm((current) => ({ ...current, experience: values }));
   };
+  const setPrivacyField = (field: PrivacyField, value: boolean) => {
+    setPrivacyForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <div className="space-y-5">
@@ -1027,6 +1064,61 @@ function ApplicantEditForm({
           <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
           <GenderToggle value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} showLabel />
           <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} />
+        </div>
+      </Panel>
+
+      <Panel title="Privacy And Visibility">
+        <div className="grid md:grid-cols-2 gap-3">
+          <PrivacySwitch
+            label="Recruiters can discover profile"
+            checked={privacyForm.profileVisibleToRecruiters}
+            onCheckedChange={(checked) => setPrivacyField("profileVisibleToRecruiters", checked)}
+          />
+          <PrivacySwitch
+            label="Show full name"
+            checked={privacyForm.showFullName}
+            onCheckedChange={(checked) => setPrivacyField("showFullName", checked)}
+          />
+          <PrivacySwitch
+            label="Show contact info"
+            checked={privacyForm.showContactInfo}
+            onCheckedChange={(checked) => setPrivacyField("showContactInfo", checked)}
+          />
+          <PrivacySwitch
+            label="Show address"
+            checked={privacyForm.showAddress}
+            onCheckedChange={(checked) => setPrivacyField("showAddress", checked)}
+          />
+          <PrivacySwitch
+            label="Show uploaded CV file"
+            checked={privacyForm.showCvFile}
+            onCheckedChange={(checked) => setPrivacyField("showCvFile", checked)}
+          />
+          <PrivacySwitch
+            label="Show objective"
+            checked={privacyForm.showObjective}
+            onCheckedChange={(checked) => setPrivacyField("showObjective", checked)}
+          />
+          <PrivacySwitch
+            label="Show skills"
+            checked={privacyForm.showSkills}
+            onCheckedChange={(checked) => setPrivacyField("showSkills", checked)}
+          />
+          <PrivacySwitch
+            label="Show experience"
+            checked={privacyForm.showExperience}
+            onCheckedChange={(checked) => setPrivacyField("showExperience", checked)}
+          />
+          <PrivacySwitch
+            label="Show education"
+            checked={privacyForm.showEducation}
+            onCheckedChange={(checked) => setPrivacyField("showEducation", checked)}
+          />
+          <PrivacySwitch
+            label="Show certificates"
+            checked={privacyForm.showCertifications}
+            onCheckedChange={(checked) => setPrivacyField("showCertifications", checked)}
+          />
         </div>
       </Panel>
 
@@ -1451,6 +1543,46 @@ function Panel({
       </div>
       {children}
     </section>
+  );
+}
+
+function PrivacySummary({ privacyForm }: { privacyForm: PrivacyForm }) {
+  const visibleCount = privacyVisibleCount(privacyForm);
+  return (
+    <Panel title="Privacy">
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-sm border bg-secondary text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {privacyForm.profileVisibleToRecruiters ? "Visible to recruiters" : "Hidden from recruiters"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {visibleCount} of 9 profile sections shared
+            </p>
+          </div>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function PrivacySwitch({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-3 rounded-md border bg-secondary/20 px-3 py-2">
+      <Label className="text-sm font-medium leading-5">{label}</Label>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+    </div>
   );
 }
 
@@ -1918,6 +2050,35 @@ function fileNameFromPath(value?: string | null) {
 function toAssetUrl(value: string) {
   if (/^https?:\/\//i.test(value)) return value;
   return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function toPrivacyForm(applicant?: Applicant | null): PrivacyForm {
+  return {
+    profileVisibleToRecruiters: applicant?.profileVisibleToRecruiters ?? defaultPrivacyForm.profileVisibleToRecruiters,
+    showFullName: applicant?.showFullName ?? defaultPrivacyForm.showFullName,
+    showContactInfo: applicant?.showContactInfo ?? defaultPrivacyForm.showContactInfo,
+    showAddress: applicant?.showAddress ?? defaultPrivacyForm.showAddress,
+    showCvFile: applicant?.showCvFile ?? defaultPrivacyForm.showCvFile,
+    showObjective: applicant?.showObjective ?? defaultPrivacyForm.showObjective,
+    showSkills: applicant?.showSkills ?? defaultPrivacyForm.showSkills,
+    showExperience: applicant?.showExperience ?? defaultPrivacyForm.showExperience,
+    showEducation: applicant?.showEducation ?? defaultPrivacyForm.showEducation,
+    showCertifications: applicant?.showCertifications ?? defaultPrivacyForm.showCertifications,
+  };
+}
+
+function privacyVisibleCount(privacyForm: PrivacyForm) {
+  return [
+    privacyForm.showFullName,
+    privacyForm.showContactInfo,
+    privacyForm.showAddress,
+    privacyForm.showCvFile,
+    privacyForm.showObjective,
+    privacyForm.showSkills,
+    privacyForm.showExperience,
+    privacyForm.showEducation,
+    privacyForm.showCertifications,
+  ].filter(Boolean).length;
 }
 
 function UsersIcon() {

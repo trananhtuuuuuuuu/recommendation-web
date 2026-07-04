@@ -64,6 +64,19 @@ export interface Applicant {
   gender?: string;
   status?: string;
   cvId?: string | number | null;
+  profileVisibleToRecruiters?: boolean;
+  showFullName?: boolean;
+  showContactInfo?: boolean;
+  showAddress?: boolean;
+  showCvFile?: boolean;
+  showObjective?: boolean;
+  showSkills?: boolean;
+  showExperience?: boolean;
+  showEducation?: boolean;
+  showCertifications?: boolean;
+  privacyApplied?: boolean;
+  anonymized?: boolean;
+  privacyNotice?: string;
   cv?: {
     id?: string | number;
     fullName?: string;
@@ -132,6 +145,11 @@ export interface JobApplicant {
   coverLetter?: string;
   portfolioUrl?: string;
   applicationAnswers?: string;
+  kAnonymityApplied?: boolean;
+  kAnonymitySatisfied?: boolean;
+  anonymityGroupSize?: number;
+  anonymityK?: number;
+  privacyNotice?: string;
 }
 
 export interface ApplicationField {
@@ -253,6 +271,23 @@ export const fetchApplicant = (id: string | number) =>
 export const updateApplicant = (id: string | number, body: Partial<Applicant>) =>
   apiRequest<Applicant>(`/api/v1/applicants/${id}`, { method: "PUT", body });
 
+export type ApplicantPrivacySettings = Pick<
+  Applicant,
+  | "profileVisibleToRecruiters"
+  | "showFullName"
+  | "showContactInfo"
+  | "showAddress"
+  | "showCvFile"
+  | "showObjective"
+  | "showSkills"
+  | "showExperience"
+  | "showEducation"
+  | "showCertifications"
+>;
+
+export const updateApplicantPrivacy = (id: string | number, body: ApplicantPrivacySettings) =>
+  apiRequest<Applicant>(`/api/v1/applicants/${id}/privacy`, { method: "PUT", body });
+
 export const fetchRecruiters = () => apiRequest<Recruiter[]>("/api/v1/recruiters");
 export const fetchRecruiter = (id: string | number) =>
   apiRequest<Recruiter>(`/api/v1/recruiters/${id}`);
@@ -307,6 +342,10 @@ export interface CvJobMatch {
   hardFilterReasons?: string[];
   scoringMethod?: string;
   modelUsed?: string;
+  differentialPrivacyApplied?: boolean;
+  privacyEpsilon?: number;
+  scoreSensitivity?: number;
+  privacyMechanism?: string;
 }
 
 export const matchCvToJob = (
