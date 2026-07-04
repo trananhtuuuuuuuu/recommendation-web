@@ -110,7 +110,7 @@
   "second_input_size": 112,
   "shape_size": 128,
   "text_embed": true,
-  "transformers_version": "5.11.0",
+  "transformers_version": "5.12.1",
   "type_vocab_size": 1,
   "use_cache": false,
   "visual_embed": true,
