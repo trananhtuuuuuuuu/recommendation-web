@@ -29,3 +29,9 @@ docker compose up --build -d
 
 Without the exported model, text-based PDF, DOC, and DOCX files use the
 conservative fallback parser. See `ai/README.md` for details.
+
+
+# AI drive
+https://drive.google.com/drive/folders/1mndPDpmmGevP7-IRCDgJK4X8FfwleS_h?usp=drive_link
+
+

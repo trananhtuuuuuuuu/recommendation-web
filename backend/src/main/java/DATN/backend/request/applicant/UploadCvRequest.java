@@ -4,7 +4,14 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.util.List;
+
 import org.springframework.web.multipart.MultipartFile;
+
+import com.fasterxml.jackson.annotation.JsonSetter;
+
+import DATN.backend.utils.StringListConverter;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -17,10 +24,12 @@ public class UploadCvRequest {
     private String address;
     private String phone;
     private String objective;
-    private String skills;
-    private String experience;
-    private String education;
-    private String certifications;
+    private List<String> skills;
     private String cvFileUrl;
     private MultipartFile cvFile;
+
+    @JsonSetter("skills")
+    public void setSkillsFromJson(Object skills) {
+        this.skills = StringListConverter.fromAny(skills);
+    }
 }

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { fetchRecruiterJobs, getJobId, getJobTitle, type Job } from "@/lib/jobsApi";
+import { fetchRecruiterJobs, getApplyingDeadline, getJobId, getJobTitle, type Job } from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 import MetricCard from "@/components/MetricCard";
@@ -39,7 +39,7 @@ export default function RecruiterJobs() {
   const completeJobs = jobs.filter((job) =>
     Boolean(getJobTitle(job) && job.jobDescription && job.requirements && job.location)
   ).length;
-  const jobsWithDeadline = jobs.filter((job) => job.applicationDeadline).length;
+  const jobsWithDeadline = jobs.filter((job) => getApplyingDeadline(job)).length;
   const industryCount = new Set(jobs.map((job) => job.industry).filter(Boolean)).size;
 
   return (

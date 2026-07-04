@@ -30,6 +30,11 @@ COPY --from=builder /app/target/*.jar app.jar
 
 USER appuser
 
-EXPOSE 8081
+# Springboot port listening on docker container
+EXPOSE 8081 
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Java debugger port via Vscode
+EXPOSE 5005
+
+# ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT [ "java", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005", "-jar", "app.jar" ]

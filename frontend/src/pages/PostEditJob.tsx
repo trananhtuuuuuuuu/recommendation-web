@@ -14,7 +14,7 @@ import { toast } from "sonner";
 const empty: Job = {
   jobTitle: "", aboutCompany: "", jobDescription: "", requirements: "", benefits: "",
   location: "", salaryRange: "", jobType: "Full-time", experienceLevel: "", industry: "",
-  postedDate: "", applicationDeadline: "", startDate: "", endDate: "",
+  postedDate: "", applyingDeadline: "", startDate: "", endDate: "",
   customApplicationFields: "",
 };
 
@@ -127,7 +127,7 @@ export default function PostEditJob() {
               {field("industry", "Industry")}
               {field("salaryRange", "Salary Range", { placeholder: "$100K - $140K" })}
               {field("postedDate", "Posted Date", { type: "date" })}
-              {field("applicationDeadline", "Application Deadline", { type: "date" })}
+              {field("applyingDeadline", "Application Deadline", { type: "date" })}
               {field("startDate", "Start Date", { type: "date" })}
               {field("endDate", "End Date", { type: "date" })}
             </div>

@@ -1,0 +1,144 @@
+services:
+  db:
+    image: postgres:16
+    container_name: postgres-rw-db
+    restart: unless-stopped
+    networks:
+      - rw-network
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rw-db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+    ports:
+      - "${DB_HOST_PORT:-8386}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-rw-db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # LayoutLMv3 CV extraction service. Put the exported notebook model in
+  # ai/model, or set AI_MODEL_HOST_PATH to another local model directory.
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+      args:
+        AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+    container_name: rw-ai
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rw-network
+    environment:
+      AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+      # ai/model is mounted at /app/model so BOTH the LayoutLMv3 dir and the
+      # recommender_svm*.joblib files (config.MODEL_DIR=/app/model) are found.
+      AI_MODEL_DIR: /app/model
+      AI_MAX_PAGES: ${AI_MAX_PAGES:-3}
+      AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
+      AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}
+      AI_OCR_ENGINE: ${AI_OCR_ENGINE:-paddle}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    volumes:
+      - ${AI_MODEL_HOST_PATH:-./ai/model}:/app/model:ro
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama
+    container_name: rw-ollama
+    restart: unless-stopped
+    networks:
+      - rw-network
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # This automatically pulls the model if it doesn't exist, then runs the server
+    entrypoint: /bin/sh
+    command: -c "ollama serve & sleep 5 && ollama pull ${OLLAMA_MODEL:-qwen2.5:3b} && wait"
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Spring Boot Backend ──────────────────────────────────────────────────
+  # Connects to the db service inside this compose project.
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rw-backend
+    restart: unless-stopped
+    networks:
+      - rw-network
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME:-rw-db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-123456}
+      # Hibernate creates the schema from the entities; spring.sql.init then runs
+      # the ALTERs + seed (continue-on-error tolerates rows from older schema).
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: never
+      SPRING_SQL_INIT_DATA_LOCATIONS: classpath:db/seed-postgres.sql
+      SPRING_SQL_INIT_CONTINUE_ON_ERROR: "true"
+      AI_CV_BASE_URL: http://ai:8001
+      AI_CV_ENABLED: ${AI_CV_ENABLED:-true}
+    ports:
+      - "8000:8081"
+      - "5005:5005"
+    volumes:
+      - cv_uploads:/app/uploads
+    depends_on:
+      ai:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  # ── React / Vite Frontend ────────────────────────────────────────────────
+  # localhost:3000 (your machine) → :3001 (inside container, nginx)
+  # VITE_API_BASE_URL is baked at build time — must be the HOST port (8000)
+  # because it's the browser that calls the backend, not the container.
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: rw-frontend
+    restart: unless-stopped
+    networks:
+      - rw-network
+    ports:
+      - "3000:3001"
+    depends_on:
+      - backend
+
+# ── Shared Bridge Network ────────────────────────────────────────────────────
+# All services join "rw-network" so they can reach each other
+# by container/service name instead of IP.
+networks:
+  rw-network:
+    driver: bridge
+
+volumes:
+  pg_data:
+    driver: local
+  cv_uploads:
+    driver: local
+  ollama_data:

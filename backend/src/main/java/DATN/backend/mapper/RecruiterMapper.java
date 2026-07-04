@@ -1,5 +1,8 @@
 package DATN.backend.mapper;
 
+import java.sql.Date;
+import java.time.LocalDate;
+
 import DATN.backend.model.Recruiter;
 import DATN.backend.request.recruiter.RegistrationRecruiterRequest;
 import DATN.backend.request.recruiter.UpdateRecruiterRequest;
@@ -19,19 +22,13 @@ public class RecruiterMapper {
         recruiter.setPhone(request.getPhone());
         recruiter.setUserName(request.getUserName());
         recruiter.setCompanyName(request.getCompanyName());
-        recruiter.setCompanyDescription(request.getCompanyDescription());
-        recruiter.setCompanyLocation(request.getCompanyLocation());
-        recruiter.setCompanySize(request.getCompanySize());
-        recruiter.setIndustry(request.getIndustry());
-        recruiter.setWebsite(request.getWebsite());
-        recruiter.setLogoUrl(request.getLogoUrl());
-        recruiter.setCoverImageUrl(request.getCoverImageUrl());
-        recruiter.setContactEmail(request.getContactEmail());
-        recruiter.setContactPhone(request.getContactPhone());
-        recruiter.setTaxCode(request.getTaxCode());
-        recruiter.setBusinessLicense(request.getBusinessLicense());
-        recruiter.setEstablishedDate(request.getEstablishedDate());
-        recruiter.setCompanyType(request.getCompanyType());
+        recruiter.setCompanyDesc(firstNonBlank(request.getCompanyDesc(), request.getCompanyDescription()));
+        recruiter.setLocation(firstNonBlank(request.getLocation(), request.getCompanyLocation(), request.getAddress()));
+        recruiter.setCompanySize(parseInteger(request.getCompanySize()));
+        recruiter.setIndustryType(firstNonBlank(request.getIndustryType(), request.getIndustry()));
+        recruiter.setContact(firstNonBlank(request.getContact(), request.getContactEmail(), request.getContactPhone()));
+        recruiter.setAvatarUrl(firstNonBlank(request.getAvatarUrl(), request.getLogoUrl(), request.getCoverImageUrl()));
+        recruiter.setEstablishedDate(parseDate(request.getEstablishedDate()));
         return recruiter;
     }
 
@@ -52,19 +49,19 @@ public class RecruiterMapper {
                 recruiter.getUserName(),
                 recruiter.getEmail(),
                 recruiter.getCompanyName(),
-                recruiter.getCompanyDescription(),
-                recruiter.getCompanyLocation(),
-                recruiter.getCompanySize(),
-                recruiter.getIndustry(),
-                recruiter.getWebsite(),
-                recruiter.getLogoUrl(),
-                recruiter.getCoverImageUrl(),
-                recruiter.getContactEmail(),
-                recruiter.getContactPhone(),
-                recruiter.getTaxCode(),
-                recruiter.getBusinessLicense(),
-                recruiter.getEstablishedDate(),
-                recruiter.getCompanyType(),
+                recruiter.getCompanyDesc(),
+                recruiter.getLocation(),
+                recruiter.getCompanySize() == null ? null : recruiter.getCompanySize().toString(),
+                recruiter.getIndustryType(),
+                null,
+                recruiter.getAvatarUrl(),
+                recruiter.getAvatarUrl(),
+                recruiter.getContact(),
+                recruiter.getPhone(),
+                null,
+                null,
+                recruiter.getEstablishedDate() == null ? null : recruiter.getEstablishedDate().toString(),
+                null,
                 recruiter.getAddress(),
                 recruiter.getPhone());
     }
@@ -75,19 +72,43 @@ public class RecruiterMapper {
         recruiter.setPhone(request.getPhone());
         recruiter.setUserName(request.getUserName());
         recruiter.setCompanyName(request.getCompanyName());
-        recruiter.setCompanyDescription(request.getCompanyDescription());
-        recruiter.setCompanyLocation(request.getCompanyLocation());
-        recruiter.setCompanySize(request.getCompanySize());
-        recruiter.setIndustry(request.getIndustry());
-        recruiter.setWebsite(request.getWebsite());
-        recruiter.setLogoUrl(request.getLogoUrl());
-        recruiter.setCoverImageUrl(request.getCoverImageUrl());
-        recruiter.setContactEmail(request.getContactEmail());
-        recruiter.setContactPhone(request.getContactPhone());
-        recruiter.setTaxCode(request.getTaxCode());
-        recruiter.setBusinessLicense(request.getBusinessLicense());
-        recruiter.setEstablishedDate(request.getEstablishedDate());
-        recruiter.setCompanyType(request.getCompanyType());
+        recruiter.setCompanyDesc(firstNonBlank(request.getCompanyDesc(), request.getCompanyDescription()));
+        recruiter.setLocation(firstNonBlank(request.getLocation(), request.getCompanyLocation(), request.getAddress()));
+        recruiter.setCompanySize(parseInteger(request.getCompanySize()));
+        recruiter.setIndustryType(firstNonBlank(request.getIndustryType(), request.getIndustry()));
+        recruiter.setContact(firstNonBlank(request.getContact(), request.getContactEmail(), request.getContactPhone()));
+        recruiter.setAvatarUrl(firstNonBlank(request.getAvatarUrl(), request.getLogoUrl(), request.getCoverImageUrl()));
+        recruiter.setEstablishedDate(parseDate(request.getEstablishedDate()));
         return recruiter;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static Integer parseInteger(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static Date parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Date.valueOf(LocalDate.parse(value));
     }
 }

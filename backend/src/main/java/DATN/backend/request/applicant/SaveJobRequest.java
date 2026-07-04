@@ -1,6 +1,5 @@
 package DATN.backend.request.applicant;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,13 +11,17 @@ import lombok.Setter;
 @Setter
 public class SaveJobRequest {
 
-    @NotNull(message = "Applicant id is required")
     private Long applicantId;
 
-    @NotNull(message = "Job description id is required")
+    private Long jobId;
+
     private Long jobDescriptionId;
 
     private String coverLetter;
     private String portfolioUrl;
     private String applicationAnswers;
+
+    public Long getJobId() {
+        return jobId != null ? jobId : jobDescriptionId;
+    }
 }

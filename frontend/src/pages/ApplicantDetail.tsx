@@ -86,7 +86,7 @@ export default function ApplicantDetail() {
           {applicant.cv ? (
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>Objective: <span className="text-foreground">{applicant.cv.objective || "N/A"}</span></p>
-              <p>Skills: <span className="text-foreground">{applicant.cv.skills || "N/A"}</span></p>
+              <p>Skills: <span className="text-foreground">{formatList(applicant.cv.skills) || "N/A"}</span></p>
               <p>Experience: <span className="text-foreground whitespace-pre-line">{formatExperience(applicant.cv.experience)}</span></p>
             </div>
           ) : (
@@ -113,4 +113,8 @@ function formatExperience(value?: string | null) {
     return value;
   }
   return value;
+}
+
+function formatList(value?: string | string[] | null) {
+  return Array.isArray(value) ? value.filter(Boolean).join(", ") : value;
 }

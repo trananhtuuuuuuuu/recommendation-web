@@ -73,10 +73,12 @@ public class ApplicantMapper {
                         applicant.setFullName(request.getFullName());
                 }
                 if (request.getGender() != null) {
-                        applicant.setGender(request.getGender().isBlank() ? null : GenderEnum.valueOf(request.getGender()));
+                        applicant.setGender(
+                                        request.getGender().isBlank() ? null : GenderEnum.valueOf(request.getGender()));
                 }
                 if (request.getStatus() != null) {
-                        applicant.setStatus(request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
+                        applicant.setStatus(
+                                        request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
                 }
                 return applicant;
         }
@@ -95,9 +97,6 @@ public class ApplicantMapper {
                                 request.getPhone(),
                                 request.getObjective(),
                                 request.getSkills(),
-                                request.getExperience(),
-                                request.getEducation(),
-                                request.getCertifications(),
                                 request.getCvFileUrl());
         }
 
@@ -109,10 +108,27 @@ public class ApplicantMapper {
                                 cv.getPhone(),
                                 cv.getObjective(),
                                 cv.getSkills(),
-                                cv.getExperience(),
-                                cv.getEducation(),
-                                cv.getCertifications(),
                                 cv.getCvFileUrl());
+        }
+
+        /**
+         * Updates an existing {@link Cv} entity's fields in-place from the given
+         * request. Using this instead of {@link #toCv} on subsequent uploads prevents
+         * JPA from inserting a second CV row and violating the one-to-one FK
+         * constraint.
+         *
+         * @param cv      existing managed CV entity
+         * @param request upload payload with the new field values
+         */
+        public static void updateCv(Cv cv, UploadCvRequest request) {
+                cv.setFullName(request.getFullName());
+                cv.setAddress(request.getAddress());
+                cv.setPhone(request.getPhone());
+                cv.setObjective(request.getObjective());
+                cv.setSkills(request.getSkills());
+                if (request.getCvFileUrl() != null && !request.getCvFileUrl().isBlank()) {
+                        cv.setCvFileUrl(request.getCvFileUrl());
+                }
         }
 
 }

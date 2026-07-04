@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.ApiResponse;
-import DATN.backend.service.InterfaceService.InterfaceJobDescriptionService;
+import DATN.backend.service.InterfaceService.InterfaceJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "Recruiter Job", description = "Recruiter job management APIs")
 public class RecruiterJobController {
 
-    private final InterfaceJobDescriptionService jobDescriptionService;
+    private final InterfaceJobService jobDescriptionService;
 
     @Operation(summary = "Get jobs posted by recruiter")
     @GetMapping("/{recruiterId}")

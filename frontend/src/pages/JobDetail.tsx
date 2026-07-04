@@ -14,6 +14,7 @@ import {
   Loader2,
   MapPin,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,8 +26,11 @@ import {
   applyJob,
   fetchJob,
   fetchJobApplicantCount,
+  matchCvToJob,
+  getApplyingDeadline,
   saveJob,
   type ApplicationField,
+  type CvJobMatch,
   type Job,
   type JobApplicantsCount,
 } from "@/lib/jobsApi";
@@ -48,6 +52,8 @@ export default function JobDetail() {
   const [applying, setApplying] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [applicationAnswers, setApplicationAnswers] = useState<Record<string, string>>({});
+  const [matchResult, setMatchResult] = useState<CvJobMatch | null>(null);
+  const [matching, setMatching] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -82,6 +88,19 @@ export default function JobDetail() {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to save");
     } finally { setSaving(false); }
+  };
+
+  const handleMatch = async () => {
+    if (!isAuthenticated) { navigate("/auth"); return; }
+    if (role !== "APPLICANT") { toast.error("Only applicants can check match score."); return; }
+    if (!user?.id || !id) return;
+    setMatching(true);
+    try {
+      const result = await matchCvToJob(user.id, id, { llm: true, method: "tfidf" });
+      setMatchResult(result);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Match failed. Make sure your CV is uploaded.");
+    } finally { setMatching(false); }
   };
 
   const customFields = parseApplicationFields(job?.customApplicationFields);
@@ -190,7 +209,7 @@ export default function JobDetail() {
               <OverviewRow icon={Briefcase} label="Employment" value={job.jobType} />
               <OverviewRow icon={MapPin} label="Location" value={job.location} />
               <OverviewRow icon={Banknote} label="Salary" value={job.salaryRange} />
-              <OverviewRow icon={Calendar} label="Apply by" value={job.applicationDeadline} />
+              <OverviewRow icon={Calendar} label="Apply by" value={getApplyingDeadline(job)} />
             </div>
 
             <div className="mt-6 grid gap-2">
@@ -236,6 +255,14 @@ export default function JobDetail() {
               </div>
             </div>
           </div>
+
+          {role === "APPLICANT" ? (
+            <MatchPanel
+              matching={matching}
+              matchResult={matchResult}
+              onCheck={handleMatch}
+            />
+          ) : null}
         </aside>
       </div>
 
@@ -329,6 +356,151 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <h3 className="font-display font-semibold text-foreground mb-2">{title}</h3>
       {children}
+    </div>
+  );
+}
+
+// ── AI Match Panel ────────────────────────────────────────────────────────────
+
+const FIELD_LABELS: Record<string, string> = {
+  SKILL: "Kỹ năng", SOFT_SKILL: "Kỹ năng mềm", LANGUAGE: "Ngoại ngữ",
+  CERTIFICATION: "Chứng chỉ", JOB_TITLE: "Chức danh", COMPANY: "Công ty",
+  EDUCATION: "Học vấn", SUMMARY: "Tóm tắt", EXPERIENCE: "Kinh nghiệm", PROJECT: "Dự án",
+};
+
+function ScoreRing({ percent }: { percent: number }) {
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (percent / 100) * circ;
+  const color = percent >= 70 ? "#22c55e" : percent >= 45 ? "#f59e0b" : "#ef4444";
+  return (
+    <svg width="88" height="88" viewBox="0 0 88 88" className="shrink-0" aria-label={`Match score ${percent}%`}>
+      <circle cx="44" cy="44" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
+      <circle
+        cx="44" cy="44" r={r} fill="none" stroke={color} strokeWidth="8"
+        strokeLinecap="round" strokeDasharray={`${dash} ${circ}`}
+        transform="rotate(-90 44 44)"
+        style={{ transition: "stroke-dasharray 0.6s ease" }}
+      />
+      <text x="44" y="48" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>
+        {percent}%
+      </text>
+    </svg>
+  );
+}
+
+function MatchPanel({
+  matching, matchResult, onCheck,
+}: {
+  matching: boolean;
+  matchResult: CvJobMatch | null;
+  onCheck: () => void;
+}) {
+  const fieldOrder = [
+    "SKILL", "JOB_TITLE", "EXPERIENCE", "EDUCATION",
+    "SUMMARY", "CERTIFICATION", "PROJECT", "LANGUAGE", "SOFT_SKILL", "COMPANY",
+  ];
+  return (
+    <div className="rounded-xl border bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <h2 id="ai-match-heading" className="font-display text-sm font-semibold text-foreground">
+          AI CV Match
+        </h2>
+      </div>
+
+      {!matchResult ? (
+        <>
+          <p className="text-xs text-muted-foreground leading-5">
+            Check how well your uploaded CV matches this job across 10 fields (skills,
+            experience, education, language, and more).
+          </p>
+          <Button
+            id="check-match-btn"
+            onClick={onCheck}
+            disabled={matching}
+            variant="outline"
+            className="w-full gap-2"
+          >
+            {matching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {matching ? "Analysing…" : "Check My Match"}
+          </Button>
+        </>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center gap-4">
+            <ScoreRing percent={matchResult.matchPercent ?? 0} />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">
+                {matchResult.passedFilter ? "Passed initial filter" : "Did not pass filter"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-foreground line-clamp-3">
+                {matchResult.reason}
+              </p>
+            </div>
+          </div>
+
+          {matchResult.perFieldScores && Object.keys(matchResult.perFieldScores).length > 0 ? (
+            <div className="space-y-1.5">
+              {fieldOrder
+                .filter((f) => matchResult.perFieldScores![f] !== undefined)
+                .map((field) => {
+                  const pct = Math.round((matchResult.perFieldScores![field] ?? 0) * 100);
+                  return (
+                    <div key={field}>
+                      <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
+                        <span>{FIELD_LABELS[field] ?? field}</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : null}
+
+          {matchResult.hardFilterReasons && matchResult.hardFilterReasons.length > 0 ? (
+            <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+              {matchResult.hardFilterReasons.map((r, i) => <p key={i}>{r}</p>)}
+            </div>
+          ) : null}
+
+          {matchResult.suggestions && matchResult.suggestions.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Gợi ý cải thiện</p>
+              <ul className="space-y-1.5">
+                {matchResult.suggestions.map((s, i) => (
+                  <li key={i} className="flex gap-2 text-xs leading-5 text-foreground">
+                    <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-bold">{i + 1}</span>
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <Button
+            id="recheck-match-btn"
+            onClick={onCheck}
+            disabled={matching}
+            variant="ghost"
+            size="sm"
+            className="w-full gap-1 text-muted-foreground"
+          >
+            {matching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            Re-check
+          </Button>
+        </motion.div>
+      )}
     </div>
   );
 }

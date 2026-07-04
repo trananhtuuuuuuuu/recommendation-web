@@ -1,0 +1,21 @@
+{
+    "fullName":"LE THI HONG NGOC",
+    "detectedEmail":"ngoc508710@gmail.com",
+    "phone":"+84 816 239 930",
+    "address":null,
+    "objective":"Motivated third-year Finance and Banking student 
+    at the University of Economics and Law (UEL), 
+    seeking an internship to apply financial knowledge and develop 
+    practical experience in finance and data management. 
+    Detail-oriented, responsible, and eager to learn in a fast-paced, 
+    global working environment.\nMay - June 2025",
+    "skills":[
+        "Financial Tools:",
+        "Excel (PivotTable,",
+        "Financial Modeling,",
+        "Ratio Analysis)",
+        "Analytical","Accuracy,",
+        "teamwork,",
+        "problem-solving,",
+        "time management"],
+    "experience":[{"companyName":"Moc Chau Milk","position":"Financial Forecasting","time":"","description":"Analyzed financial statements and key ratios of Moc Chau Milk JSC (2020-2024). Built 10-year forecasts and valuation model (FCF & NPV) in Excel. Proposed recommendations to enhance financial performance.","skills":"","certificates":""},{"companyName":"Vietnam Airlines","position":"Financial Statement Analysis","time":"June - July 2025","description":"Analyzed Vietnam Airlines' financial statements using horizontal, vertical, and ratio analysis. Assessed liguidity, leverage, and profitability through key financial ratios and the DuPont model. Evaluated post-CoVID-19 recovery and proposed improvement strategies using Excel-based analysis. Role: Focused on sustainability goals, financial risk assessment, vertical (common-size) analysis, and market value ratios.","skills":"","certificates":""},{"companyName":"Small Business","position":"Financial Reporting and Analysis","time":"May - June 2025","description":"Designed a comprehensive financial reporting system to track revenue, expenses, and profitability of a small business project. Conducted financial ratio analysis to evaluate performance, liquidity, and operational efficiency. Recorded material and merchandise purchase costs, tracked revenue by product line, and monitored accounts receivable. Utilized Excel to organize financial data and support cash flow analysis.","skills":"","certificates":""}],"education":["Course: Financial Modeling with Excel - University of Economics and Law (UEL)","Course: Financial Management (Corporate Finance) - University of Economics and Law (UEL)","(2021-2024)","Course: Financial Modeling with Excel – University of Economics and Law (UEL)","Bachelor of Finance and Banking","University of Economics and Law (UEL) - Vietnam National University, HCMC","Graduation: 2027","2023 - 2027","University of Economics and Law (UEL) – Vietnam National University, HCMC","Expected Graduation: 2027","Currently GPA: 8.45/10","ADDITIONAL INFORMATION","Financial Tools: Excel (PivotTable, Financial Modeling, Ratio Analysis)","Analytical & Soft Skills: Accuracy, teamwork, problem-solving, time management","SKILL"],"certifications":["Office Specialist"],"extractionMode":"layoutlmv3","confidence":0.905,"warnings":[]}
