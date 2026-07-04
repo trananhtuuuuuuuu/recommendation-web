@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -39,6 +40,7 @@ import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
 import DATN.backend.response.applicant.RegistrationApplicantResponse;
 import DATN.backend.response.cv.CvResponse;
+import DATN.backend.response.PageResponse;
 import DATN.backend.service.InterfaceService.InterfaceApplicantService;
 import lombok.RequiredArgsConstructor;
 
@@ -141,7 +143,11 @@ public class ImplApplicantService implements InterfaceApplicantService {
                 job.getId(),
                 job.getJobTitle(),
                 job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
-                job.getLocation());
+                job.getLocation(),
+                job.getJobType(),
+                SAVED_ACTION,
+                toDateText(relation.getCreatedAt()),
+                null);
     }
 
     @Override
@@ -170,27 +176,31 @@ public class ImplApplicantService implements InterfaceApplicantService {
                 job.getId(),
                 job.getJobTitle(),
                 job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
-                job.getLocation());
+                job.getLocation(),
+                job.getJobType(),
+                APPLIED_ACTION,
+                null,
+                toDateText(relation.getCreatedAt()));
     }
 
     @Override
-    public List<SavedJobResponse> getSavedJobs(Long applicantId) {
+    public PageResponse<SavedJobResponse> getSavedJobs(Long applicantId, Pageable pageable) {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        return applicantJobRepository.findByApplicant_IdAndActionType(applicantId, SAVED_ACTION).stream()
-                .map(this::toSavedJobResponse)
-                .toList();
+        return PageResponse.from(applicantJobRepository
+                .findByApplicant_IdAndActionType(applicantId, SAVED_ACTION, pageable)
+                .map(this::toSavedJobResponse));
     }
 
     @Override
-    public List<SavedJobResponse> getAppliedJobs(Long applicantId) {
+    public PageResponse<SavedJobResponse> getAppliedJobs(Long applicantId, Pageable pageable) {
         if (!applicantRepository.existsById(applicantId)) {
             throw new ResourcesNotFoundException("Applicant not found");
         }
-        return applicantJobRepository.findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION).stream()
-                .map(this::toSavedJobResponse)
-                .toList();
+        return PageResponse.from(applicantJobRepository
+                .findByApplicant_IdAndActionType(applicantId, APPLIED_ACTION, pageable)
+                .map(this::toSavedJobResponse));
     }
 
     /**
@@ -361,6 +371,14 @@ public class ImplApplicantService implements InterfaceApplicantService {
                 job.getId(),
                 job.getJobTitle(),
                 job.getRecruiter() == null ? null : job.getRecruiter().getCompanyName(),
-                job.getLocation());
+                job.getLocation(),
+                job.getJobType(),
+                relation.getActionType(),
+                SAVED_ACTION.equals(relation.getActionType()) ? toDateText(relation.getCreatedAt()) : null,
+                APPLIED_ACTION.equals(relation.getActionType()) ? toDateText(relation.getCreatedAt()) : null);
+    }
+
+    private String toDateText(java.sql.Date date) {
+        return date == null ? null : date.toString();
     }
 }

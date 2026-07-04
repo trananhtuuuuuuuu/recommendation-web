@@ -3,6 +3,9 @@ package DATN.backend.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,6 +17,9 @@ public interface ApplicantJobRepository extends JpaRepository<ApplicantJob, Long
     List<ApplicantJob> findByApplicant_Id(Long applicantId);
 
     List<ApplicantJob> findByApplicant_IdAndActionType(Long applicantId, String actionType);
+
+    @EntityGraph(attributePaths = { "applicant", "job", "job.recruiter" })
+    Page<ApplicantJob> findByApplicant_IdAndActionType(Long applicantId, String actionType, Pageable pageable);
 
     List<ApplicantJob> findByJob_IdAndActionType(Long jobDescriptionId, String actionType);
 

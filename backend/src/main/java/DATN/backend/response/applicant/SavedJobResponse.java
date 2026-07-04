@@ -16,4 +16,8 @@ public class SavedJobResponse {
     private String jobTitle;
     private String companyName;
     private String location;
+    private String jobType;
+    private String status;
+    private String savedAt;
+    private String appliedAt;
 }

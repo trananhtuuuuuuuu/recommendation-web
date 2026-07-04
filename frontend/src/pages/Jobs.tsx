@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { fetchJobs, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch } from "@/lib/jobsApi";
+import { fetchJobsPage, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch, type PageResponse } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -26,6 +26,18 @@ interface Analysis {
   hardFilterReasons: string[];
 }
 
+const JOB_PAGE_SIZE = 10;
+
+const emptyJobsPage: PageResponse<Job> = {
+  content: [],
+  page: 0,
+  size: JOB_PAGE_SIZE,
+  totalElements: 0,
+  totalPages: 0,
+  first: true,
+  last: true,
+};
+
 function toAnalysis(match: CvJobMatch): Analysis {
   return {
     matchPercent: match.matchPercent ?? Math.round((match.matchScore ?? 0) * 100),
@@ -42,6 +54,8 @@ export default function Jobs() {
   const { user, role, isAuthenticated } = useAuth();
 
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobsPage, setJobsPage] = useState<PageResponse<Job>>(emptyJobsPage);
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -62,16 +76,26 @@ export default function Jobs() {
 
   useEffect(() => {
     let active = true;
-    fetchJobs()
-      .then((data) => { if (active) setJobs(Array.isArray(data) ? data : []); })
+    setLoading(true);
+    setError(null);
+    fetchJobsPage(currentPage, JOB_PAGE_SIZE)
+      .then((data) => {
+        if (!active) return;
+        setJobsPage(data);
+        setJobs(data.content);
+      })
       .catch((e) => { if (active) setError(e instanceof ApiError ? e.message : "Failed to load jobs"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     setQuery(searchParams.get("q") ?? "");
   }, [searchParams]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [query, locationFilter, typeFilter, industryFilter]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -172,7 +196,9 @@ export default function Jobs() {
             <div>
               <h1 className="font-display text-2xl font-bold text-foreground">Job Listings</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {loading ? "Loading open opportunities..." : `${filtered.length} of ${jobs.length} opportunities shown`}
+                {loading
+                  ? "Loading open opportunities..."
+                  : `${filtered.length} shown on page ${jobsPage.page + 1} of ${Math.max(jobsPage.totalPages, 1)} (${jobsPage.totalElements} total)`}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -402,6 +428,34 @@ export default function Jobs() {
           );
         })}
       </div>
+
+      {!loading && !error && jobsPage.totalPages > 1 ? (
+        <nav className="flex flex-col items-center justify-between gap-3 rounded-lg border bg-card p-4 sm:flex-row" aria-label="Job pagination">
+          <p className="text-sm text-muted-foreground">
+            Page {jobsPage.page + 1} of {jobsPage.totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={jobsPage.first || loading}
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 0))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={jobsPage.last || loading}
+              onClick={() => setCurrentPage((page) => page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }

@@ -9,8 +9,11 @@ import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.RegistrationApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
 import DATN.backend.response.cv.CvResponse;
+import DATN.backend.response.PageResponse;
 
 import java.util.List;
+
+import org.springframework.data.domain.Pageable;
 
 public interface InterfaceApplicantService {
 
@@ -28,9 +31,9 @@ public interface InterfaceApplicantService {
 
     SavedJobResponse applyJob(SaveJobRequest request);
 
-    List<SavedJobResponse> getSavedJobs(Long applicantId);
+    PageResponse<SavedJobResponse> getSavedJobs(Long applicantId, Pageable pageable);
 
-    List<SavedJobResponse> getAppliedJobs(Long applicantId);
+    PageResponse<SavedJobResponse> getAppliedJobs(Long applicantId, Pageable pageable);
 
     /**
      * Removes a job from an applicant's saved list.

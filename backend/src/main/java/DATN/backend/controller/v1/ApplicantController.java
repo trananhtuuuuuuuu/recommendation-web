@@ -4,6 +4,9 @@ import java.beans.PropertyEditorSupport;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -111,16 +114,22 @@ public class ApplicantController {
 
         @Operation(summary = "Get saved jobs for applicant")
         @GetMapping("/saved-jobs")
-        public ResponseEntity<ApiResponse> getSavedJobs(@RequestParam Long applicantId) {
+        public ResponseEntity<ApiResponse> getSavedJobs(@RequestParam Long applicantId,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "5") int size,
+                        @RequestParam(defaultValue = "id,desc") String sort) {
                 return ResponseEntity.ok(ApiResponse.success("Saved jobs found", HttpStatus.OK,
-                                applicantService.getSavedJobs(applicantId)));
+                                applicantService.getSavedJobs(applicantId, toPageable(page, size, sort))));
         }
 
         @Operation(summary = "Get applied jobs for applicant")
         @GetMapping("/applied-jobs")
-        public ResponseEntity<ApiResponse> getAppliedJobs(@RequestParam Long applicantId) {
+        public ResponseEntity<ApiResponse> getAppliedJobs(@RequestParam Long applicantId,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "5") int size,
+                        @RequestParam(defaultValue = "id,desc") String sort) {
                 return ResponseEntity.ok(ApiResponse.success("Applied jobs found", HttpStatus.OK,
-                                applicantService.getAppliedJobs(applicantId)));
+                                applicantService.getAppliedJobs(applicantId, toPageable(page, size, sort))));
         }
 
         @Operation(summary = "Save a job for applicant")
@@ -266,6 +275,28 @@ public class ApplicantController {
                 return authentication != null
                                 && authentication.getPrincipal() instanceof InforInsideToken tokenInformation
                                 && "ADMIN".equalsIgnoreCase(tokenInformation.getRoleName());
+        }
+
+        private Pageable toPageable(int page, int size, String sort) {
+                int safePage = Math.max(page, 0);
+                int safeSize = Math.min(Math.max(size, 1), 20);
+                return PageRequest.of(safePage, safeSize, toSort(sort));
+        }
+
+        private Sort toSort(String sort) {
+                String[] parts = sort == null ? new String[0] : sort.split(",", 2);
+                String requestedField = parts.length > 0 ? parts[0] : "id";
+                Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1])
+                                ? Sort.Direction.ASC
+                                : Sort.Direction.DESC;
+                String field = switch (requestedField) {
+                        case "jobTitle" -> "job.jobTitle";
+                        case "location" -> "job.location";
+                        case "jobType" -> "job.jobType";
+                        case "postedDate" -> "job.postedDate";
+                        default -> "id";
+                };
+                return Sort.by(direction, field);
         }
 
 }

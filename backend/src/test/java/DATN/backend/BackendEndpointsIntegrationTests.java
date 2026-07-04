@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -16,7 +17,6 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-// import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpHeaders;
@@ -24,6 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 import org.springframework.mock.web.MockMultipartFile;
 
 import DATN.backend.Enum.ApplicantStatusEnum;
@@ -70,13 +72,15 @@ class BackendEndpointsIntegrationTests {
   @MockitoBean
   private InterfaceCvMatchService cvMatchService;
 
-  BackendEndpointsIntegrationTests(MockMvc mockMvc, UserRepository userRepository,
+  BackendEndpointsIntegrationTests(WebApplicationContext webApplicationContext, UserRepository userRepository,
       ApplicantRepository applicantRepository,
       ApplicantJobRepository applicantJobRepository, CvRepository cvRepository,
       RecruiterRepository recruiterRepository, RoleRepository roleRepository,
       JobRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
       JwtService jwtService) {
-    this.mockMvc = mockMvc;
+    this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
+        .apply(springSecurity())
+        .build();
     this.userRepository = userRepository;
     this.applicantRepository = applicantRepository;
     this.applicantJobRepository = applicantJobRepository;
@@ -288,12 +292,23 @@ class BackendEndpointsIntegrationTests {
 
     mockMvc.perform(get("/api/v1/applicants/saved-jobs").param("applicantId", applicant.getId().toString()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].jobDescriptionId").value(job.getId()));
+        .andExpect(jsonPath("$.data.content[0].jobDescriptionId").value(job.getId()))
+        .andExpect(jsonPath("$.data.content[0].jobType").value("Full-time"))
+        .andExpect(jsonPath("$.data.content[0].status").value("SAVED"))
+        .andExpect(jsonPath("$.data.page").value(0))
+        .andExpect(jsonPath("$.data.size").value(5))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.totalPages").value(1))
+        .andExpect(jsonPath("$.data.first").value(true))
+        .andExpect(jsonPath("$.data.last").value(true));
 
     mockMvc.perform(get("/api/v1/applicants/applied-jobs").param("applicantId",
         applicant.getId().toString()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].jobDescriptionId").value(job.getId()));
+        .andExpect(jsonPath("$.data.content[0].jobDescriptionId").value(job.getId()))
+        .andExpect(jsonPath("$.data.content[0].status").value("APPLIED"))
+        .andExpect(jsonPath("$.data.page").value(0))
+        .andExpect(jsonPath("$.data.totalElements").value(1));
 
     mockMvc.perform(post("/api/v1/applicants/upload-cv/{applicantId}", applicant.getId())
         .contentType(MediaType.APPLICATION_JSON)
@@ -402,6 +417,55 @@ class BackendEndpointsIntegrationTests {
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.errors[0]")
             .value("You can only manage jobs in your own applicant account"));
+  }
+
+  @Test
+  void applicantJobEndpointsShouldReturnPagedMetadata() throws Exception {
+    Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+    Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+
+    Long newestSavedJobId = null;
+    for (int index = 1; index <= 7; index++) {
+      Job job = seedJob(recruiter, "Saved Job " + index);
+      applicantJobRepository.save(new ApplicantJob(applicant, job, "SAVED"));
+      newestSavedJobId = job.getId();
+    }
+
+    for (int index = 1; index <= 6; index++) {
+      Job job = seedJob(recruiter, "Applied Job " + index);
+      applicantJobRepository.save(new ApplicantJob(applicant, job, "APPLIED"));
+    }
+
+    mockMvc.perform(get("/api/v1/applicants/saved-jobs")
+        .param("applicantId", applicant.getId().toString())
+        .param("page", "0")
+        .param("size", "5"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.content.length()").value(5))
+        .andExpect(jsonPath("$.data.content[0].jobDescriptionId").value(newestSavedJobId))
+        .andExpect(jsonPath("$.data.page").value(0))
+        .andExpect(jsonPath("$.data.size").value(5))
+        .andExpect(jsonPath("$.data.totalElements").value(7))
+        .andExpect(jsonPath("$.data.totalPages").value(2))
+        .andExpect(jsonPath("$.data.first").value(true))
+        .andExpect(jsonPath("$.data.last").value(false));
+
+    mockMvc.perform(get("/api/v1/applicants/saved-jobs")
+        .param("applicantId", applicant.getId().toString())
+        .param("page", "1")
+        .param("size", "5"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.content.length()").value(2))
+        .andExpect(jsonPath("$.data.page").value(1))
+        .andExpect(jsonPath("$.data.last").value(true));
+
+    mockMvc.perform(get("/api/v1/applicants/applied-jobs")
+        .param("applicantId", applicant.getId().toString())
+        .param("size", "99"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.content.length()").value(6))
+        .andExpect(jsonPath("$.data.size").value(20))
+        .andExpect(jsonPath("$.data.totalElements").value(6));
   }
 
   @Test
@@ -531,7 +595,12 @@ class BackendEndpointsIntegrationTests {
 
     mockMvc.perform(get("/api/v1/browse-jobs"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
+        .andExpect(jsonPath("$.data.content[0].jobTitle").value("Backend Engineer"))
+        .andExpect(jsonPath("$.data.page").value(0))
+        .andExpect(jsonPath("$.data.size").value(10))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.first").value(true))
+        .andExpect(jsonPath("$.data.last").value(true));
 
     mockMvc.perform(get("/api/v1/browse-jobs/{jobId}", jobDescription.getId()))
         .andExpect(status().isOk())
@@ -647,6 +716,7 @@ class BackendEndpointsIntegrationTests {
   private Job seedJob(Recruiter recruiter, String jobTitle) {
     Job jobDescription = new Job();
     jobDescription.setJobTitle(jobTitle);
+    jobDescription.setJobType("Full-time");
     jobDescription.setLocation("Remote");
     jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));
     jobDescription.setRecruiter(recruiter);

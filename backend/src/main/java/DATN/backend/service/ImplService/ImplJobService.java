@@ -2,6 +2,7 @@ package DATN.backend.service.ImplService;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
+import DATN.backend.response.PageResponse;
 import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobApplicantResponse;
 import DATN.backend.response.job.JobResponse;
@@ -38,6 +40,12 @@ public class ImplJobService implements InterfaceJobService {
                 return jobDescriptionRepository.findAll().stream()
                                 .map(JobMapper::toResponse)
                                 .toList();
+        }
+
+        @Override
+        public PageResponse<JobResponse> getAllJobs(Pageable pageable) {
+                return PageResponse.from(jobDescriptionRepository.findAll(pageable)
+                                .map(JobMapper::toResponse));
         }
 
         @Override

@@ -123,7 +123,21 @@ export interface SavedJob {
   companyName?: string;
   location?: string;
   salaryRange?: string;
+  jobType?: string;
+  status?: string;
+  savedAt?: string;
+  appliedAt?: string;
   [k: string]: unknown;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
 }
 
 export interface HomeSummary {
@@ -197,6 +211,18 @@ const normalizeJob = (job: Job): Job => ({
 
 const normalizeJobs = (jobs: Job[]): Job[] => jobs.map(normalizeJob);
 
+const normalizeJobPage = (page: PageResponse<Job>): PageResponse<Job> => ({
+  ...page,
+  content: normalizeJobs(page.content),
+});
+
+const toPageParams = (page = 0, size = 5, sort = "id,desc") =>
+  new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    sort,
+  }).toString();
+
 const toJobPayload = (job: Job): Job => ({
   ...job,
   applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
@@ -204,8 +230,14 @@ const toJobPayload = (job: Job): Job => ({
 
 export const fetchHome = () => apiRequest<HomeSummary>("/api/v1/home", { auth: false });
 
+export const fetchJobsPage = (page = 0, size = 10, sort = "id,desc") =>
+  apiRequest<PageResponse<Job>>(`/api/v1/browse-jobs?${toPageParams(page, size, sort)}`, { auth: false })
+    .then(normalizeJobPage);
+
 export const fetchJobs = () =>
-  apiRequest<Job[]>("/api/v1/browse-jobs", { auth: false }).then(normalizeJobs);
+  apiRequest<Job[] | PageResponse<Job>>("/api/v1/browse-jobs", { auth: false }).then((data) =>
+    Array.isArray(data) ? normalizeJobs(data) : normalizeJobs(data.content),
+  );
 
 export const fetchJob = (id: string | number) =>
   apiRequest<Job>(`/api/v1/browse-jobs/${id}`, { auth: false }).then(normalizeJob);
@@ -218,8 +250,10 @@ export const fetchJobApplicants = (jobId: string | number, recruiterId?: string 
     ? apiRequest<JobApplicant[]>(`/api/v1/recruiters/jobs/${recruiterId}/${jobId}/applicants`)
     : apiRequest<JobApplicant[]>(`/api/v1/browse-jobs/applicants/${jobId}/list`);
 
-export const fetchSavedJobs = (applicantId: string | number) =>
-  apiRequest<SavedJob[]>(`/api/v1/applicants/saved-jobs?applicantId=${applicantId}`);
+export const fetchSavedJobs = (applicantId: string | number, page = 0, size = 5, sort = "id,desc") =>
+  apiRequest<PageResponse<SavedJob>>(
+    `/api/v1/applicants/saved-jobs?applicantId=${applicantId}&${toPageParams(page, size, sort)}`,
+  );
 
 export const saveJob = (applicantId: string | number, jobId: string | number) =>
   apiRequest<unknown>(`/api/v1/applicants/save/job`, {
@@ -233,8 +267,10 @@ export const applyJob = (applicantId: string | number, jobId: string | number, b
     body: { applicantId, jobDescriptionId: jobId, ...body },
   });
 
-export const fetchAppliedJobs = (applicantId: string | number) =>
-  apiRequest<SavedJob[]>(`/api/v1/applicants/applied-jobs?applicantId=${applicantId}`);
+export const fetchAppliedJobs = (applicantId: string | number, page = 0, size = 5, sort = "id,desc") =>
+  apiRequest<PageResponse<SavedJob>>(
+    `/api/v1/applicants/applied-jobs?applicantId=${applicantId}&${toPageParams(page, size, sort)}`,
+  );
 
 export const removeSavedJob = (applicantId: string | number, applicantJobId: string | number) =>
   apiRequest<SavedJob>(`/api/v1/applicants/${applicantId}/saved-jobs/${applicantJobId}`, {

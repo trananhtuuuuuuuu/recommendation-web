@@ -4,12 +4,17 @@ import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobApplicantResponse;
 import DATN.backend.response.job.JobResponse;
+import DATN.backend.response.PageResponse;
 
 import java.util.List;
+
+import org.springframework.data.domain.Pageable;
 
 public interface InterfaceJobService {
 
     List<JobResponse> getAllJobs();
+
+    PageResponse<JobResponse> getAllJobs(Pageable pageable);
 
     JobResponse getJobById(Long jobId);
 

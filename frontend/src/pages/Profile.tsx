@@ -171,6 +171,9 @@ type PrivacyField = keyof PrivacyForm;
 
 type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "experience" | "objective" | "cvFile";
 
+const PROFILE_PREVIEW_LIMIT = 3;
+const SKILL_PREVIEW_LIMIT = 10;
+
 export default function Profile() {
   const { user: authUser, role } = useAuth();
   const [applicant, setApplicant] = useState<Applicant | null>(null);
@@ -1491,7 +1494,10 @@ function ExperiencePanel({
   onSave: () => void;
   saving: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const filtered = values.filter(hasExperienceValue);
+  const visibleItems = expanded ? filtered : filtered.slice(0, PROFILE_PREVIEW_LIMIT);
+  const hiddenCount = Math.max(filtered.length - visibleItems.length, 0);
   return (
     <Panel
       title="Experience"
@@ -1521,10 +1527,11 @@ function ExperiencePanel({
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">No experience added yet.</p>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((item, index) => (
-            <div key={`${item.companyName}-${item.position}-${index}`} className="flex items-start gap-3">
-              <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border bg-secondary text-primary">
+        <div className="space-y-3">
+          {visibleItems.map((item, index) => (
+            <div key={`${item.companyName}-${item.position}-${index}`} className="rounded-md border bg-background p-3">
+              <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border bg-secondary text-primary">
                 <Briefcase className="w-5 h-5" />
               </span>
               <div className="min-w-0 space-y-1">
@@ -1536,8 +1543,22 @@ function ExperiencePanel({
                 {item.skills && <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Skills:</span> {item.skills}</p>}
                 {item.certificates && <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Certificates:</span> {item.certificates}</p>}
               </div>
+              </div>
             </div>
           ))}
+          {filtered.length > PROFILE_PREVIEW_LIMIT ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-primary"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((current) => !current)}
+            >
+              {expanded ? "Show less" : `View all ${filtered.length} experiences`}
+              {!expanded && hiddenCount > 0 ? ` (${hiddenCount} more)` : ""}
+            </Button>
+          ) : null}
         </div>
       )}
     </Panel>
@@ -1570,7 +1591,12 @@ function LinkedInListPanel({
   saving: boolean;
   placeholder: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const filtered = values.filter(Boolean);
+  const isSkills = title.toLowerCase() === "skills";
+  const previewLimit = isSkills ? SKILL_PREVIEW_LIMIT : PROFILE_PREVIEW_LIMIT;
+  const visibleItems = expanded ? filtered : filtered.slice(0, previewLimit);
+  const hiddenCount = Math.max(filtered.length - visibleItems.length, 0);
   return (
     <Panel
       title={title}
@@ -1599,19 +1625,71 @@ function LinkedInListPanel({
         </InlineEditorActions>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">No {title.toLowerCase()} added yet.</p>
+      ) : isSkills ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {visibleItems.map((item) => (
+              <Badge
+                key={item}
+                variant="secondary"
+                className="max-w-full whitespace-normal break-words rounded-md px-2.5 py-1 text-left text-xs leading-5"
+              >
+                {item}
+              </Badge>
+            ))}
+            {filtered.length > previewLimit && !expanded ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-auto min-h-7 rounded-md px-2.5 py-1 text-xs"
+                aria-expanded={expanded}
+                onClick={() => setExpanded(true)}
+              >
+                +{hiddenCount} more
+              </Button>
+            ) : null}
+          </div>
+          {filtered.length > previewLimit && expanded ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-primary"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(false)}
+            >
+              Show less
+            </Button>
+          ) : null}
+        </div>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((item) => (
-            <div key={item} className="flex items-start gap-3">
-              <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border bg-secondary text-primary [&_svg]:w-5 [&_svg]:h-5">
+        <div className="space-y-3">
+          {visibleItems.map((item) => (
+            <div key={item} className="rounded-md border bg-background p-3">
+              <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border bg-secondary text-primary [&_svg]:w-4 [&_svg]:h-4">
                 {icon}
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground whitespace-pre-line">{firstLine(item)}</p>
+                <p className="text-sm font-semibold text-foreground whitespace-pre-line break-words">{firstLine(item)}</p>
                 {restLines(item) && <p className="mt-1 text-sm leading-6 text-muted-foreground whitespace-pre-line">{restLines(item)}</p>}
+              </div>
               </div>
             </div>
           ))}
+          {filtered.length > previewLimit ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-primary"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((current) => !current)}
+            >
+              {expanded ? "Show less" : `View all ${filtered.length} ${title.toLowerCase()}`}
+            </Button>
+          ) : null}
         </div>
       )}
     </Panel>
