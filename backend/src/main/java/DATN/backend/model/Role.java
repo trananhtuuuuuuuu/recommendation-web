@@ -28,13 +28,9 @@ public class Role extends BaseEntity {
     @Column(unique = true, nullable = false)
     private String roleName;
 
-    @Column(nullable = true)
-    private String description;
-
     public Role(String roleName, String description) {
         super();
         this.roleName = roleName;
-        this.description = description;
     }
 
     @OneToMany(mappedBy = "role")

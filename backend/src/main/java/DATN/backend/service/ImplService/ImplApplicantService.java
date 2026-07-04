@@ -23,13 +23,17 @@ import DATN.backend.model.Job;
 import DATN.backend.model.Role;
 import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.ApplicantRepository;
+import DATN.backend.repository.CertificateRepository;
 import DATN.backend.repository.CvRepository;
+import DATN.backend.repository.EducationRepository;
+import DATN.backend.repository.ExperienceRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
+import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
@@ -50,6 +54,9 @@ public class ImplApplicantService implements InterfaceApplicantService {
     private final ApplicantJobRepository applicantJobRepository;
     private final JobRepository jobDescriptionRepository;
     private final CvRepository cvRepository;
+    private final ExperienceRepository experienceRepository;
+    private final EducationRepository educationRepository;
+    private final CertificateRepository certificateRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -76,16 +83,16 @@ public class ImplApplicantService implements InterfaceApplicantService {
     }
 
     @Override
-    public ApplicantResponse getApplicantById(Long applicantId) {
+    public ApplicantResponse getApplicantById(Long applicantId, boolean fullAccess) {
         Applicant applicant = applicantRepository.findById(applicantId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        return ApplicantMapper.toApplicantResponse(applicant);
+        return ApplicantMapper.toApplicantResponse(applicant, fullAccess);
     }
 
     @Override
-    public List<ApplicantResponse> getAllApplicants() {
+    public List<ApplicantResponse> getAllApplicants(boolean fullAccess) {
         return applicantRepository.findAll().stream()
-                .map(ApplicantMapper::toApplicantResponse)
+                .map(applicant -> ApplicantMapper.toApplicantResponse(applicant, fullAccess))
                 .toList();
     }
 
@@ -97,6 +104,15 @@ public class ImplApplicantService implements InterfaceApplicantService {
         ApplicantMapper.updateApplicant(applicant, request);
         Applicant savedApplicant = applicantRepository.save(applicant);
         return ApplicantMapper.toApplicantResponse(savedApplicant);
+    }
+
+    @Override
+    @Transactional
+    public ApplicantResponse updateApplicantPrivacy(Long applicantId, UpdateApplicantPrivacyRequest request) {
+        Applicant applicant = applicantRepository.findById(applicantId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        ApplicantMapper.updateApplicantPrivacy(applicant, request);
+        return ApplicantMapper.toApplicantResponse(applicantRepository.save(applicant));
     }
 
     @Override
@@ -202,18 +218,23 @@ public class ImplApplicantService implements InterfaceApplicantService {
                 .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
 
         MultipartFile cvFile = request.getCvFile();
+        String replacedCvFileUrl = applicant.getCv() == null ? null : applicant.getCv().getCvFileUrl();
         if (cvFile != null && !cvFile.isEmpty()) {
             request.setCvFileUrl(storeCvFile(cvFile));
         } else if ((request.getCvFileUrl() == null || request.getCvFileUrl().isBlank())
                 && applicant.getCv() != null) {
             // Keep the previously stored file URL when no new file is provided
             request.setCvFileUrl(applicant.getCv().getCvFileUrl());
+            replacedCvFileUrl = null;
+        } else {
+            replacedCvFileUrl = null;
         }
 
         Cv cv = applicant.getCv();
         if (cv == null) {
             // First upload — create and link a new CV entity
             cv = ApplicantMapper.toCv(request);
+            saveCvRelations(cv);
             Cv savedCv = cvRepository.save(cv);
             applicant.setCv(savedCv);
             applicantRepository.save(applicant);
@@ -222,8 +243,38 @@ public class ImplApplicantService implements InterfaceApplicantService {
 
         // Subsequent upload — update the existing CV row in-place (no new INSERT)
         ApplicantMapper.updateCv(cv, request);
+        saveCvRelations(cv);
         Cv savedCv = cvRepository.save(cv);
+        deleteStoredCvFile(replacedCvFileUrl);
         return ApplicantMapper.toCvResponse(savedCv);
+    }
+
+    @Override
+    @Transactional
+    public CvResponse deleteUploadedCvFile(Long applicantId) {
+        Applicant applicant = applicantRepository.findById(applicantId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        Cv cv = applicant.getCv();
+        if (cv == null || cv.getCvFileUrl() == null || cv.getCvFileUrl().isBlank()) {
+            throw new ResourcesNotFoundException("Uploaded CV file not found");
+        }
+
+        String storedCvFileUrl = cv.getCvFileUrl();
+        deleteStoredCvFile(storedCvFileUrl);
+        cv.setCvFileUrl(null);
+        return ApplicantMapper.toCvResponse(cvRepository.save(cv));
+    }
+
+    private void saveCvRelations(Cv cv) {
+        if (cv.getExperienceObj() != null && cv.getExperienceObj().getId() == null) {
+            cv.setExperienceObj(experienceRepository.save(cv.getExperienceObj()));
+        }
+        if (cv.getEducationObj() != null && cv.getEducationObj().getId() == null) {
+            cv.setEducationObj(educationRepository.save(cv.getEducationObj()));
+        }
+        if (cv.getCertificate() != null && cv.getCertificate().getId() == null) {
+            cv.setCertificate(certificateRepository.save(cv.getCertificate()));
+        }
     }
 
     private String storeCvFile(MultipartFile cvFile) {
@@ -260,6 +311,31 @@ public class ImplApplicantService implements InterfaceApplicantService {
             return "/uploads/cvs/" + fileName;
         } catch (IOException exception) {
             throw new IllegalArgumentException("Unable to store CV file");
+        }
+    }
+
+    private void deleteStoredCvFile(String cvFileUrl) {
+        if (cvFileUrl == null || cvFileUrl.isBlank()) {
+            return;
+        }
+        String normalizedUrl = cvFileUrl.startsWith("/") ? cvFileUrl.substring(1) : cvFileUrl;
+        if (!normalizedUrl.startsWith("uploads/cvs/")) {
+            return;
+        }
+
+        Path fileName = Path.of(normalizedUrl).getFileName();
+        if (fileName == null) {
+            return;
+        }
+        Path filePath = CV_UPLOAD_DIR.resolve(fileName).normalize();
+        if (!filePath.startsWith(CV_UPLOAD_DIR.normalize())) {
+            throw new IllegalArgumentException("Invalid CV file path");
+        }
+
+        try {
+            Files.deleteIfExists(filePath);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Unable to delete CV file");
         }
     }
 

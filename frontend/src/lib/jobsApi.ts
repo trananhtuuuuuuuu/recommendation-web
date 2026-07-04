@@ -27,6 +27,33 @@ export interface Job {
   [k: string]: unknown;
 }
 
+export interface CvExperience {
+  id?: string | number;
+  companyName?: string;
+  jobTitle?: string;
+  field?: string;
+  contribution?: string;
+  startDate?: string;
+  endDate?: string;
+  isPresent?: boolean;
+}
+
+export interface CvEducation {
+  id?: string | number;
+  name?: string;
+  major?: string;
+  degree?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CvCertificate {
+  id?: string | number;
+  name?: string;
+  score?: string;
+  provider?: string;
+}
+
 export interface Applicant {
   id?: string | number;
   userName?: string;
@@ -37,6 +64,19 @@ export interface Applicant {
   gender?: string;
   status?: string;
   cvId?: string | number | null;
+  profileVisibleToRecruiters?: boolean;
+  showFullName?: boolean;
+  showContactInfo?: boolean;
+  showAddress?: boolean;
+  showCvFile?: boolean;
+  showObjective?: boolean;
+  showSkills?: boolean;
+  showExperience?: boolean;
+  showEducation?: boolean;
+  showCertifications?: boolean;
+  privacyApplied?: boolean;
+  anonymized?: boolean;
+  privacyNotice?: string;
   cv?: {
     id?: string | number;
     fullName?: string;
@@ -44,9 +84,9 @@ export interface Applicant {
     phone?: string;
     objective?: string;
     skills?: string | string[];
-    experience?: string;
-    education?: string;
-    certifications?: string;
+    experience?: string | CvExperience | null;
+    education?: string | CvEducation | null;
+    certifications?: string | CvCertificate | null;
     cvFileUrl?: string;
   } | null;
   [k: string]: unknown;
@@ -105,6 +145,11 @@ export interface JobApplicant {
   coverLetter?: string;
   portfolioUrl?: string;
   applicationAnswers?: string;
+  kAnonymityApplied?: boolean;
+  kAnonymitySatisfied?: boolean;
+  anonymityGroupSize?: number;
+  anonymityK?: number;
+  privacyNotice?: string;
 }
 
 export interface ApplicationField {
@@ -226,6 +271,23 @@ export const fetchApplicant = (id: string | number) =>
 export const updateApplicant = (id: string | number, body: Partial<Applicant>) =>
   apiRequest<Applicant>(`/api/v1/applicants/${id}`, { method: "PUT", body });
 
+export type ApplicantPrivacySettings = Pick<
+  Applicant,
+  | "profileVisibleToRecruiters"
+  | "showFullName"
+  | "showContactInfo"
+  | "showAddress"
+  | "showCvFile"
+  | "showObjective"
+  | "showSkills"
+  | "showExperience"
+  | "showEducation"
+  | "showCertifications"
+>;
+
+export const updateApplicantPrivacy = (id: string | number, body: ApplicantPrivacySettings) =>
+  apiRequest<Applicant>(`/api/v1/applicants/${id}/privacy`, { method: "PUT", body });
+
 export const fetchRecruiters = () => apiRequest<Recruiter[]>("/api/v1/recruiters");
 export const fetchRecruiter = (id: string | number) =>
   apiRequest<Recruiter>(`/api/v1/recruiters/${id}`);
@@ -253,6 +315,11 @@ export const uploadCv = (applicantId: string | number, body: FormData | Record<s
     isForm: body instanceof FormData,
   });
 
+export const deleteUploadedCvFile = (applicantId: string | number) =>
+  apiRequest<Applicant["cv"]>(`/api/v1/applicants/${applicantId}/cv-file`, {
+    method: "DELETE",
+  });
+
 export const analyzeCv = (applicantId: string | number, cvFile: File) => {
   const body = new FormData();
   body.append("cvFile", cvFile);
@@ -275,6 +342,10 @@ export interface CvJobMatch {
   hardFilterReasons?: string[];
   scoringMethod?: string;
   modelUsed?: string;
+  differentialPrivacyApplied?: boolean;
+  privacyEpsilon?: number;
+  scoreSensitivity?: number;
+  privacyMechanism?: string;
 }
 
 export const matchCvToJob = (

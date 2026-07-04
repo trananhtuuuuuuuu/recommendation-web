@@ -28,28 +28,42 @@ public class Education extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, name = "name")
     private String name;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "major")
     private String major;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "degree")
     @Enumerated(EnumType.STRING)
     private DegreeEnum degree;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "start_date")
     private Date startDate;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "end_date")
     private Date endDate;
 
-    public Education(String name, String major, DegreeEnum degree, Date startDate, Date endDate) {
+    @Column(nullable = true, name = "period")
+    private String time;
+
+    @Column(nullable = false, name = "isPresent")
+    private boolean isPresent = false;
+
+    public Education(String name,
+            String major,
+            DegreeEnum degree,
+            Date startDate,
+            Date endDate,
+            String time,
+            boolean isPresent) {
         super();
         this.name = name;
         this.major = major;
         this.degree = degree;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.time = time;
+        this.isPresent = isPresent;
     }
 }

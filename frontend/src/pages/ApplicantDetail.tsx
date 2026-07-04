@@ -65,6 +65,9 @@ export default function ApplicantDetail() {
               {canSeeContact && applicant.address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {applicant.address}</span>}
               {!canSeeContact && <span className="text-xs">Contact details hidden until the applicant shares them.</span>}
             </div>
+            {applicant.privacyNotice && (
+              <p className="mt-2 text-xs text-muted-foreground">{applicant.privacyNotice}</p>
+            )}
           </div>
         </div>
       </motion.div>
@@ -98,13 +101,23 @@ export default function ApplicantDetail() {
   );
 }
 
-function formatExperience(value?: string | null) {
+function formatExperience(value?: string | Record<string, unknown> | null) {
   if (!value) return "N/A";
+  if (typeof value === "object") {
+    const contribution = typeof value.contribution === "string" ? value.contribution : "";
+    if (contribution) {
+      const parsed = formatExperience(contribution);
+      if (parsed !== "N/A") return parsed;
+    }
+    return [value.jobTitle, value.companyName, value.startDate, value.endDate]
+      .filter(Boolean)
+      .join(" - ") || "N/A";
+  }
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
       const formatted = parsed
-        .map((item) => [item.position, item.companyName, item.time].filter(Boolean).join(" - "))
+        .map((item) => [item.position ?? item.jobTitle, item.companyName, item.time].filter(Boolean).join(" - "))
         .filter(Boolean)
         .join("\n");
       return formatted || "N/A";

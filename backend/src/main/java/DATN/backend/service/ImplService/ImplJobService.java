@@ -9,7 +9,7 @@ import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.mapper.ApplicantMapper;
 import DATN.backend.mapper.JobMapper;
-//import DATN.backend.model.ApplicantJob;
+import DATN.backend.model.ApplicantJob;
 import DATN.backend.model.Job;
 import DATN.backend.model.Recruiter;
 import DATN.backend.repository.ApplicantJobRepository;
@@ -27,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class ImplJobService implements InterfaceJobService {
 
         private static final String APPLIED_ACTION = "APPLIED";
+        private static final int K_ANONYMITY_THRESHOLD = 3;
 
         private final JobRepository jobDescriptionRepository;
         private final RecruiterRepository recruiterRepository;
@@ -67,16 +68,35 @@ public class ImplJobService implements InterfaceJobService {
                                 || !jobDescription.getRecruiter().getId().equals(recruiterId))) {
                         throw new AlreadyExistException("Only posting recruiter can access this resource");
                 }
-                return applicantJobRepository.findByJob_IdAndActionType(jobId, APPLIED_ACTION)
-                                .stream()
-                                .map(relation -> new JobApplicantResponse(
-                                                relation.getId(),
-                                                jobId,
-                                                ApplicantMapper.toApplicantResponse(relation.getApplicant()),
-                                                null,
-                                                null,
-                                                null))
+                List<ApplicantJob> applications = applicantJobRepository.findByJob_IdAndActionType(jobId,
+                                APPLIED_ACTION);
+                int groupSize = applications.size();
+                boolean kSatisfied = groupSize >= K_ANONYMITY_THRESHOLD;
+                return applications.stream()
+                                .map(relation -> toKAnonymousJobApplicantResponse(relation, jobId, groupSize,
+                                                kSatisfied))
                                 .toList();
+        }
+
+        private JobApplicantResponse toKAnonymousJobApplicantResponse(ApplicantJob relation, Long jobId, int groupSize,
+                        boolean kSatisfied) {
+                String notice = kSatisfied
+                                ? "Applicant shortlist is k-anonymous; quasi-identifiers are generalized."
+                                : "Applicant shortlist has fewer than " + K_ANONYMITY_THRESHOLD
+                                                + " applicants, so identifying details are suppressed.";
+                return new JobApplicantResponse(
+                                relation.getId(),
+                                jobId,
+                                ApplicantMapper.toKAnonymousApplicantResponse(relation.getApplicant(), groupSize,
+                                                K_ANONYMITY_THRESHOLD),
+                                null,
+                                null,
+                                null,
+                                true,
+                                kSatisfied,
+                                groupSize,
+                                K_ANONYMITY_THRESHOLD,
+                                notice);
         }
 
         @Override

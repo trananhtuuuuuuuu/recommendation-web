@@ -40,6 +40,19 @@ public class StringListConverter implements AttributeConverter<List<String>, Str
         if (value instanceof List<?> list) {
             return list.stream()
                     .filter(item -> item != null && !item.toString().isBlank())
+                    .flatMap(item -> fromString(item.toString()).stream())
+                    .toList();
+        }
+        if (value instanceof String[] array) {
+            return java.util.Arrays.stream(array)
+                    .filter(item -> item != null && !item.isBlank())
+                    .flatMap(item -> fromString(item).stream())
+                    .toList();
+        }
+        if (value instanceof Object[] array) {
+            return java.util.Arrays.stream(array)
+                    .filter(item -> item != null && !item.toString().isBlank())
+                    .flatMap(item -> fromString(item.toString()).stream())
                     .map(item -> item.toString().trim())
                     .toList();
         }

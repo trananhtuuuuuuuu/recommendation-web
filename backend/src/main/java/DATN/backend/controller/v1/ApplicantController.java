@@ -1,11 +1,15 @@
 package DATN.backend.controller.v1;
 
+import java.beans.PropertyEditorSupport;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +23,11 @@ import org.springframework.web.multipart.MultipartFile;
 import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
+import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
+import DATN.backend.model.Certificate;
+import DATN.backend.model.Education;
+import DATN.backend.model.Experience;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.exception.ForbiddenException;
 import DATN.backend.security.InforInsideToken;
@@ -44,18 +52,42 @@ public class ApplicantController {
         private final InterfaceCvAiService cvAiService;
         private final InterfaceCvMatchService cvMatchService;
 
+        @InitBinder
+        public void initBinder(WebDataBinder binder) {
+                binder.registerCustomEditor(Experience.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseExperience(text));
+                        }
+                });
+                binder.registerCustomEditor(Education.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseEducation(text));
+                        }
+                });
+                binder.registerCustomEditor(Certificate.class, new PropertyEditorSupport() {
+                        @Override
+                        public void setAsText(String text) {
+                                setValue(UploadCvRequest.parseCertificate(text));
+                        }
+                });
+        }
+
         @Operation(summary = "Get all applicants")
         @GetMapping
-        public ResponseEntity<ApiResponse> getAllApplicants() {
+        public ResponseEntity<ApiResponse> getAllApplicants(Authentication authentication) {
                 return ResponseEntity.ok(ApiResponse.success("Applicants found", HttpStatus.OK,
-                                applicantService.getAllApplicants()));
+                                applicantService.getAllApplicants(isAdmin(authentication))));
         }
 
         @Operation(summary = "Get applicant profile")
         @GetMapping("/{applicantId}")
-        public ResponseEntity<ApiResponse> getApplicantById(@PathVariable Long applicantId) {
+        public ResponseEntity<ApiResponse> getApplicantById(@PathVariable Long applicantId,
+                        Authentication authentication) {
                 return ResponseEntity.ok(ApiResponse.success("Applicant found", HttpStatus.OK,
-                                applicantService.getApplicantById(applicantId)));
+                                applicantService.getApplicantById(applicantId,
+                                                hasFullApplicantAccess(applicantId, authentication))));
         }
 
         @Operation(summary = "Update applicant profile")
@@ -64,6 +96,17 @@ public class ApplicantController {
                         @Valid @RequestBody UpdateApplicantRequest request) {
                 return ResponseEntity.ok(ApiResponse.success("Applicant updated successfully", HttpStatus.OK,
                                 applicantService.updateApplicant(applicantId, request)));
+        }
+
+        @Operation(summary = "Update applicant privacy and visibility settings")
+        @PutMapping("/{applicantId}/privacy")
+        public ResponseEntity<ApiResponse> updateApplicantPrivacy(@PathVariable Long applicantId,
+                        @Valid @RequestBody UpdateApplicantPrivacyRequest request,
+                        Authentication authentication) {
+                verifyApplicantAccess(applicantId, authentication);
+                return ResponseEntity.ok(ApiResponse.success("Applicant privacy settings updated successfully",
+                                HttpStatus.OK,
+                                applicantService.updateApplicantPrivacy(applicantId, request)));
         }
 
         @Operation(summary = "Get saved jobs for applicant")
@@ -189,6 +232,15 @@ public class ApplicantController {
                                 HttpStatus.CREATED, applicantService.uploadCv(applicantId, request)));
         }
 
+        @Operation(summary = "Delete uploaded CV file for applicant")
+        @DeleteMapping("/{applicantId}/cv-file")
+        public ResponseEntity<ApiResponse> deleteUploadedCvFile(@PathVariable Long applicantId,
+                        Authentication authentication) {
+                verifyApplicantAccess(applicantId, authentication);
+                return ResponseEntity.ok(ApiResponse.success("CV file deleted successfully", HttpStatus.OK,
+                                applicantService.deleteUploadedCvFile(applicantId)));
+        }
+
         private void verifyApplicantAccess(Long applicantId, Authentication authentication) {
                 if (authentication == null
                                 || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)
@@ -196,6 +248,24 @@ public class ApplicantController {
                                 || !applicantId.equals(tokenInformation.getUserId())) {
                         throw new ForbiddenException("You can only manage jobs in your own applicant account");
                 }
+        }
+
+        private boolean hasFullApplicantAccess(Long applicantId, Authentication authentication) {
+                if (authentication == null
+                                || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)) {
+                        return false;
+                }
+                if ("ADMIN".equalsIgnoreCase(tokenInformation.getRoleName())) {
+                        return true;
+                }
+                return "APPLICANT".equalsIgnoreCase(tokenInformation.getRoleName())
+                                && applicantId.equals(tokenInformation.getUserId());
+        }
+
+        private boolean isAdmin(Authentication authentication) {
+                return authentication != null
+                                && authentication.getPrincipal() instanceof InforInsideToken tokenInformation
+                                && "ADMIN".equalsIgnoreCase(tokenInformation.getRoleName());
         }
 
 }

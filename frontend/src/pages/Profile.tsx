@@ -34,10 +34,13 @@ import {
   fetchApplicant,
   fetchRecruiter,
   analyzeCv,
+  deleteUploadedCvFile,
   updateApplicant,
+  updateApplicantPrivacy,
   updateRecruiter,
   uploadCv,
   type Applicant,
+  type ApplicantPrivacySettings,
   type CvAnalysis,
   type CvExperienceSuggestion,
   type Recruiter,
@@ -56,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   AlertDialog,
@@ -137,6 +141,34 @@ const emptyCvForm = {
   cvFileUrl: "",
 };
 
+const createEmptyApplicantForm = () => ({ ...emptyApplicantForm });
+
+const createEmptyRecruiterForm = () => ({ ...emptyRecruiterForm });
+
+const createEmptyCvForm = () => ({
+  ...emptyCvForm,
+  skills: [""],
+  experience: [createEmptyExperience()],
+  education: [""],
+  certifications: [""],
+});
+
+const defaultPrivacyForm = {
+  profileVisibleToRecruiters: true,
+  showFullName: false,
+  showContactInfo: false,
+  showAddress: false,
+  showCvFile: false,
+  showObjective: true,
+  showSkills: true,
+  showExperience: true,
+  showEducation: true,
+  showCertifications: true,
+} satisfies Required<ApplicantPrivacySettings>;
+
+type PrivacyForm = typeof defaultPrivacyForm;
+type PrivacyField = keyof PrivacyForm;
+
 type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "experience" | "objective" | "cvFile";
 
 export default function Profile() {
@@ -145,16 +177,19 @@ export default function Profile() {
   const [recruiter, setRecruiter] = useState<Recruiter | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingCvFile, setDeletingCvFile] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [applicantForm, setApplicantForm] = useState(emptyApplicantForm);
-  const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
-  const [cvForm, setCvForm] = useState(emptyCvForm);
+  const [applicantForm, setApplicantForm] = useState(createEmptyApplicantForm);
+  const [recruiterForm, setRecruiterForm] = useState(createEmptyRecruiterForm);
+  const [cvForm, setCvForm] = useState(createEmptyCvForm);
+  const [privacyForm, setPrivacyForm] = useState<PrivacyForm>(defaultPrivacyForm);
   const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null);
   const [analyzingCv, setAnalyzingCv] = useState(false);
   const [cvAnalysis, setCvAnalysis] = useState<CvAnalysis | null>(null);
   const [activeApplicantEditor, setActiveApplicantEditor] = useState<ApplicantInlineEditor | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
+  const [showClearProfileWarning, setShowClearProfileWarning] = useState(false);
 
   useEffect(() => {
     if (!authUser?.id) return;
@@ -211,6 +246,7 @@ export default function Profile() {
             certifications: toList(next.cv?.certifications),
             cvFileUrl: next.cv?.cvFileUrl ?? "",
           });
+          setPrivacyForm(toPrivacyForm(next));
           setSelectedCvFile(null);
           setCvAnalysis(null);
           setActiveApplicantEditor(null);
@@ -265,7 +301,7 @@ export default function Profile() {
     if (!applicant) return;
     setApplicantForm({
       userName: applicant.userName || authUser?.userName || "",
-    email: applicant.email || authUser?.email || "",
+      email: applicant.email || authUser?.email || "",
       phone: applicant.phone || "",
       address: applicant.address || "",
       fullName: applicant.fullName || "",
@@ -283,8 +319,24 @@ export default function Profile() {
       certifications: toList(applicant.cv?.certifications),
       cvFileUrl: applicant.cv?.cvFileUrl ?? "",
     });
+    setPrivacyForm(toPrivacyForm(applicant));
     setSelectedCvFile(null);
     setCvAnalysis(null);
+  };
+
+  const clearProfileDraft = () => {
+    if (role === "RECRUITER") {
+      setRecruiterForm(createEmptyRecruiterForm());
+    } else {
+      setApplicantForm(createEmptyApplicantForm());
+      setCvForm(createEmptyCvForm());
+      setPrivacyForm(defaultPrivacyForm);
+      setSelectedCvFile(null);
+      setCvAnalysis(null);
+      setActiveApplicantEditor(null);
+    }
+    setShowClearProfileWarning(false);
+    toast.success("Profile draft cleared.");
   };
 
   const handleCvFileChange = async (file: File | null) => {
@@ -355,15 +407,16 @@ export default function Profile() {
         setRecruiter(updated);
       } else {
         const updated = await updateApplicant(authUser.id, applicantForm);
+        await updateApplicantPrivacy(authUser.id, privacyForm);
         const formData = new FormData();
         formData.append("fullName", cvForm.fullName);
         formData.append("address", cvForm.address);
         formData.append("phone", cvForm.phone);
         formData.append("objective", cvForm.objective);
         formData.append("skills", fromList(cvForm.skills));
-        formData.append("experience", fromExperienceList(cvForm.experience));
-        formData.append("education", fromList(cvForm.education));
-        formData.append("certifications", fromList(cvForm.certifications));
+        formData.append("experience", fromExperienceEntity(cvForm.experience));
+        formData.append("education", fromEducationEntity(cvForm.education));
+        formData.append("certifications", fromCertificateEntity(cvForm.certifications));
         formData.append("cvFileUrl", cvForm.cvFileUrl);
         if (selectedCvFile) {
           formData.append("cvFile", selectedCvFile);
@@ -384,6 +437,25 @@ export default function Profile() {
     }
   };
 
+  const handleDeleteCvFile = async () => {
+    if (!authUser?.id || deletingCvFile) return;
+
+    setDeletingCvFile(true);
+    try {
+      await deleteUploadedCvFile(authUser.id);
+      const refreshed = await fetchApplicant(authUser.id);
+      setApplicant(refreshed);
+      setCvForm((current) => ({ ...current, cvFileUrl: "" }));
+      setSelectedCvFile(null);
+      setCvAnalysis(null);
+      toast.success("Uploaded CV file deleted.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Unable to delete uploaded CV file");
+    } finally {
+      setDeletingCvFile(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[55vh] flex items-center justify-center text-muted-foreground">
@@ -394,19 +466,34 @@ export default function Profile() {
 
   if (role === "RECRUITER") {
     return (
-      <ProfileFrame editing={editing} saving={saving} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={handleSave}>
-        {editing ? (
-          <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
-        ) : (
-          <RecruiterView
-            recruiter={recruiter}
-            avatarUrl={avatarUrl}
-            onAvatarUpload={handleAvatarUpload}
-            onAvatarRemove={handleAvatarRemove}
-            onEdit={() => setEditing(true)}
-          />
-        )}
-      </ProfileFrame>
+      <>
+        <ProfileFrame
+          editing={editing}
+          saving={saving}
+          onEdit={() => setEditing(true)}
+          onCancel={() => setEditing(false)}
+          onSave={handleSave}
+          onClear={() => setShowClearProfileWarning(true)}
+        >
+          {editing ? (
+            <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
+          ) : (
+            <RecruiterView
+              recruiter={recruiter}
+              avatarUrl={avatarUrl}
+              onAvatarUpload={handleAvatarUpload}
+              onAvatarRemove={handleAvatarRemove}
+              onEdit={() => setEditing(true)}
+            />
+          )}
+        </ProfileFrame>
+
+        <ClearProfileDialog
+          open={showClearProfileWarning}
+          onOpenChange={setShowClearProfileWarning}
+          onConfirm={clearProfileDraft}
+        />
+      </>
     );
   }
 
@@ -421,6 +508,7 @@ export default function Profile() {
         }}
         onCancel={() => setEditing(false)}
         onSave={handleSave}
+        onClear={() => setShowClearProfileWarning(true)}
       >
         {editing ? (
           <ApplicantEditForm
@@ -430,8 +518,12 @@ export default function Profile() {
             setCvForm={setCvForm}
             selectedCvFile={selectedCvFile}
             onCvFileChange={handleCvFileChange}
+            onDeleteCvFile={handleDeleteCvFile}
+            deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
+            privacyForm={privacyForm}
+            setPrivacyForm={setPrivacyForm}
           />
         ) : (
           <ApplicantView
@@ -446,8 +538,11 @@ export default function Profile() {
             setCvForm={setCvForm}
             selectedCvFile={selectedCvFile}
             onCvFileChange={handleCvFileChange}
+            onDeleteCvFile={handleDeleteCvFile}
+            deletingCvFile={deletingCvFile}
             analyzingCv={analyzingCv}
             cvAnalysis={cvAnalysis}
+            privacyForm={privacyForm}
             activeEditor={activeApplicantEditor}
             onEdit={(field) => setActiveApplicantEditor(field)}
             onCancel={() => {
@@ -479,7 +574,42 @@ export default function Profile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ClearProfileDialog
+        open={showClearProfileWarning}
+        onOpenChange={setShowClearProfileWarning}
+        onConfirm={clearProfileDraft}
+      />
     </>
+  );
+}
+
+function ClearProfileDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear Profile Draft?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This clears the editable fields on this screen before you save.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            Clear Draft
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -489,6 +619,7 @@ function ProfileFrame({
   onEdit,
   onCancel,
   onSave,
+  onClear,
   children,
 }: {
   editing: boolean;
@@ -496,6 +627,7 @@ function ProfileFrame({
   onEdit: () => void;
   onCancel: () => void;
   onSave: () => void;
+  onClear?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -503,6 +635,17 @@ function ProfileFrame({
       <div className="flex justify-end gap-2">
         {editing ? (
           <>
+            {onClear ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={saving}
+                onClick={onClear}
+                className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="w-4 h-4" /> Clear
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={onCancel} className="gap-2">
               <X className="w-4 h-4" /> Cancel
             </Button>
@@ -594,8 +737,11 @@ function ApplicantView({
   setCvForm,
   selectedCvFile,
   onCvFileChange,
+  onDeleteCvFile,
+  deletingCvFile,
   analyzingCv,
   cvAnalysis,
+  privacyForm,
   activeEditor,
   onEdit,
   onCancel,
@@ -613,8 +759,11 @@ function ApplicantView({
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
   onCvFileChange: (file: File | null) => void;
+  onDeleteCvFile: () => void;
+  deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
+  privacyForm: PrivacyForm;
   activeEditor: ApplicantInlineEditor | null;
   onEdit: (field: ApplicantInlineEditor) => void;
   onCancel: () => void;
@@ -717,6 +866,8 @@ function ApplicantView({
           />
         </Panel>
 
+        <PrivacySummary privacyForm={privacyForm} />
+
         <div className="grid grid-cols-2 gap-3">
           {highlights.map((item) => (
             <div key={item.label} className="rounded-lg border bg-card p-4">
@@ -755,7 +906,30 @@ function ApplicantView({
           )}
         </Panel>
 
-        <Panel title="CV File" action={activeEditor !== "cvFile" && <IconButton label="Edit CV file" onClick={() => onEdit("cvFile")} icon={<Pencil />} />}>
+        <Panel
+          title="CV File"
+          action={
+            activeEditor !== "cvFile" && (
+              <div className="flex gap-1">
+                <IconButton label={cv?.cvFileUrl ? "Replace CV file" : "Upload CV file"} onClick={() => onEdit("cvFile")} icon={cv?.cvFileUrl ? <Pencil /> : <Plus />} />
+                {cv?.cvFileUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete uploaded CV file"
+                    title="Delete uploaded CV file"
+                    disabled={deletingCvFile}
+                    onClick={onDeleteCvFile}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    {deletingCvFile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </Button>
+                ) : null}
+              </div>
+            )
+          }
+        >
           {activeEditor === "cvFile" ? (
             <InlineEditorActions onCancel={onCancel} onSave={onSave} saving={saving}>
               <Input
@@ -773,11 +947,14 @@ function ApplicantView({
               <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
             </InlineEditorActions>
           ) : cv?.cvFileUrl ? (
-            <a href={toAssetUrl(cv.cvFileUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
-              <FileText className="w-4 h-4" /> Open uploaded CV
-            </a>
+            <div className="space-y-3">
+              <a href={toAssetUrl(cv.cvFileUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
+                <FileText className="w-4 h-4" /> Open uploaded CV
+              </a>
+              <UploadCvHoverButton label="Replace CV file" onClick={() => onEdit("cvFile")} />
+            </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No CV file reference has been added yet.</p>
+            <UploadCvHoverButton label="Upload CV file" onClick={() => onEdit("cvFile")} />
           )}
         </Panel>
 
@@ -932,8 +1109,12 @@ function ApplicantEditForm({
   setCvForm,
   selectedCvFile,
   onCvFileChange,
+  onDeleteCvFile,
+  deletingCvFile,
   analyzingCv,
   cvAnalysis,
+  privacyForm,
+  setPrivacyForm,
 }: {
   applicantForm: typeof emptyApplicantForm;
   setApplicantForm: React.Dispatch<React.SetStateAction<typeof emptyApplicantForm>>;
@@ -941,8 +1122,12 @@ function ApplicantEditForm({
   setCvForm: React.Dispatch<React.SetStateAction<typeof emptyCvForm>>;
   selectedCvFile: File | null;
   onCvFileChange: (file: File | null) => void;
+  onDeleteCvFile: () => void;
+  deletingCvFile: boolean;
   analyzingCv: boolean;
   cvAnalysis: CvAnalysis | null;
+  privacyForm: PrivacyForm;
+  setPrivacyForm: React.Dispatch<React.SetStateAction<PrivacyForm>>;
 }) {
   const setApplicantField = (field: keyof typeof emptyApplicantForm, value: string) => {
     setApplicantForm((current) => ({ ...current, [field]: value }));
@@ -956,6 +1141,9 @@ function ApplicantEditForm({
   const setExperience = (values: ExperienceEntry[]) => {
     setCvForm((current) => ({ ...current, experience: values }));
   };
+  const setPrivacyField = (field: PrivacyField, value: boolean) => {
+    setPrivacyForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <div className="space-y-5">
@@ -968,6 +1156,61 @@ function ApplicantEditForm({
           <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
           <GenderToggle value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} showLabel />
           <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} />
+        </div>
+      </Panel>
+
+      <Panel title="Privacy And Visibility">
+        <div className="grid md:grid-cols-2 gap-3">
+          <PrivacySwitch
+            label="Recruiters can discover profile"
+            checked={privacyForm.profileVisibleToRecruiters}
+            onCheckedChange={(checked) => setPrivacyField("profileVisibleToRecruiters", checked)}
+          />
+          <PrivacySwitch
+            label="Show full name"
+            checked={privacyForm.showFullName}
+            onCheckedChange={(checked) => setPrivacyField("showFullName", checked)}
+          />
+          <PrivacySwitch
+            label="Show contact info"
+            checked={privacyForm.showContactInfo}
+            onCheckedChange={(checked) => setPrivacyField("showContactInfo", checked)}
+          />
+          <PrivacySwitch
+            label="Show address"
+            checked={privacyForm.showAddress}
+            onCheckedChange={(checked) => setPrivacyField("showAddress", checked)}
+          />
+          <PrivacySwitch
+            label="Show uploaded CV file"
+            checked={privacyForm.showCvFile}
+            onCheckedChange={(checked) => setPrivacyField("showCvFile", checked)}
+          />
+          <PrivacySwitch
+            label="Show objective"
+            checked={privacyForm.showObjective}
+            onCheckedChange={(checked) => setPrivacyField("showObjective", checked)}
+          />
+          <PrivacySwitch
+            label="Show skills"
+            checked={privacyForm.showSkills}
+            onCheckedChange={(checked) => setPrivacyField("showSkills", checked)}
+          />
+          <PrivacySwitch
+            label="Show experience"
+            checked={privacyForm.showExperience}
+            onCheckedChange={(checked) => setPrivacyField("showExperience", checked)}
+          />
+          <PrivacySwitch
+            label="Show education"
+            checked={privacyForm.showEducation}
+            onCheckedChange={(checked) => setPrivacyField("showEducation", checked)}
+          />
+          <PrivacySwitch
+            label="Show certificates"
+            checked={privacyForm.showCertifications}
+            onCheckedChange={(checked) => setPrivacyField("showCertifications", checked)}
+          />
         </div>
       </Panel>
 
@@ -1006,7 +1249,23 @@ function ApplicantEditForm({
             <span className="break-all">
               {selectedCvFile?.name || fileNameFromPath(cvForm.cvFileUrl) || "No CV file selected yet."}
             </span>
+            {cvForm.cvFileUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={deletingCvFile}
+                onClick={onDeleteCvFile}
+                className="ml-auto shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
+              >
+                {deletingCvFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
+              </Button>
+            ) : null}
           </div>
+          {!cvForm.cvFileUrl && !selectedCvFile ? (
+            <UploadCvHoverButton label="Move to upload CV" onClick={() => document.getElementById("cv-file")?.click()} />
+          ) : null}
           <CvAnalysisNotice analyzing={analyzingCv} analysis={cvAnalysis} />
         </div>
       </Panel>
@@ -1379,6 +1638,46 @@ function Panel({
   );
 }
 
+function PrivacySummary({ privacyForm }: { privacyForm: PrivacyForm }) {
+  const visibleCount = privacyVisibleCount(privacyForm);
+  return (
+    <Panel title="Privacy">
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-sm border bg-secondary text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {privacyForm.profileVisibleToRecruiters ? "Visible to recruiters" : "Hidden from recruiters"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {visibleCount} of 9 profile sections shared
+            </p>
+          </div>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function PrivacySwitch({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-3 rounded-md border bg-secondary/20 px-3 py-2">
+      <Label className="text-sm font-medium leading-5">{label}</Label>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+    </div>
+  );
+}
+
 function Field({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
@@ -1576,6 +1875,25 @@ function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
   );
 }
 
+function UploadCvHoverButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onClick}
+      className="group h-auto w-full justify-start gap-3 border-dashed px-4 py-3 text-left transition hover:border-primary hover:bg-primary/5"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <FileText className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        <span className="block text-xs font-normal text-muted-foreground">PDF, DOC, DOCX, or image file</span>
+      </span>
+    </Button>
+  );
+}
+
 function CvAnalysisNotice({
   analyzing,
   analysis,
@@ -1682,10 +2000,14 @@ function experienceKey(entry: ExperienceEntry) {
     .join("|");
 }
 
-function toList(value?: string | string[] | null) {
+function toList(value?: string | string[] | object | null) {
   if (Array.isArray(value)) {
-    const items = value.map((item) => item.trim()).filter(Boolean);
+    const items = value.map((item) => String(item).trim()).filter(Boolean);
     return items.length > 0 ? items : [""];
+  }
+  if (value && typeof value === "object") {
+    const text = formatCvEntityText(value);
+    return text ? toList(text) : [""];
   }
   const items = (value || "")
     .split(/\r?\n|,/)
@@ -1698,8 +2020,36 @@ function fromList(values: string[]) {
   return values.map((item) => item.trim()).filter(Boolean).join("\n");
 }
 
-function toExperienceList(value?: string | null): ExperienceEntry[] {
+function toExperienceList(value?: string | object | null): ExperienceEntry[] {
+  if (value && typeof value === "object") {
+    const item = value as Record<string, unknown>;
+    const contribution = typeof item.contribution === "string" ? item.contribution : "";
+    const parsedContribution = parseExperienceEntries(contribution);
+    if (parsedContribution.length > 0) return parsedContribution;
+
+    const entry = {
+      companyName: String(item.companyName ?? ""),
+      position: String(item.jobTitle ?? item.position ?? ""),
+      time: formatDateRange(item.startDate, item.endDate, item.isPresent),
+      description: contribution,
+      skills: String(item.field ?? item.skills ?? ""),
+      certificates: String(item.certificates ?? ""),
+    };
+    return hasExperienceValue(entry) ? [entry] : [createEmptyExperience()];
+  }
+
   if (!value?.trim()) return [createEmptyExperience()];
+  const parsedEntries = parseExperienceEntries(value);
+  if (parsedEntries.length > 0) return parsedEntries;
+
+  const legacyEntries = toList(value)
+    .filter(Boolean)
+    .map((description) => ({ ...createEmptyExperience(), description }));
+  return legacyEntries.length > 0 ? legacyEntries : [createEmptyExperience()];
+}
+
+function parseExperienceEntries(value?: string | null): ExperienceEntry[] {
+  if (!value?.trim()) return [];
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
@@ -1711,18 +2061,15 @@ function toExperienceList(value?: string | null): ExperienceEntry[] {
         skills: Array.isArray(item?.skills) ? item.skills.join(", ") : String(item?.skills ?? ""),
         certificates: Array.isArray(item?.certificates) ? item.certificates.join(", ") : String(item?.certificates ?? ""),
       }));
-      return entries.length > 0 ? entries : [createEmptyExperience()];
+      return entries.filter(hasExperienceValue);
     }
   } catch {
     // Plain text experience from older CVs is converted into one editable entry.
   }
-  const legacyEntries = toList(value)
-    .filter(Boolean)
-    .map((description) => ({ ...createEmptyExperience(), description }));
-  return legacyEntries.length > 0 ? legacyEntries : [createEmptyExperience()];
+  return [];
 }
 
-function fromExperienceList(values: ExperienceEntry[]) {
+function fromExperienceEntity(values: ExperienceEntry[]) {
   const entries = values
     .map((item) => ({
       companyName: item.companyName.trim(),
@@ -1733,11 +2080,50 @@ function fromExperienceList(values: ExperienceEntry[]) {
       certificates: item.certificates.trim(),
     }))
     .filter(hasExperienceValue);
-  return entries.length > 0 ? JSON.stringify(entries) : "";
+  if (entries.length === 0) return "";
+
+  const [first] = entries;
+  return JSON.stringify({
+    companyName: first.companyName || "Experience",
+    jobTitle: first.position,
+    field: first.skills,
+    contribution: JSON.stringify(entries),
+    isPresent: false,
+  });
+}
+
+function fromEducationEntity(values: string[]) {
+  const name = fromList(values);
+  return name ? JSON.stringify({ name }) : "";
+}
+
+function fromCertificateEntity(values: string[]) {
+  const name = fromList(values);
+  return name ? JSON.stringify({ name }) : "";
 }
 
 function hasExperienceValue(value: ExperienceEntry) {
   return Object.values(value).some((item) => item.trim().length > 0);
+}
+
+function formatCvEntityText(value: object) {
+  const item = value as Record<string, unknown>;
+  return [
+    item.name,
+    item.major,
+    item.degree,
+    item.provider,
+    item.score,
+  ]
+    .map((item) => (item == null ? "" : String(item).trim()))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatDateRange(startDate: unknown, endDate: unknown, isPresent: unknown) {
+  const start = typeof startDate === "string" ? startDate : "";
+  const end = isPresent ? "Present" : typeof endDate === "string" ? endDate : "";
+  return [start, end].filter(Boolean).join(" - ");
 }
 
 function firstLine(value: string) {
@@ -1756,6 +2142,35 @@ function fileNameFromPath(value?: string | null) {
 function toAssetUrl(value: string) {
   if (/^https?:\/\//i.test(value)) return value;
   return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function toPrivacyForm(applicant?: Applicant | null): PrivacyForm {
+  return {
+    profileVisibleToRecruiters: applicant?.profileVisibleToRecruiters ?? defaultPrivacyForm.profileVisibleToRecruiters,
+    showFullName: applicant?.showFullName ?? defaultPrivacyForm.showFullName,
+    showContactInfo: applicant?.showContactInfo ?? defaultPrivacyForm.showContactInfo,
+    showAddress: applicant?.showAddress ?? defaultPrivacyForm.showAddress,
+    showCvFile: applicant?.showCvFile ?? defaultPrivacyForm.showCvFile,
+    showObjective: applicant?.showObjective ?? defaultPrivacyForm.showObjective,
+    showSkills: applicant?.showSkills ?? defaultPrivacyForm.showSkills,
+    showExperience: applicant?.showExperience ?? defaultPrivacyForm.showExperience,
+    showEducation: applicant?.showEducation ?? defaultPrivacyForm.showEducation,
+    showCertifications: applicant?.showCertifications ?? defaultPrivacyForm.showCertifications,
+  };
+}
+
+function privacyVisibleCount(privacyForm: PrivacyForm) {
+  return [
+    privacyForm.showFullName,
+    privacyForm.showContactInfo,
+    privacyForm.showAddress,
+    privacyForm.showCvFile,
+    privacyForm.showObjective,
+    privacyForm.showSkills,
+    privacyForm.showExperience,
+    privacyForm.showEducation,
+    privacyForm.showCertifications,
+  ].filter(Boolean).length;
 }
 
 function UsersIcon() {
