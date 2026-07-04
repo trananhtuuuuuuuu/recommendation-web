@@ -20,7 +20,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class Recruiter extends User {
 
-    @Column(unique = false, nullable = false)
+    @Column(unique = false, name = "company_name", nullable = false)
     private String companyName;
 
     @Column(name = "company_desc", length = 2000, nullable = true, columnDefinition = "TEXT")
@@ -29,10 +29,10 @@ public class Recruiter extends User {
     @Column(nullable = true)
     private String location;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "company_size")
     private Integer companySize;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "industry_type")
     private String industryType;
 
     @Column(nullable = true)

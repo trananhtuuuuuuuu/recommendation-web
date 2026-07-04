@@ -23,13 +23,13 @@ public class ApplicationForm extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "attribute")
     private String field;
 
-    @Column(name = "field_value", nullable = true)
+    @Column(name = "value", nullable = true)
     private String value;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "url_file")
     private String urlFile;
 
     public ApplicationForm(String field, String value, String urlFile) {

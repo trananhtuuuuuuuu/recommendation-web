@@ -12,7 +12,7 @@ services:
     ports:
       - "${DB_HOST_PORT:-8386}:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data_final:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-rw-db}" ]
       interval: 10s
@@ -137,8 +137,9 @@ networks:
     driver: bridge
 
 volumes:
-  pg_data:
+  pg_data_final:
     driver: local
   cv_uploads:
     driver: local
   ollama_data:
+    driver: local

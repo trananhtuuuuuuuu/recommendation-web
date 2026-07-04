@@ -31,14 +31,10 @@ public class Permission extends BaseEntity {
     @Column(nullable = false)
     private String method;
 
-    @Column(nullable = true)
-    private String description;
-
-    public Permission(String endpoint, String method, String description) {
+    public Permission(String endpoint, String method) {
         super();
         this.endpoint = endpoint;
         this.method = method;
-        this.description = description;
     }
 
     @OneToMany(mappedBy = "permission")

@@ -23,13 +23,13 @@ public class Certificate extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, name = "certificate_name")
     private String name;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "point")
     private String score;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "organisation_name")
     private String provider;
 
     public Certificate(String name, String score, String provider) {

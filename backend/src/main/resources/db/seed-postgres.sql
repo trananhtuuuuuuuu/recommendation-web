@@ -2,8 +2,42 @@
 -- Run this after the database schema has already been created.
 --
 -- All seeded users use this login password: secret123
+-- Main seeded accounts:
+--   admin@example.com / secret123
+--   recruiter01@seed.local .. recruiter50@seed.local / secret123
+--   applicant001@seed.local .. applicant200@seed.local / secret123
 
 BEGIN;
+
+ALTER TABLE IF EXISTS recruiters
+    ADD COLUMN IF NOT EXISTS company_description TEXT,
+    ADD COLUMN IF NOT EXISTS company_location VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS industry VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS website VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS logo_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS tax_code VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS business_license VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS company_type VARCHAR(255);
+
+DELETE FROM permission_role
+WHERE id BETWEEN 6001 AND 6100
+   OR permission_id BETWEEN 5001 AND 5030;
+DELETE FROM permissions WHERE id BETWEEN 5001 AND 5030;
+DELETE FROM applicant_jobs WHERE id BETWEEN 4001 AND 4800;
+DELETE FROM jobs WHERE id BETWEEN 3001 AND 3301;
+DELETE FROM applicants WHERE id BETWEEN 2201 AND 2400;
+DELETE FROM recruiters WHERE id BETWEEN 2101 AND 2150;
+DELETE FROM users
+WHERE id = 2001
+   OR id BETWEEN 2101 AND 2150
+   OR id BETWEEN 2201 AND 2400;
+DELETE FROM cvs WHERE id BETWEEN 1001 AND 1200;
+DELETE FROM certificates WHERE id BETWEEN 7001 AND 7200;
+DELETE FROM educations WHERE id BETWEEN 8001 AND 8200;
+DELETE FROM experiences WHERE id BETWEEN 9001 AND 9200;
 
 INSERT INTO roles (id, role_name, description)
 VALUES
@@ -12,67 +46,6 @@ VALUES
     (1003, 'RECRUITER', 'Recruiter')
 ON CONFLICT (role_name) DO UPDATE
 SET description = EXCLUDED.description;
-
-INSERT INTO cvs (
-    id,
-    full_name,
-    address,
-    phone,
-    objective,
-    skills,
-    experience,
-    education,
-    certifications,
-    cv_file_url
-)
-VALUES
-    (
-        1001,
-        'Nguyen Van An',
-        'District 1, Ho Chi Minh City',
-        '+84901234501',
-        'Build scalable backend systems for customer-facing products.',
-        'Java, Spring Boot, PostgreSQL, Docker, REST API',
-        '2 years building internal APIs and reporting services.',
-        'BSc Computer Science, HCMUS',
-        'AWS Certified Cloud Practitioner',
-        'https://files.example.com/cv/nguyen-van-an.pdf'
-    ),
-    (
-        1002,
-        'Tran Thi Binh',
-        'Cau Giay, Hanoi',
-        '+84901234502',
-        'Create polished and accessible frontend experiences.',
-        'React, TypeScript, TailwindCSS, Testing Library',
-        '3 years delivering React dashboards and design system components.',
-        'BSc Software Engineering, HCMUS',
-        'Google UX Design Certificate',
-        'https://files.example.com/cv/tran-thi-binh.pdf'
-    ),
-    (
-        1003,
-        'Le Minh Chau',
-        'Hai Chau, Da Nang',
-        '+84901234503',
-        'Apply data and backend engineering to recommendation systems.',
-        'Python, SQL, Java, Machine Learning, Spring Boot',
-        'Built recommendation prototypes and batch data pipelines.',
-        'BSc Data Science, HCMUS',
-        'TensorFlow Developer Certificate',
-        'https://files.example.com/cv/le-minh-chau.pdf'
-    )
-ON CONFLICT (id) DO UPDATE
-SET
-    full_name = EXCLUDED.full_name,
-    address = EXCLUDED.address,
-    phone = EXCLUDED.phone,
-    objective = EXCLUDED.objective,
-    skills = EXCLUDED.skills,
-    experience = EXCLUDED.experience,
-    education = EXCLUDED.education,
-    certifications = EXCLUDED.certifications,
-    cv_file_url = EXCLUDED.cv_file_url;
 
 INSERT INTO users (
     id,
@@ -84,77 +57,16 @@ INSERT INTO users (
     refresh_token,
     role_id
 )
-VALUES
-    (
-        2001,
-        'Ho Chi Minh City',
-        'admin@example.com',
-        'admin',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84900000001',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'ADMIN')
-    ),
-    (
-        2101,
-        'District 3, Ho Chi Minh City',
-        'hr@technova.example.com',
-        'technova_hr',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84900000101',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'RECRUITER')
-    ),
-    (
-        2102,
-        'Nam Tu Liem, Hanoi',
-        'talent@greenlabs.example.com',
-        'greenlabs_talent',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84900000102',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'RECRUITER')
-    ),
-    (
-        2103,
-        'Hai Chau, Da Nang',
-        'jobs@cloudbridge.example.com',
-        'cloudbridge_jobs',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84900000103',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'RECRUITER')
-    ),
-    (
-        2201,
-        'District 1, Ho Chi Minh City',
-        'nguyen.an@example.com',
-        'nguyen_an',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84901234501',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'APPLICANT')
-    ),
-    (
-        2202,
-        'Cau Giay, Hanoi',
-        'tran.binh@example.com',
-        'tran_binh',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84901234502',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'APPLICANT')
-    ),
-    (
-        2203,
-        'Hai Chau, Da Nang',
-        'le.chau@example.com',
-        'le_chau',
-        '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
-        '+84901234503',
-        NULL,
-        (SELECT id FROM roles WHERE role_name = 'APPLICANT')
-    )
+VALUES (
+    2001,
+    'Ho Chi Minh City, Vietnam',
+    'admin@example.com',
+    'admin',
+    '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
+    '+84900000001',
+    NULL,
+    (SELECT id FROM roles WHERE role_name = 'ADMIN')
+)
 ON CONFLICT (id) DO UPDATE
 SET
     address = EXCLUDED.address,
@@ -165,6 +77,56 @@ SET
     refresh_token = EXCLUDED.refresh_token,
     role_id = EXCLUDED.role_id;
 
+WITH recruiter_seed AS (
+    SELECT
+        n,
+        2100 + n AS id,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Binh Duong'])[((n - 1) % 5) + 1] AS city,
+        (ARRAY['Software Development', 'Artificial Intelligence', 'Cloud Infrastructure', 'E-commerce', 'FinTech', 'HealthTech', 'Education Technology'])[((n - 1) % 7) + 1] AS industry,
+        (ARRAY['Nova', 'Green', 'Cloud', 'Bright', 'Astra', 'River', 'Summit', 'Pixel', 'Core', 'Next'])[((n - 1) % 10) + 1] AS prefix,
+        (ARRAY['Labs', 'Systems', 'Works', 'Digital', 'Solutions'])[((n - 1) % 5) + 1] AS suffix
+    FROM generate_series(1, 50) AS n
+)
+INSERT INTO users (
+    id,
+    address,
+    email,
+    user_name,
+    password,
+    phone,
+    refresh_token,
+    role_id
+)
+SELECT
+    id,
+    city || ', Vietnam',
+    'recruiter' || lpad(n::text, 2, '0') || '@seed.local',
+    'seed_recruiter_' || lpad(n::text, 2, '0'),
+    '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
+    '+84910' || lpad(n::text, 6, '0'),
+    NULL,
+    (SELECT id FROM roles WHERE role_name = 'RECRUITER')
+FROM recruiter_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    address = EXCLUDED.address,
+    email = EXCLUDED.email,
+    user_name = EXCLUDED.user_name,
+    password = EXCLUDED.password,
+    phone = EXCLUDED.phone,
+    refresh_token = EXCLUDED.refresh_token,
+    role_id = EXCLUDED.role_id;
+
+WITH recruiter_seed AS (
+    SELECT
+        n,
+        2100 + n AS id,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Binh Duong'])[((n - 1) % 5) + 1] AS city,
+        (ARRAY['Software Development', 'Artificial Intelligence', 'Cloud Infrastructure', 'E-commerce', 'FinTech', 'HealthTech', 'Education Technology'])[((n - 1) % 7) + 1] AS industry,
+        (ARRAY['Nova', 'Green', 'Cloud', 'Bright', 'Astra', 'River', 'Summit', 'Pixel', 'Core', 'Next'])[((n - 1) % 10) + 1] AS prefix,
+        (ARRAY['Labs', 'Systems', 'Works', 'Digital', 'Solutions'])[((n - 1) % 5) + 1] AS suffix
+    FROM generate_series(1, 50) AS n
+)
 INSERT INTO recruiters (
     id,
     company_name,
@@ -174,42 +136,41 @@ INSERT INTO recruiters (
     industry_type,
     contact,
     avatar_url,
-    established_date
+    established_date,
+    company_description,
+    company_location,
+    industry,
+    website,
+    logo_url,
+    cover_image_url,
+    contact_email,
+    contact_phone,
+    tax_code,
+    business_license,
+    company_type
 )
-VALUES
-    (
-        2101,
-        'TechNova Software',
-        'TechNova builds enterprise software for finance, retail, and logistics teams.',
-        'Ho Chi Minh City',
-        300,
-        'Software Development',
-        'hr@technova.example.com',
-        'https://technova.example.com/logo.png',
-        DATE '2018-05-20'
-    ),
-    (
-        2102,
-        'GreenLabs AI',
-        'GreenLabs AI creates analytics and machine learning tools for sustainable operations.',
-        'Hanoi',
-        100,
-        'Artificial Intelligence',
-        'talent@greenlabs.example.com',
-        'https://greenlabs.example.com/logo.png',
-        DATE '2020-09-12'
-    ),
-    (
-        2103,
-        'CloudBridge Solutions',
-        'CloudBridge helps companies modernize infrastructure and cloud-native platforms.',
-        'Da Nang',
-        500,
-        'Cloud Infrastructure',
-        'jobs@cloudbridge.example.com',
-        'https://cloudbridge.example.com/logo.png',
-        DATE '2015-03-02'
-    )
+SELECT
+    id,
+    prefix || ' ' || suffix || ' ' || lpad(n::text, 2, '0'),
+    prefix || ' ' || suffix || ' builds hiring-ready products for ' || lower(industry) || ' teams in Vietnam and Southeast Asia.',
+    city,
+    50 + (n * 17) % 950,
+    industry,
+    'recruiter' || lpad(n::text, 2, '0') || '@seed.local',
+    'https://images.example.com/recruiters/company-' || lpad(n::text, 2, '0') || '.png',
+    DATE '2010-01-01' + ((n * 97) % 5200),
+    prefix || ' ' || suffix || ' builds hiring-ready products for ' || lower(industry) || ' teams in Vietnam and Southeast Asia.',
+    city,
+    industry,
+    'https://company-' || lpad(n::text, 2, '0') || '.seed.local',
+    'https://images.example.com/recruiters/company-' || lpad(n::text, 2, '0') || '.png',
+    'https://images.example.com/recruiters/company-' || lpad(n::text, 2, '0') || '-cover.png',
+    'recruiter' || lpad(n::text, 2, '0') || '@seed.local',
+    '+84910' || lpad(n::text, 6, '0'),
+    'TAX-SEED-' || lpad(n::text, 5, '0'),
+    'https://files.example.com/licenses/recruiter-' || lpad(n::text, 2, '0') || '.pdf',
+    CASE WHEN n % 2 = 0 THEN 'Product Company' ELSE 'Technology Services' END
+FROM recruiter_seed
 ON CONFLICT (id) DO UPDATE
 SET
     company_name = EXCLUDED.company_name,
@@ -219,144 +180,326 @@ SET
     industry_type = EXCLUDED.industry_type,
     contact = EXCLUDED.contact,
     avatar_url = EXCLUDED.avatar_url,
-    established_date = EXCLUDED.established_date;
+    established_date = EXCLUDED.established_date,
+    company_description = EXCLUDED.company_description,
+    company_location = EXCLUDED.company_location,
+    industry = EXCLUDED.industry,
+    website = EXCLUDED.website,
+    logo_url = EXCLUDED.logo_url,
+    cover_image_url = EXCLUDED.cover_image_url,
+    contact_email = EXCLUDED.contact_email,
+    contact_phone = EXCLUDED.contact_phone,
+    tax_code = EXCLUDED.tax_code,
+    business_license = EXCLUDED.business_license,
+    company_type = EXCLUDED.company_type;
 
+WITH applicant_seed AS (
+    SELECT
+        n,
+        2200 + n AS user_id,
+        1000 + n AS cv_id,
+        (ARRAY['An', 'Binh', 'Chau', 'Dung', 'Giang', 'Hieu', 'Khanh', 'Lan', 'Minh', 'Ngoc', 'Phuc', 'Quang', 'Thao', 'Trang', 'Tuan', 'Vy'])[((n - 1) % 16) + 1] AS given_name,
+        (ARRAY['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Dang', 'Bui', 'Do'])[((n - 1) % 10) + 1] AS family_name,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Hue', 'Nha Trang'])[((n - 1) % 6) + 1] AS city,
+        (ARRAY['Java', 'Spring Boot', 'React', 'TypeScript', 'PostgreSQL', 'Docker', 'Python', 'Machine Learning', 'AWS', 'Testing'])[((n - 1) % 10) + 1] AS primary_skill,
+        (ARRAY['Backend Engineer', 'Frontend Developer', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Analyst'])[((n - 1) % 6) + 1] AS target_role
+    FROM generate_series(1, 200) AS n
+)
+INSERT INTO certificates (id, name, score, provider)
+SELECT
+    7000 + n,
+    (ARRAY['AWS Cloud Practitioner', 'Google Data Analytics', 'Meta Front-End Developer', 'Oracle Java Foundations', 'ISTQB Foundation', 'Microsoft Azure Fundamentals'])[((n - 1) % 6) + 1],
+    CASE WHEN n % 5 = 0 THEN NULL ELSE (70 + (n % 30))::text END,
+    (ARRAY['AWS', 'Google', 'Meta', 'Oracle', 'ISTQB', 'Microsoft'])[((n - 1) % 6) + 1]
+FROM applicant_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    score = EXCLUDED.score,
+    provider = EXCLUDED.provider;
+
+WITH applicant_seed AS (
+    SELECT
+        n,
+        (ARRAY['Computer Science', 'Software Engineering', 'Information Systems', 'Data Science', 'Cybersecurity'])[((n - 1) % 5) + 1] AS major
+    FROM generate_series(1, 200) AS n
+)
+INSERT INTO educations (id, name, major, degree, start_date, end_date)
+SELECT
+    8000 + n,
+    (ARRAY['VNUHCM - University of Science', 'Hanoi University of Science and Technology', 'Da Nang University of Technology', 'FPT University', 'Ton Duc Thang University'])[((n - 1) % 5) + 1],
+    major,
+    (ARRAY['BSc', 'MSc', 'Associate', 'Other'])[((n - 1) % 4) + 1],
+    DATE '2015-09-01' + ((n % 6) * 365),
+    DATE '2019-06-15' + ((n % 6) * 365)
+FROM applicant_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    major = EXCLUDED.major,
+    degree = EXCLUDED.degree,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date;
+
+WITH applicant_seed AS (
+    SELECT
+        n,
+        (ARRAY['Backend Engineer', 'Frontend Developer', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Analyst'])[((n - 1) % 6) + 1] AS target_role,
+        (ARRAY['Java', 'Spring Boot', 'React', 'TypeScript', 'PostgreSQL', 'Docker', 'Python', 'Machine Learning', 'AWS', 'Testing'])[((n - 1) % 10) + 1] AS primary_skill
+    FROM generate_series(1, 200) AS n
+)
+INSERT INTO experiences (id, company_name, job_title, field, contribution, start_date, end_date, is_present)
+SELECT
+    9000 + n,
+    (ARRAY['Acme Digital', 'Blue Ocean Tech', 'CloudBridge', 'Future Retail', 'Mekong Analytics', 'Saigon Software'])[((n - 1) % 6) + 1],
+    target_role,
+    primary_skill,
+    'Delivered production features, collaborated with cross-functional teams, and improved maintainability using ' || primary_skill || '.',
+    DATE '2020-01-01' + ((n % 48) * 30),
+    CASE WHEN n % 4 = 0 THEN NULL ELSE DATE '2022-01-01' + ((n % 36) * 30) END,
+    n % 4 = 0
+FROM applicant_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    company_name = EXCLUDED.company_name,
+    job_title = EXCLUDED.job_title,
+    field = EXCLUDED.field,
+    contribution = EXCLUDED.contribution,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date,
+    is_present = EXCLUDED.is_present;
+
+WITH applicant_seed AS (
+    SELECT
+        n,
+        1000 + n AS cv_id,
+        (ARRAY['An', 'Binh', 'Chau', 'Dung', 'Giang', 'Hieu', 'Khanh', 'Lan', 'Minh', 'Ngoc', 'Phuc', 'Quang', 'Thao', 'Trang', 'Tuan', 'Vy'])[((n - 1) % 16) + 1] AS given_name,
+        (ARRAY['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Dang', 'Bui', 'Do'])[((n - 1) % 10) + 1] AS family_name,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Hue', 'Nha Trang'])[((n - 1) % 6) + 1] AS city,
+        (ARRAY['Java', 'Spring Boot', 'React', 'TypeScript', 'PostgreSQL', 'Docker', 'Python', 'Machine Learning', 'AWS', 'Testing'])[((n - 1) % 10) + 1] AS primary_skill,
+        (ARRAY['Backend Engineer', 'Frontend Developer', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Analyst'])[((n - 1) % 6) + 1] AS target_role
+    FROM generate_series(1, 200) AS n
+)
+INSERT INTO cvs (
+    id,
+    full_name,
+    address,
+    phone,
+    objective,
+    skills,
+    cv_file_url,
+    certificate_id,
+    education_id,
+    experience_id
+)
+SELECT
+    cv_id,
+    family_name || ' ' || given_name || ' ' || lpad(n::text, 3, '0'),
+    city || ', Vietnam',
+    '+84912' || lpad(n::text, 6, '0'),
+    'Grow as a ' || target_role || ' while building reliable products with measurable business impact.',
+    jsonb_build_array(primary_skill, 'Git', 'REST API', 'Agile teamwork')::text,
+    'https://files.example.com/cvs/applicant-' || lpad(n::text, 3, '0') || '.pdf',
+    7000 + n,
+    8000 + n,
+    9000 + n
+FROM applicant_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    full_name = EXCLUDED.full_name,
+    address = EXCLUDED.address,
+    phone = EXCLUDED.phone,
+    objective = EXCLUDED.objective,
+    skills = EXCLUDED.skills,
+    cv_file_url = EXCLUDED.cv_file_url,
+    certificate_id = EXCLUDED.certificate_id,
+    education_id = EXCLUDED.education_id,
+    experience_id = EXCLUDED.experience_id;
+
+WITH applicant_seed AS (
+    SELECT
+        n,
+        2200 + n AS user_id,
+        (ARRAY['An', 'Binh', 'Chau', 'Dung', 'Giang', 'Hieu', 'Khanh', 'Lan', 'Minh', 'Ngoc', 'Phuc', 'Quang', 'Thao', 'Trang', 'Tuan', 'Vy'])[((n - 1) % 16) + 1] AS given_name,
+        (ARRAY['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Dang', 'Bui', 'Do'])[((n - 1) % 10) + 1] AS family_name,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Hue', 'Nha Trang'])[((n - 1) % 6) + 1] AS city
+    FROM generate_series(1, 200) AS n
+)
+INSERT INTO users (
+    id,
+    address,
+    email,
+    user_name,
+    password,
+    phone,
+    refresh_token,
+    role_id
+)
+SELECT
+    user_id,
+    city || ', Vietnam',
+    'applicant' || lpad(n::text, 3, '0') || '@seed.local',
+    'seed_applicant_' || lpad(n::text, 3, '0'),
+    '$2a$10$dPeD6d66Fyg5wkpS9SZNA.Jj.bJgb1qllauWbS7ijC1URoKshRj2i',
+    '+84912' || lpad(n::text, 6, '0'),
+    NULL,
+    (SELECT id FROM roles WHERE role_name = 'APPLICANT')
+FROM applicant_seed
+ON CONFLICT (id) DO UPDATE
+SET
+    address = EXCLUDED.address,
+    email = EXCLUDED.email,
+    user_name = EXCLUDED.user_name,
+    password = EXCLUDED.password,
+    phone = EXCLUDED.phone,
+    refresh_token = EXCLUDED.refresh_token,
+    role_id = EXCLUDED.role_id;
+
+WITH applicant_seed AS (
+    SELECT
+        n,
+        2200 + n AS user_id,
+        1000 + n AS cv_id,
+        (ARRAY['An', 'Binh', 'Chau', 'Dung', 'Giang', 'Hieu', 'Khanh', 'Lan', 'Minh', 'Ngoc', 'Phuc', 'Quang', 'Thao', 'Trang', 'Tuan', 'Vy'])[((n - 1) % 16) + 1] AS given_name,
+        (ARRAY['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Dang', 'Bui', 'Do'])[((n - 1) % 10) + 1] AS family_name
+    FROM generate_series(1, 200) AS n
+)
 INSERT INTO applicants (
     id,
     status,
     gender,
     full_name,
+    profile_visible_to_recruiters,
+    show_full_name,
+    show_contact_info,
+    show_address,
+    show_cv_file,
+    show_objective,
+    show_skills,
+    show_experience,
+    show_education,
+    show_certifications,
     cv_id
 )
-VALUES
-    (2201, 0, 0, 'Nguyen Van An', 1001),
-    (2202, 0, 1, 'Tran Thi Binh', 1002),
-    (2203, 1, 0, 'Le Minh Chau', 1003)
+SELECT
+    user_id,
+    CASE WHEN n % 5 = 0 THEN 1 ELSE 0 END,
+    (n - 1) % 3,
+    family_name || ' ' || given_name || ' ' || lpad(n::text, 3, '0'),
+    n % 11 <> 0,
+    n % 3 = 0,
+    n % 4 = 0,
+    n % 5 = 0,
+    n % 6 = 0,
+    true,
+    true,
+    n % 7 <> 0,
+    true,
+    n % 8 <> 0,
+    cv_id
+FROM applicant_seed
 ON CONFLICT (id) DO UPDATE
 SET
     status = EXCLUDED.status,
     gender = EXCLUDED.gender,
     full_name = EXCLUDED.full_name,
+    profile_visible_to_recruiters = EXCLUDED.profile_visible_to_recruiters,
+    show_full_name = EXCLUDED.show_full_name,
+    show_contact_info = EXCLUDED.show_contact_info,
+    show_address = EXCLUDED.show_address,
+    show_cv_file = EXCLUDED.show_cv_file,
+    show_objective = EXCLUDED.show_objective,
+    show_skills = EXCLUDED.show_skills,
+    show_experience = EXCLUDED.show_experience,
+    show_education = EXCLUDED.show_education,
+    show_certifications = EXCLUDED.show_certifications,
     cv_id = EXCLUDED.cv_id;
 
+WITH job_seed AS (
+    SELECT
+        row_number() OVER (ORDER BY recruiter.n, slot.seq) + 3000 AS id,
+        recruiter.n AS recruiter_number,
+        2100 + recruiter.n AS recruiter_id,
+        slot.seq,
+        (ARRAY['Backend Engineer', 'Frontend Developer', 'Full Stack Developer', 'Data Analyst', 'Machine Learning Engineer', 'QA Automation Engineer', 'Cloud DevOps Engineer', 'Product Analyst', 'Mobile Developer', 'Security Engineer'])[((recruiter.n + slot.seq - 2) % 10) + 1] AS title,
+        (ARRAY['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Remote', 'Hybrid'])[((recruiter.n + slot.seq - 2) % 5) + 1] AS city,
+        (ARRAY['Full-time', 'Part-time', 'Contract', 'Internship'])[((recruiter.n + slot.seq - 2) % 4) + 1] AS job_type,
+        (ARRAY['Java', 'React', 'TypeScript', 'Python', 'PostgreSQL', 'Docker', 'Kubernetes', 'Machine Learning', 'Testing', 'AWS'])[((recruiter.n + slot.seq - 2) % 10) + 1] AS skill
+    FROM generate_series(1, 50) AS recruiter(n)
+    CROSS JOIN LATERAL generate_series(1, 5 + (recruiter.n % 3)) AS slot(seq)
+)
 INSERT INTO jobs (
     id,
+    applying_deadline,
+    benefits,
     job_title,
     job_desc,
     requirement,
-    benefits,
     location,
     salary_range,
     job_type,
     posted_date,
-    applying_deadline,
     yoe,
     custom_application_fields_id,
     recruiter_id
 )
-VALUES
-    (
-        3001,
-        'Backend Engineer',
-        'Design, build, and maintain Spring Boot APIs for customer-facing services.',
-        '2+ years with Java, Spring Boot, REST APIs, PostgreSQL, and Git.',
-        'Hybrid work, annual bonus, training budget, health insurance.',
-        'Ho Chi Minh City',
-        2600,
-        'Full-time',
-        DATE '2026-05-01',
-        DATE '2026-06-15',
-        2,
-        NULL,
-        2101
-    ),
-    (
-        3002,
-        'Frontend Developer',
-        'Develop responsive React and TypeScript interfaces for internal SaaS products.',
-        'Strong React, TypeScript, TailwindCSS, component testing, and API integration.',
-        'Flexible hours, laptop allowance, mentoring, health insurance.',
-        'Remote',
-        2300,
-        'Full-time',
-        DATE '2026-05-03',
-        DATE '2026-06-20',
-        2,
-        NULL,
-        2101
-    ),
-    (
-        3003,
-        'Machine Learning Engineer',
-        'Build recommendation, forecasting, and classification models for product teams.',
-        'Python, SQL, model evaluation, feature engineering, and deployment experience.',
-        'Research time, conference budget, flexible working policy.',
-        'Hanoi',
-        3200,
-        'Full-time',
-        DATE '2026-05-05',
-        DATE '2026-06-25',
-        4,
-        NULL,
-        2102
-    ),
-    (
-        3004,
-        'Cloud DevOps Engineer',
-        'Operate Kubernetes workloads, CI/CD pipelines, monitoring, and cloud automation.',
-        'Linux, Docker, Kubernetes, Terraform, CI/CD, and AWS or GCP experience.',
-        'Certification support, on-call allowance, health insurance.',
-        'Da Nang',
-        3000,
-        'Full-time',
-        DATE '2026-05-07',
-        DATE '2026-07-01',
-        4,
-        NULL,
-        2103
-    ),
-    (
-        3005,
-        'Data Analyst Intern',
-        'Prepare dashboards, clean datasets, and support analytics reporting.',
-        'SQL basics, spreadsheet skills, curiosity, and clear communication.',
-        'Mentorship, internship allowance, conversion opportunity.',
-        'Hanoi',
-        500,
-        'Internship',
-        DATE '2026-05-10',
-        DATE '2026-06-10',
-        0,
-        NULL,
-        2102
-    )
+SELECT
+    id,
+    DATE '2026-08-15' + (((id - 3001) % 45)::int),
+    jsonb_build_array('Health insurance', 'Annual bonus', 'Learning budget', 'Hybrid working options')::text,
+    title,
+    'Work with recruiter #' || lpad(recruiter_number::text, 2, '0') || ' to deliver production features for real users.',
+    jsonb_build_array(skill, 'REST API', 'Git', 'Clear communication')::text,
+    city,
+    800 + (((id - 3001) % 12) * 250),
+    job_type,
+    DATE '2026-06-01' + (((id - 3001) % 30)::int),
+    ((id - 3001) % 6)::int,
+    NULL,
+    recruiter_id
+FROM job_seed
 ON CONFLICT (id) DO UPDATE
 SET
+    applying_deadline = EXCLUDED.applying_deadline,
+    benefits = EXCLUDED.benefits,
     job_title = EXCLUDED.job_title,
     job_desc = EXCLUDED.job_desc,
     requirement = EXCLUDED.requirement,
-    benefits = EXCLUDED.benefits,
     location = EXCLUDED.location,
     salary_range = EXCLUDED.salary_range,
     job_type = EXCLUDED.job_type,
     posted_date = EXCLUDED.posted_date,
-    applying_deadline = EXCLUDED.applying_deadline,
     yoe = EXCLUDED.yoe,
     custom_application_fields_id = EXCLUDED.custom_application_fields_id,
     recruiter_id = EXCLUDED.recruiter_id;
 
+WITH applicant_actions AS (
+    SELECT
+        applicant.n AS applicant_number,
+        2200 + applicant.n AS applicant_id,
+        action.slot,
+        action.action_type,
+        3001 + (((applicant.n * 7) + action.slot * 19) % 301) AS job_id
+    FROM generate_series(1, 200) AS applicant(n)
+    CROSS JOIN (
+        VALUES
+            (1, 'APPLIED'),
+            (2, 'SAVED'),
+            (3, 'SAVED')
+    ) AS action(slot, action_type)
+)
 INSERT INTO applicant_jobs (
     id,
     applicant_id,
     job_id,
     action_type
 )
-VALUES
-    (4001, 2201, 3001, 'APPLIED'),
-    (4002, 2201, 3004, 'SAVED'),
-    (4003, 2202, 3002, 'APPLIED'),
-    (4004, 2203, 3003, 'APPLIED'),
-    (4005, 2203, 3005, 'SAVED')
+SELECT
+    row_number() OVER (ORDER BY applicant_number, slot) + 4000,
+    applicant_id,
+    job_id,
+    action_type
+FROM applicant_actions
 ON CONFLICT (id) DO UPDATE
 SET
     applicant_id = EXCLUDED.applicant_id,
@@ -369,20 +512,30 @@ VALUES
     (5002, '/api/v1/browse-jobs', 'GET', 'Browse all jobs'),
     (5003, '/api/v1/browse-jobs/{jobId}', 'GET', 'View job detail'),
     (5004, '/api/v1/browse-jobs/applicants/{jobId}', 'GET', 'View applicant count for a job'),
-    (5005, '/api/v1/auth', 'POST', 'Login'),
-    (5006, '/api/v1/registrations/applicant', 'POST', 'Register applicant'),
-    (5007, '/api/v1/registrations/recruiters', 'POST', 'Register recruiter'),
-    (5008, '/api/v1/applicants', 'GET', 'Admin view applicants'),
-    (5009, '/api/v1/applicants/{applicantId}', 'GET', 'View applicant profile'),
-    (5010, '/api/v1/applicants/{applicantId}', 'PUT', 'Update applicant profile'),
-    (5011, '/api/v1/applicants/saved-jobs', 'GET', 'View saved jobs'),
-    (5012, '/api/v1/applicants/save/job', 'POST', 'Save a job'),
-    (5013, '/api/v1/applicants/upload-cv/{applicantId}', 'POST', 'Upload applicant CV'),
-    (5014, '/api/v1/recruiters', 'GET', 'Admin view recruiters'),
-    (5015, '/api/v1/recruiters/{recruiterId}', 'GET', 'View recruiter profile'),
-    (5016, '/api/v1/recruiters/jobs/{recruiterId}', 'GET', 'View recruiter jobs'),
-    (5017, '/api/v1/recruiters/jobs/{recruiterId}', 'POST', 'Create recruiter job'),
-    (5018, '/api/v1/recruiters/jobs/{recruiterId}/{jobId}', 'PUT', 'Update recruiter job')
+    (5005, '/api/v1/browse-jobs/applicants/{jobId}/list', 'GET', 'View applicants for a job'),
+    (5006, '/api/v1/auth', 'POST', 'Login'),
+    (5007, '/api/v1/registrations/applicant', 'POST', 'Register applicant'),
+    (5008, '/api/v1/registrations/recruiters', 'POST', 'Register recruiter'),
+    (5009, '/api/v1/applicants', 'GET', 'Admin view applicants'),
+    (5010, '/api/v1/applicants/{applicantId}', 'GET', 'View applicant profile'),
+    (5011, '/api/v1/applicants/{applicantId}', 'PUT', 'Update applicant profile'),
+    (5012, '/api/v1/applicants/{applicantId}/privacy', 'PUT', 'Update applicant privacy'),
+    (5013, '/api/v1/applicants/saved-jobs', 'GET', 'View saved jobs'),
+    (5014, '/api/v1/applicants/applied-jobs', 'GET', 'View applied jobs'),
+    (5015, '/api/v1/applicants/save/job', 'POST', 'Save a job'),
+    (5016, '/api/v1/applicants/apply/job', 'POST', 'Apply to a job'),
+    (5017, '/api/v1/applicants/upload-cv/{applicantId}', 'POST', 'Upload applicant CV'),
+    (5018, '/api/v1/applicants/{applicantId}/cv-file', 'DELETE', 'Delete uploaded CV file'),
+    (5019, '/api/v1/applicants/{applicantId}/analyze-cv', 'POST', 'Analyze applicant CV'),
+    (5020, '/api/v1/applicants/{applicantId}/match/{jobId}', 'POST', 'Match applicant CV to job'),
+    (5021, '/api/v1/recruiters', 'GET', 'Admin view recruiters'),
+    (5022, '/api/v1/recruiters/{recruiterId}', 'GET', 'View recruiter profile'),
+    (5023, '/api/v1/recruiters/{recruiterId}', 'PUT', 'Update recruiter profile'),
+    (5024, '/api/v1/recruiters/jobs/{recruiterId}', 'GET', 'View recruiter jobs'),
+    (5025, '/api/v1/recruiters/jobs/{recruiterId}', 'POST', 'Create recruiter job'),
+    (5026, '/api/v1/recruiters/jobs/{recruiterId}/{jobId}', 'GET', 'View recruiter job'),
+    (5027, '/api/v1/recruiters/jobs/{recruiterId}/{jobId}', 'PUT', 'Update recruiter job'),
+    (5028, '/api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants', 'GET', 'View applicants for recruiter job')
 ON CONFLICT (id) DO UPDATE
 SET
     endpoint = EXCLUDED.endpoint,
@@ -390,36 +543,47 @@ SET
     description = EXCLUDED.description;
 
 INSERT INTO permission_role (id, permission_id, role_id)
-VALUES
-    (6001, 5001, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6002, 5001, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6003, 5001, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6004, 5002, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6005, 5002, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6006, 5002, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6007, 5003, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6008, 5003, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6009, 5003, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6010, 5004, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6011, 5008, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6012, 5009, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6013, 5009, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6014, 5010, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6015, 5011, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6016, 5012, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6017, 5013, (SELECT id FROM roles WHERE role_name = 'APPLICANT')),
-    (6018, 5014, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6019, 5015, (SELECT id FROM roles WHERE role_name = 'ADMIN')),
-    (6020, 5015, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6021, 5016, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6022, 5017, (SELECT id FROM roles WHERE role_name = 'RECRUITER')),
-    (6023, 5018, (SELECT id FROM roles WHERE role_name = 'RECRUITER'))
+SELECT
+    row_number() OVER (ORDER BY permission_id, role_name) + 6000,
+    permission_id,
+    (SELECT id FROM roles WHERE roles.role_name = grants.role_name)
+FROM (
+    VALUES
+        (5001, 'ADMIN'), (5001, 'APPLICANT'), (5001, 'RECRUITER'),
+        (5002, 'ADMIN'), (5002, 'APPLICANT'), (5002, 'RECRUITER'),
+        (5003, 'ADMIN'), (5003, 'APPLICANT'), (5003, 'RECRUITER'),
+        (5004, 'RECRUITER'),
+        (5005, 'RECRUITER'),
+        (5009, 'ADMIN'),
+        (5010, 'ADMIN'), (5010, 'APPLICANT'), (5010, 'RECRUITER'),
+        (5011, 'APPLICANT'),
+        (5012, 'APPLICANT'),
+        (5013, 'APPLICANT'),
+        (5014, 'APPLICANT'),
+        (5015, 'APPLICANT'),
+        (5016, 'APPLICANT'),
+        (5017, 'APPLICANT'),
+        (5018, 'APPLICANT'),
+        (5019, 'APPLICANT'),
+        (5020, 'APPLICANT'),
+        (5021, 'ADMIN'),
+        (5022, 'ADMIN'), (5022, 'RECRUITER'),
+        (5023, 'RECRUITER'),
+        (5024, 'RECRUITER'),
+        (5025, 'RECRUITER'),
+        (5026, 'RECRUITER'),
+        (5027, 'RECRUITER'),
+        (5028, 'RECRUITER')
+) AS grants(permission_id, role_name)
 ON CONFLICT (id) DO UPDATE
 SET
     permission_id = EXCLUDED.permission_id,
     role_id = EXCLUDED.role_id;
 
 SELECT setval(pg_get_serial_sequence('roles', 'id'), GREATEST((SELECT MAX(id) FROM roles), 1), true);
+SELECT setval(pg_get_serial_sequence('certificates', 'id'), GREATEST((SELECT MAX(id) FROM certificates), 1), true);
+SELECT setval(pg_get_serial_sequence('educations', 'id'), GREATEST((SELECT MAX(id) FROM educations), 1), true);
+SELECT setval(pg_get_serial_sequence('experiences', 'id'), GREATEST((SELECT MAX(id) FROM experiences), 1), true);
 SELECT setval(pg_get_serial_sequence('cvs', 'id'), GREATEST((SELECT MAX(id) FROM cvs), 1), true);
 SELECT setval(pg_get_serial_sequence('users', 'id'), GREATEST((SELECT MAX(id) FROM users), 1), true);
 SELECT setval(pg_get_serial_sequence('jobs', 'id'), GREATEST((SELECT MAX(id) FROM jobs), 1), true);

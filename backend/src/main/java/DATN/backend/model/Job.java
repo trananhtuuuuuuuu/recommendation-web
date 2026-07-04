@@ -31,44 +31,52 @@ public class Job extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "applying_deadline")
     private Date applyingDeadline;
 
-    @Column(nullable = true, columnDefinition = "TEXT")
+    @Column(nullable = true, columnDefinition = "TEXT", name = "benefits")
     @Convert(converter = StringListConverter.class)
     private List<String> benefits;
 
-    @Column(nullable = false)
-    private String jobTitle;
+    @Column(name = "yoe", nullable = true)
+    private Integer yoe;
 
     @Column(name = "job_desc", nullable = true, columnDefinition = "TEXT")
     private String jobDesc;
 
-    @Column(name = "requirement", nullable = true, columnDefinition = "TEXT")
-    @Convert(converter = StringListConverter.class)
-    private List<String> requirements;
+    @Column(nullable = false, name = "job_title")
+    private String jobTitle;
+
+    @Column(nullable = true, name = "job_type")
+    private String jobType;
 
     @Column(nullable = true)
     private String location;
 
     @Column(nullable = true)
-    private Double salaryRange;
-
-    @Column(nullable = true)
-    private String jobType;
-
-    @Column(nullable = true)
     private Date postedDate;
 
-    @Column(name = "yoe", nullable = true)
-    private Integer yoe;
+    @Column(name = "requirements", nullable = true, columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> requirements;
+
+    @Column(nullable = true, name = "salary_range")
+    private String salaryRange;
+
+    @ManyToOne
+    @JoinColumn(name = "recruiter_id")
+    private Recruiter recruiter;
+
+    @OneToOne
+    @JoinColumn(name = "custom_application_fields_id")
+    private ApplicationForm applicationForm;
 
     public Job(String jobTitle,
             String jobDesc,
             List<String> requirements,
             List<String> benefits,
             String location,
-            Double salaryRange,
+            String salaryRange,
             String jobType,
             Date postedDate,
             Date applyingDeadline,
@@ -86,13 +94,5 @@ public class Job extends BaseEntity {
         this.applyingDeadline = applyingDeadline;
         this.yoe = yoe;
     }
-
-    @ManyToOne
-    @JoinColumn(name = "recruiter_id")
-    private Recruiter recruiter;
-
-    @OneToOne
-    @JoinColumn(name = "custom_application_fields_id")
-    private ApplicationForm applicationForm;
 
 }

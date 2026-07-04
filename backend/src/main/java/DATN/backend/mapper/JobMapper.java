@@ -78,15 +78,11 @@ public class JobMapper {
         return Date.valueOf(LocalDate.parse(value));
     }
 
-    private static Double parseSalaryRange(String value) {
+    private static String parseSalaryRange(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        try {
-            return Double.valueOf(value);
-        } catch (NumberFormatException exception) {
-            return null;
-        }
+        return value;
     }
 
     private static ApplicationForm toApplicationFormReference(Long id) {

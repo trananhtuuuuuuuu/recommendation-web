@@ -141,6 +141,18 @@ const emptyCvForm = {
   cvFileUrl: "",
 };
 
+const createEmptyApplicantForm = () => ({ ...emptyApplicantForm });
+
+const createEmptyRecruiterForm = () => ({ ...emptyRecruiterForm });
+
+const createEmptyCvForm = () => ({
+  ...emptyCvForm,
+  skills: [""],
+  experience: [createEmptyExperience()],
+  education: [""],
+  certifications: [""],
+});
+
 const defaultPrivacyForm = {
   profileVisibleToRecruiters: true,
   showFullName: false,
@@ -167,9 +179,9 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [deletingCvFile, setDeletingCvFile] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [applicantForm, setApplicantForm] = useState(emptyApplicantForm);
-  const [recruiterForm, setRecruiterForm] = useState(emptyRecruiterForm);
-  const [cvForm, setCvForm] = useState(emptyCvForm);
+  const [applicantForm, setApplicantForm] = useState(createEmptyApplicantForm);
+  const [recruiterForm, setRecruiterForm] = useState(createEmptyRecruiterForm);
+  const [cvForm, setCvForm] = useState(createEmptyCvForm);
   const [privacyForm, setPrivacyForm] = useState<PrivacyForm>(defaultPrivacyForm);
   const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null);
   const [analyzingCv, setAnalyzingCv] = useState(false);
@@ -177,6 +189,7 @@ export default function Profile() {
   const [activeApplicantEditor, setActiveApplicantEditor] = useState<ApplicantInlineEditor | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
+  const [showClearProfileWarning, setShowClearProfileWarning] = useState(false);
 
   useEffect(() => {
     if (!authUser?.id) return;
@@ -288,7 +301,7 @@ export default function Profile() {
     if (!applicant) return;
     setApplicantForm({
       userName: applicant.userName || authUser?.userName || "",
-    email: applicant.email || authUser?.email || "",
+      email: applicant.email || authUser?.email || "",
       phone: applicant.phone || "",
       address: applicant.address || "",
       fullName: applicant.fullName || "",
@@ -309,6 +322,21 @@ export default function Profile() {
     setPrivacyForm(toPrivacyForm(applicant));
     setSelectedCvFile(null);
     setCvAnalysis(null);
+  };
+
+  const clearProfileDraft = () => {
+    if (role === "RECRUITER") {
+      setRecruiterForm(createEmptyRecruiterForm());
+    } else {
+      setApplicantForm(createEmptyApplicantForm());
+      setCvForm(createEmptyCvForm());
+      setPrivacyForm(defaultPrivacyForm);
+      setSelectedCvFile(null);
+      setCvAnalysis(null);
+      setActiveApplicantEditor(null);
+    }
+    setShowClearProfileWarning(false);
+    toast.success("Profile draft cleared.");
   };
 
   const handleCvFileChange = async (file: File | null) => {
@@ -438,19 +466,34 @@ export default function Profile() {
 
   if (role === "RECRUITER") {
     return (
-      <ProfileFrame editing={editing} saving={saving} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={handleSave}>
-        {editing ? (
-          <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
-        ) : (
-          <RecruiterView
-            recruiter={recruiter}
-            avatarUrl={avatarUrl}
-            onAvatarUpload={handleAvatarUpload}
-            onAvatarRemove={handleAvatarRemove}
-            onEdit={() => setEditing(true)}
-          />
-        )}
-      </ProfileFrame>
+      <>
+        <ProfileFrame
+          editing={editing}
+          saving={saving}
+          onEdit={() => setEditing(true)}
+          onCancel={() => setEditing(false)}
+          onSave={handleSave}
+          onClear={() => setShowClearProfileWarning(true)}
+        >
+          {editing ? (
+            <RecruiterEditForm form={recruiterForm} setForm={setRecruiterForm} />
+          ) : (
+            <RecruiterView
+              recruiter={recruiter}
+              avatarUrl={avatarUrl}
+              onAvatarUpload={handleAvatarUpload}
+              onAvatarRemove={handleAvatarRemove}
+              onEdit={() => setEditing(true)}
+            />
+          )}
+        </ProfileFrame>
+
+        <ClearProfileDialog
+          open={showClearProfileWarning}
+          onOpenChange={setShowClearProfileWarning}
+          onConfirm={clearProfileDraft}
+        />
+      </>
     );
   }
 
@@ -465,6 +508,7 @@ export default function Profile() {
         }}
         onCancel={() => setEditing(false)}
         onSave={handleSave}
+        onClear={() => setShowClearProfileWarning(true)}
       >
         {editing ? (
           <ApplicantEditForm
@@ -530,7 +574,42 @@ export default function Profile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ClearProfileDialog
+        open={showClearProfileWarning}
+        onOpenChange={setShowClearProfileWarning}
+        onConfirm={clearProfileDraft}
+      />
     </>
+  );
+}
+
+function ClearProfileDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear Profile Draft?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This clears the editable fields on this screen before you save.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            Clear Draft
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -540,6 +619,7 @@ function ProfileFrame({
   onEdit,
   onCancel,
   onSave,
+  onClear,
   children,
 }: {
   editing: boolean;
@@ -547,6 +627,7 @@ function ProfileFrame({
   onEdit: () => void;
   onCancel: () => void;
   onSave: () => void;
+  onClear?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -554,6 +635,17 @@ function ProfileFrame({
       <div className="flex justify-end gap-2">
         {editing ? (
           <>
+            {onClear ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={saving}
+                onClick={onClear}
+                className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="w-4 h-4" /> Clear
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={onCancel} className="gap-2">
               <X className="w-4 h-4" /> Cancel
             </Button>

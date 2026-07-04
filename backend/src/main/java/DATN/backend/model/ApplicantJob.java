@@ -25,6 +25,9 @@ public class ApplicantJob extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
+    private String actionType = "APPLIED";
+
     @ManyToOne
     @JoinColumn(name = "applicant_id")
     private Applicant applicant;
@@ -32,9 +35,6 @@ public class ApplicantJob extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "job_id")
     private Job job;
-
-    @Column(nullable = false)
-    private String actionType = "APPLIED";
 
     @ManyToOne
     @JoinColumn(name = "application_form_id")

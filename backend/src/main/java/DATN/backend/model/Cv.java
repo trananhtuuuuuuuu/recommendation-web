@@ -28,25 +28,25 @@ public class Cv extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long Id;
+    private Long id;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "full_name")
     private String fullName;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "address")
     private String address;
 
-    @Column(nullable = true)
+    @Column(nullable = true, name = "phone")
     private String phone;
 
-    @Column(nullable = true, columnDefinition = "TEXT")
+    @Column(nullable = true, columnDefinition = "TEXT", name = "objective")
     private String objective;
 
-    @Column(nullable = true, columnDefinition = "TEXT")
+    @Column(nullable = true, columnDefinition = "TEXT", name = "skills")
     @Convert(converter = StringListConverter.class)
     private List<String> skills;
 
-    @Column(nullable = true, length = 2048)
+    @Column(nullable = true, length = 2048, name = "cv_file_url")
     private String cvFileUrl;
 
     public Cv(String fullName,
