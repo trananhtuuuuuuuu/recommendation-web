@@ -29,7 +29,7 @@ parser = CvParser(
     max_pages=int(os.getenv("AI_MAX_PAGES", "3")),
     enable_model=os.getenv("AI_WITH_MODEL", "false").lower() == "true",
     ocr_languages=os.getenv("AI_OCR_LANGUAGES", "eng+vie"),
-    ocr_engine=os.getenv("AI_OCR_ENGINE", "paddle"),
+    ocr_engine=os.getenv("AI_OCR_ENGINE", "tesseract"),
 )
 
 app = FastAPI(

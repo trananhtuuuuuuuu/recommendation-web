@@ -59,6 +59,11 @@ def run_match(
     per_field = {score.field: score.score for score in field_scores}
 
     match_score, reason, model_used = decide(per_field, method=method)
+    # Experience is a soft signal: a years shortfall scales the knowledge-based
+    # score down rather than rejecting the candidate outright.
+    if hard.exp_fit < 1.0:
+        match_score = round(match_score * hard.exp_fit, 4)
+        reason += f" (Điều chỉnh do thiếu kinh nghiệm: hệ số {hard.exp_fit:.2f}.)"
     suggestions = suggest(
         match_score=match_score,
         jd_title=jd.job_title,

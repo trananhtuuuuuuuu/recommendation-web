@@ -30,13 +30,15 @@ class HeuristicDecisionTests(unittest.TestCase):
     def test_reason_names_top_contributor(self):
         with mock.patch.object(decision, "load_model", return_value=None):
             _, reason, _ = decide_scores({"JOB_TITLE": 0.9, "SKILL": 0.1})
-        self.assertIn("Chức danh", reason)
+        # English reason names the strongest field first, with its match %.
+        self.assertIn("job title", reason)
+        self.assertIn("90%", reason)
 
     def test_empty_scores_give_zero(self):
         with mock.patch.object(decision, "load_model", return_value=None):
             score, reason, _ = decide_scores({})
         self.assertEqual(score, 0.0)
-        self.assertIn("Chưa đủ dữ liệu", reason)
+        self.assertIn("isn't enough overlap", reason)
 
 
 class SvmDecisionTests(unittest.TestCase):

@@ -327,11 +327,14 @@ export default function Profile() {
         const updated = await updateRecruiter(authUser.id, recruiterForm);
         setRecruiter(updated);
       } else {
-        const updated = await updateApplicant(authUser.id, applicantForm);
+        const updated = await updateApplicant(authUser.id, {
+          ...applicantForm,
+          phone: sanitizePhone(applicantForm.phone),
+        });
         const formData = new FormData();
         formData.append("fullName", cvForm.fullName);
         formData.append("address", cvForm.address);
-        formData.append("phone", cvForm.phone);
+        formData.append("phone", sanitizePhone(cvForm.phone));
         formData.append("objective", cvForm.objective);
         formData.append("skills", fromList(cvForm.skills));
         formData.append("experience", fromExperienceList(cvForm.experience));
@@ -1496,6 +1499,10 @@ function CvAnalysisNotice({
 
 function preferExisting(current: string, detected?: string | null) {
   return current.trim() ? current : detected?.trim() ?? "";
+}
+
+function sanitizePhone(phone: string) {
+  return phone.replace(/[\s().-]/g, "").trim();
 }
 
 function mergeDetectedList(existing: string[], detected?: string[] | null) {

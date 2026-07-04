@@ -31,8 +31,12 @@ def make_cv():
 class PipelineTests(unittest.TestCase):
 
     def test_reject_short_circuits(self):
+        # Egregious experience gap (1y vs 8y required -> gap 6.5 >= HARD_GAP) still
+        # hard-rejects and short-circuits before any field scoring.
+        cv = make_cv()
+        cv["totalExperienceYears"] = 1.0
         jd = dict(_JD, experienceLevel="Senior (8+ years)")
-        result = run_match(make_cv(), jd, today=date(2022, 1, 1), enable_llm=False)
+        result = run_match(cv, jd, today=date(2022, 1, 1), enable_llm=False)
         self.assertFalse(result.passed_filter)
         self.assertEqual(result.per_field_scores, {})
         self.assertEqual(result.match_score, 0.0)

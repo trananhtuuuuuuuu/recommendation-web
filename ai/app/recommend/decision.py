@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .config import FIELD_ORDER, display_name, load_field_weights, svm_model_path
+from .config import FIELD_ORDER, display_name_en, load_field_weights, svm_model_path
 
 
 def to_feature_vector(per_field_scores: dict[str, float]) -> list[float]:
@@ -84,13 +84,29 @@ def _svm_score(pipeline: Any, features: list[float]) -> float:
 
 
 def _explain(per_field_scores: dict[str, float], weights: dict[str, float]) -> str:
+    """A natural-language reason, English, highlighting the top contributing fields.
+
+    Fields are ranked by weight x score (their pull on the decision) and the top 5
+    with a positive contribution are named, each with its own match strength.
+    """
     contributions = {
         field: weights.get(field, 0.0) * per_field_scores.get(field, 0.0)
         for field in FIELD_ORDER
     }
     ranked = sorted(contributions.items(), key=lambda item: item[1], reverse=True)
-    top = [(field, value) for field, value in ranked if value > 0][:2]
+    top = [(field, per_field_scores.get(field, 0.0)) for field, value in ranked if value > 0][:5]
     if not top:
-        return "Chưa đủ dữ liệu phù hợp giữa CV và JD để đưa ra khuyến nghị."
-    parts = [f"{display_name(field)} ({per_field_scores.get(field, 0.0):.2f})" for field, _ in top]
-    return "Khuyến nghị chủ yếu nhờ độ phù hợp cao về " + " và ".join(parts) + "."
+        return (
+            "There isn't enough overlap between this CV and the job description "
+            "to point to a clear match yet."
+        )
+    lead_field, lead_score = top[0]
+    lead = f"{display_name_en(lead_field)} ({lead_score:.0%})"
+    if len(top) == 1:
+        return f"This candidate fits the role best on {lead}."
+    rest = [f"{display_name_en(field)} ({score:.0%})" for field, score in top[1:]]
+    rest_text = ", ".join(rest[:-1]) + (" and " if len(rest) > 1 else "") + rest[-1]
+    return (
+        f"This candidate lines up strongly with the role — most of all on {lead}, "
+        f"with solid alignment on {rest_text}."
+    )

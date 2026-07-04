@@ -1,4 +1,4 @@
-"""Vietnamese improvement suggestions for the candidate.
+"""Career-coaching improvement suggestions (English) for the candidate.
 
 Primary path calls a local Ollama server (small ~2B model on CPU); when Ollama
 is unreachable or disabled, a deterministic rule-based template keyed off the
@@ -9,25 +9,25 @@ from __future__ import annotations
 
 import os
 
-from .config import display_name
+from .config import display_name_en
 
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
 
-# Rule-based fallback suggestion per field (keyed by entity label).
+# Rule-based fallback suggestion per field (used when the LLM is unavailable).
 _TEMPLATES = {
-    "SKILL": "Bổ sung và làm nổi bật các kỹ năng kỹ thuật mà JD yêu cầu.",
-    "SOFT_SKILL": "Nêu rõ các kỹ năng mềm (giao tiếp, làm việc nhóm) phù hợp với vị trí.",
-    "LANGUAGE": "Bổ sung trình độ hoặc chứng chỉ ngoại ngữ liên quan.",
-    "CERTIFICATION": "Thêm các chứng chỉ chuyên môn liên quan đến vị trí (ví dụ AWS, PMP).",
-    "JOB_TITLE": "Điều chỉnh chức danh/mục tiêu nghề nghiệp cho sát với vị trí ứng tuyển.",
-    "COMPANY": "Làm rõ kinh nghiệm tại các công ty cùng lĩnh vực.",
-    "EDUCATION": "Bổ sung thông tin học vấn phù hợp với yêu cầu của JD.",
-    "SUMMARY": "Viết lại phần tóm tắt để nhấn mạnh sự phù hợp với JD.",
-    "EXPERIENCE": "Mô tả chi tiết hơn kinh nghiệm và thành tựu liên quan đến JD.",
-    "PROJECT": "Thêm các dự án minh hoạ năng lực phù hợp với vị trí.",
+    "SKILL": "Add the specific technical skills this job calls for, and move the most relevant ones to the top of your CV.",
+    "SOFT_SKILL": "Show soft skills like communication and teamwork through short, concrete examples rather than a plain list.",
+    "LANGUAGE": "List the languages you speak with your proficiency level, especially any the role asks for.",
+    "CERTIFICATION": "Add a certification that fits this role (for example AWS, PMP, or a recognised language certificate).",
+    "JOB_TITLE": "Align your headline or career objective more closely with the exact title you're applying for.",
+    "COMPANY": "Highlight experience at companies in the same industry to show you know the domain.",
+    "EDUCATION": "Make your education section speak to what this job description expects.",
+    "SUMMARY": "Rewrite your summary so it speaks directly to this role and what you'd bring to it.",
+    "EXPERIENCE": "Describe your experience with concrete achievements and numbers that map to the job's needs.",
+    "PROJECT": "Add one or two projects that clearly demonstrate the skills this role is looking for.",
 }
 
 
@@ -84,7 +84,7 @@ def suggest(
     cv_skills: str = "",
     cv_summary: str = "",
 ) -> list[str]:
-    """Return 3-5 concrete Vietnamese suggestions grounded in the SVM output.
+    """Return 3-5 concrete English suggestions grounded in the SVM output.
 
     The decision model's per-field scores (which fields are weak, with numbers)
     plus the JD requirements and the CV's own skills are handed to the LLM so the
@@ -107,8 +107,8 @@ def _suggest_template(weak: list[str]) -> list[str]:
     suggestions = [_TEMPLATES[field] for field in weak if field in _TEMPLATES][:4]
     if not suggestions:
         return [
-            "Hồ sơ của bạn đã khá phù hợp với vị trí này.",
-            "Hãy rà soát lỗi chính tả và định dạng CV trước khi nộp.",
+            "Your profile already matches this role well.",
+            "Do a final pass for typos and formatting before you apply.",
         ]
     return suggestions
 
@@ -144,7 +144,7 @@ def _suggest_via_ollama(
 
 
 def _field_scores_text(fields: list[str], scores: dict[str, float]) -> str:
-    return ", ".join(f"{display_name(field)} ({scores.get(field, 0.0):.2f})" for field in fields)
+    return ", ".join(f"{display_name_en(field)} ({scores.get(field, 0.0):.0%})" for field in fields)
 
 
 def _build_prompt(
@@ -158,21 +158,24 @@ def _build_prompt(
     cv_skills: str,
     cv_summary: str,
 ) -> str:
-    strong_text = _field_scores_text(strong, per_field_scores) or "không rõ"
-    weak_text = _field_scores_text(weak, per_field_scores) or "không"
+    strong_text = _field_scores_text(strong, per_field_scores) or "nothing stands out yet"
+    weak_text = _field_scores_text(weak, per_field_scores) or "none"
     return (
-        "Bạn là cố vấn nghề nghiệp. Dựa trên kết quả so khớp CV–JD (do mô hình tính) dưới "
-        "đây, hãy đưa ra 3-5 gợi ý NGẮN GỌN, CỤ THỂ bằng tiếng Việt giúp ứng viên cải thiện CV "
-        "cho đúng vị trí này. Ưu tiên vá các mục ĐIỂM YẾU và bám sát YÊU CẦU JD; tránh nói "
-        "chung chung. Chỉ trả về danh sách gạch đầu dòng, mỗi dòng một gợi ý.\n\n"
-        f"Vị trí: {jd_title or 'Không rõ'}\n"
-        f"Mức phù hợp tổng thể: {match_score:.0%}\n"
-        f"Điểm mạnh: {strong_text}\n"
-        f"Điểm yếu (cần cải thiện): {weak_text}\n"
-        f"Lý do mô hình: {reason}\n\n"
-        f"JD yêu cầu (trích): {(jd_requirements or '')[:400] or 'không rõ'}\n"
-        f"Kỹ năng hiện có trong CV: {(cv_skills or '')[:300] or 'không rõ'}\n"
-        f"Tóm tắt CV: {(cv_summary or '')[:250] or 'không rõ'}\n"
+        "You are a warm, experienced career coach. Using the CV-to-job match results "
+        "below, write 3-5 short, specific suggestions to help this candidate improve "
+        "their CV for THIS role. Speak in natural, encouraging English, directly to the "
+        "person (use \"you\"). Prioritise the weak areas and the job's real requirements, "
+        "be concrete, and vary your phrasing so it doesn't read like a template. Avoid "
+        "generic filler. Return only a plain list, one suggestion per line, with no "
+        "numbering, headings, or preamble.\n\n"
+        f"Role: {jd_title or 'Unknown'}\n"
+        f"Overall match: {match_score:.0%}\n"
+        f"Strengths: {strong_text}\n"
+        f"Areas to improve: {weak_text}\n"
+        f"Model's read on the fit: {reason}\n\n"
+        f"Job requirements (excerpt): {(jd_requirements or '')[:400] or 'not provided'}\n"
+        f"Skills currently in the CV: {(cv_skills or '')[:300] or 'not provided'}\n"
+        f"CV summary: {(cv_summary or '')[:250] or 'not provided'}\n"
     )
 
 

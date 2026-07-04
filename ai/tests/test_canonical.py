@@ -75,7 +75,10 @@ class BuildCanonicalTests(unittest.TestCase):
 
         education = canonical["education_history"]
         self.assertEqual(len(education), 1)
-        self.assertEqual(education[0]["education"], "HCMUS University")  # school keyword wins
+        # School and degree/major are kept together (major no longer dropped).
+        self.assertEqual(education[0]["school"], "HCMUS University")
+        self.assertEqual(education[0]["degree"], "Bachelor of Computer Science")
+        self.assertEqual(education[0]["education"], "Bachelor of Computer Science — HCMUS University")
         self.assertEqual(education[0]["date"], "2018 - 2022")
         self.assertEqual(education[0]["gpa"], "3.6/4.0")
 
@@ -97,6 +100,18 @@ class BuildCanonicalTests(unittest.TestCase):
         self.assertEqual(canonical["work_experience"][0]["location"], "Ha Noi")
         self.assertEqual(canonical["entitiesByLabel"]["CANDIDATE_LOCATION"], ["Ho Chi Minh City"])
         self.assertEqual(canonical["entitiesByLabel"]["LOCATION"], ["Ha Noi"])
+
+    def test_personal_link_prefers_profile_over_project(self):
+        canonical = build_canonical(
+            [
+                _positioned("NAME", "Tri", 0),
+                _positioned("LINK", "https://github.com/trongtriGH/product-store", 1),
+                _positioned("LINK", "https://github.com/trongtriGH", 2),
+            ],
+            "",
+            model_used=True,
+        )
+        self.assertEqual(canonical["personal_information"]["link"], "https://github.com/trongtriGH")
 
     def test_projects_block(self):
         canonical = build_canonical(
@@ -120,8 +135,15 @@ class BuildCanonicalTests(unittest.TestCase):
         self.assertEqual(set(canonical["entitiesByLabel"]), expected)
 
     def test_total_experience_years_is_computed(self):
+        # Years are summed from the dates of detected jobs, so the date needs a
+        # real work block (company + experience) around it to count.
         canonical = build_canonical(
-            [EntitySpan("DATE", "01/2020 - 01/2023", 0.9)],
+            [
+                _positioned("JOB_TITLE", "Engineer", 0),
+                _positioned("COMPANY", "Acme", 1),
+                _positioned("DATE", "01/2020 - 01/2023", 2),
+                _positioned("EXPERIENCE", "Built systems", 3),
+            ],
             "",
             model_used=True,
         )

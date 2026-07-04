@@ -16,7 +16,7 @@ public class UpdateApplicantRequest {
 
     private String email;
 
-    @Pattern(regexp = "^$|^\\+?[0-9]{8,15}$", message = "Invalid phone number")
+    @Pattern(regexp = "^$|^\\+?[0-9\\s().-]{8,20}$", message = "Invalid phone number")
     private String phone;
 
     private String userName;

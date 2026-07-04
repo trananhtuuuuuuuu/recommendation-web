@@ -11,6 +11,8 @@ import re
 
 from ..dates import total_experience_years
 from .config import (
+    EXPERIENCE_FIT_FLOOR,
+    EXPERIENCE_HARD_GAP_YEARS,
     EXPERIENCE_TOLERANCE_YEARS,
     REMOTE_TOKENS,
     LOCATION_ALIASES,
@@ -54,7 +56,7 @@ def run_hard_filter(
         else total_experience_years(by_label.get("DATE", []), today=today)
     )
     required_years = _required_years(jd.experience_level)
-    years_ok = candidate_years + EXPERIENCE_TOLERANCE_YEARS >= required_years
+    years_ok, exp_fit = _experience_fit(candidate_years, required_years)
 
     cv_locations = list(by_label.get("CANDIDATE_LOCATION", [])) + list(by_label.get("LOCATION", []))
     location_ok = _location_match(cv_locations, jd.location) if check_location else True
@@ -68,8 +70,8 @@ def run_hard_filter(
     reasons: list[str] = []
     if not years_ok:
         reasons.append(
-            f"Thiếu kinh nghiệm: ứng viên có {candidate_years:.1f} năm, "
-            f"yêu cầu {required_years:.0f} năm."
+            f"Thiếu kinh nghiệm quá nhiều: ứng viên có {candidate_years:.1f} năm, "
+            f"yêu cầu {required_years:.0f} năm (chênh hơn {EXPERIENCE_HARD_GAP_YEARS:.0f} năm)."
         )
     if not location_ok:
         reasons.append(f"Địa điểm không phù hợp: vị trí yêu cầu '{jd.location}'.")
@@ -83,7 +85,24 @@ def run_hard_filter(
         required_years=required_years,
         location_ok=location_ok,
         gpa_ok=gpa_ok,
+        exp_fit=exp_fit,
     )
+
+
+def _experience_fit(candidate_years: float, required_years: float) -> tuple[bool, float]:
+    """Map a years shortfall to (passes_gate, soft fit multiplier in [FLOOR, 1.0]).
+
+    No shortfall -> (True, 1.0). A small shortfall passes the gate but scales the
+    score down linearly toward EXPERIENCE_FIT_FLOOR. A shortfall of at least
+    EXPERIENCE_HARD_GAP_YEARS is egregious and hard-rejects -> (False, 0.0).
+    """
+    gap = required_years - (candidate_years + EXPERIENCE_TOLERANCE_YEARS)
+    if gap <= 0:
+        return True, 1.0
+    if gap >= EXPERIENCE_HARD_GAP_YEARS:
+        return False, 0.0
+    fit = 1.0 - (gap / EXPERIENCE_HARD_GAP_YEARS) * (1.0 - EXPERIENCE_FIT_FLOOR)
+    return True, round(fit, 4)
 
 
 def _required_years(experience_level: str) -> float:

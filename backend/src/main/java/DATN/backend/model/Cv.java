@@ -27,7 +27,7 @@ public class Cv extends BaseEntity {
     @Column(nullable = true)
     private String fullName;
 
-    @Column(nullable = true)
+    @Column(nullable = true, columnDefinition = "TEXT")
     private String address;
 
     @Column(nullable = true)
@@ -42,7 +42,7 @@ public class Cv extends BaseEntity {
     @Column(nullable = true, columnDefinition = "TEXT")
     private String experience;
 
-    @Column(nullable = true)
+    @Column(nullable = true, columnDefinition = "TEXT")
     private String education;
 
     @Column(nullable = true, columnDefinition = "TEXT")

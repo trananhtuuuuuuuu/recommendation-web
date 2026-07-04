@@ -63,13 +63,15 @@ class LocationTests(unittest.TestCase):
 
 class ExperienceTests(unittest.TestCase):
 
-    def test_reject_under_experienced(self):
+    def test_reject_when_gap_is_egregious(self):
+        # Senior (5y) vs ~1y of experience -> gap 3.5 >= HARD_GAP -> hard reject.
         result = run_hard_filter(
             make_cv(dates=["01/2024 - 01/2025"]),
             JobDescriptionInput(experience_level="Senior (5+ years)"),
             today=date(2025, 1, 1),
         )
         self.assertFalse(result.passed)
+        self.assertEqual(result.exp_fit, 0.0)
         self.assertTrue(any("kinh nghiệm" in reason.lower() for reason in result.reasons))
 
     def test_pass_when_enough_experience(self):
@@ -79,6 +81,18 @@ class ExperienceTests(unittest.TestCase):
             today=date(2025, 1, 1),
         )
         self.assertTrue(result.passed)
+        self.assertEqual(result.exp_fit, 1.0)
+
+    def test_small_shortfall_passes_with_soft_penalty(self):
+        # Mid (3y) vs 1y of experience -> gap 1.5 < HARD_GAP -> pass but penalised.
+        result = run_hard_filter(
+            make_cv(dates=["01/2024 - 01/2025"]),
+            JobDescriptionInput(experience_level="Mid"),
+            today=date(2025, 1, 1),
+        )
+        self.assertTrue(result.passed)
+        self.assertEqual(result.reasons, [])
+        self.assertAlmostEqual(result.exp_fit, 0.75)  # 1 - (1.5/3)*(1-0.5)
 
     def test_precomputed_work_years_preferred_over_dates(self):
         # The canonical's work-only totalExperienceYears wins over the order-less
@@ -91,7 +105,9 @@ class ExperienceTests(unittest.TestCase):
             today=date(2024, 1, 1),
         )
         self.assertAlmostEqual(result.candidate_years, 0.3)
-        self.assertFalse(result.passed)  # 0.3 + 0.5 tolerance < 1
+        # 0.3 + 0.5 tolerance = 0.8 < 1 -> small shortfall: now passes, lightly penalised.
+        self.assertTrue(result.passed)
+        self.assertLess(result.exp_fit, 1.0)
 
 
 class GpaTests(unittest.TestCase):

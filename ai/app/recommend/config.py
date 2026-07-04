@@ -59,6 +59,21 @@ FIELD_DISPLAY_NAMES: dict[str, str] = {
     "PROJECT": "Dự án",
 }
 
+# English display names used for the match reason + LLM suggestions (natural,
+# reader-facing phrasing rather than the raw entity labels).
+FIELD_DISPLAY_NAMES_EN: dict[str, str] = {
+    "SKILL": "technical skills",
+    "SOFT_SKILL": "soft skills",
+    "LANGUAGE": "languages",
+    "CERTIFICATION": "certifications",
+    "JOB_TITLE": "job title",
+    "COMPANY": "company background",
+    "EDUCATION": "education",
+    "SUMMARY": "professional summary",
+    "EXPERIENCE": "work experience",
+    "PROJECT": "projects",
+}
+
 # Heuristic fallback weights (used before an SVM is trained). Sum ~= 1.0.
 _DEFAULT_WEIGHTS: dict[str, float] = {
     "SKILL": 0.20,
@@ -81,8 +96,18 @@ SENIORITY_YEARS: dict[str, float] = {
     "senior": 5.0, "lead": 8.0, "principal": 8.0, "manager": 8.0, "head": 10.0,
 }
 
-# Tolerance (years) applied before rejecting on experience.
+# Tolerance (years) applied before penalising on experience.
 EXPERIENCE_TOLERANCE_YEARS = 0.5
+
+# Years of experience is a noisy proxy for knowledge (and is itself derived from
+# error-prone DATE entities), while the candidate's real knowledge is already
+# scored directly via SKILL / EXPERIENCE / PROJECT / EDUCATION. So experience is
+# a SOFT penalty, not a hard gate: a shortfall scales the final score down via
+# exp_fit in [FLOOR, 1.0] instead of rejecting. Only an egregious gap -- short by
+# more than EXPERIENCE_HARD_GAP_YEARS -- still hard-rejects (e.g. a fresher
+# applying to a senior role).
+EXPERIENCE_HARD_GAP_YEARS = 3.0
+EXPERIENCE_FIT_FLOOR = 0.5
 
 # Tokens that mean a location requirement is open (auto-pass the hard filter).
 REMOTE_TOKENS = ("remote", "tu xa", "anywhere", "wfh", "hybrid")
@@ -114,6 +139,11 @@ def load_field_weights() -> dict[str, float]:
 
 def display_name(field: str) -> str:
     return FIELD_DISPLAY_NAMES.get(field, field)
+
+
+def display_name_en(field: str) -> str:
+    """Reader-facing English name for a field (match reason + LLM suggestions)."""
+    return FIELD_DISPLAY_NAMES_EN.get(field, field.replace("_", " ").lower())
 
 
 def svm_model_path(method: str = "tfidf") -> Path:

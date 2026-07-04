@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.multipart.MultipartFile;
@@ -103,6 +104,12 @@ public class ImplCvAiService implements InterfaceCvAiService {
             throw new AiServiceUnavailableException("Automatic CV analysis is temporarily unavailable");
         } catch (ResourceAccessException | IOException exception) {
             throw new AiServiceUnavailableException("Automatic CV analysis is temporarily unavailable");
+        } catch (RestClientException exception) {
+            // Covers the AI worker closing the socket mid-response (e.g. a native
+            // OCR crash): "Unexpected end of file from server". Degrade to a
+            // friendly 503 instead of leaking a raw 500.
+            LOGGER.warn("CV analysis service connection failed", exception);
+            throw new AiServiceUnavailableException("Automatic CV analysis is temporarily unavailable");
         }
     }
 
@@ -146,6 +153,9 @@ public class ImplCvAiService implements InterfaceCvAiService {
             }
             throw new AiServiceUnavailableException("CV matching is temporarily unavailable");
         } catch (ResourceAccessException exception) {
+            throw new AiServiceUnavailableException("CV matching is temporarily unavailable");
+        } catch (RestClientException exception) {
+            LOGGER.warn("CV matching service connection failed", exception);
             throw new AiServiceUnavailableException("CV matching is temporarily unavailable");
         }
     }

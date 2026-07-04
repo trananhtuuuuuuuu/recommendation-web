@@ -10,6 +10,44 @@ from .dates import total_experience_years
 
 
 EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+# A well-formed email whose domain ends at a real TLD, so a URL glued on by OCR
+# ("...@gmail.comhttps://github.com/..") is cut back to "...@gmail.com".
+_EMAIL_TLD = (
+    "com", "net", "org", "edu", "gov", "io", "dev", "ai", "co", "me", "info",
+    "vn", "edu.vn", "com.vn", "org.vn", "gmail.com",
+)
+_EMAIL_CLEAN = re.compile(
+    r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*?\.(?:" + "|".join(_EMAIL_TLD) + r")",
+    re.IGNORECASE,
+)
+
+
+def _clean_email(value: str) -> str:
+    """Extract the first well-formed email, trimming any OCR-glued trailing URL."""
+    match = _EMAIL_CLEAN.search(value or "")
+    return match.group(0) if match else ""
+
+
+def _pick_link(links: list[str]) -> str | None:
+    """Choose the personal/profile URL over a project/repo URL.
+
+    A profile is a shallow link (``github.com/<user>``, ``linkedin.com/in/<user>``)
+    whereas a project link has a deeper path (``github.com/<user>/<repo>``). When
+    the contact row is OCR-merged the profile URL is still the shallow one, so it
+    is preferred instead of blindly taking the first (often a project) link.
+    """
+    if not links:
+        return None
+
+    def is_profile(url: str) -> bool:
+        path = re.sub(r"^\w+://", "", url).rstrip("/")
+        host, _, rest = path.partition("/")
+        segments = [segment for segment in rest.split("/") if segment]
+        if "linkedin.com" in host.lower():
+            return rest.lower().startswith("in/") and len(segments) <= 2
+        return len(segments) <= 1
+
+    return next((url for url in links if is_profile(url)), links[0])
 PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 LINK_PATTERN = re.compile(r"(?:https?://|www\.)\S+|\b[\w-]+\.(?:com|net|io|dev|vn)/\S+")
 
@@ -36,6 +74,16 @@ SCHOOL_KEYWORDS = (
 )
 # Max reading-order gap to keep spans in the same education/project cluster.
 _CLUSTER_GAP = 25
+# Max reading-order gap for a DATE/GPA/LOCATION to still attach to an
+# education/project block. Keeps a single GPA from being copied onto every
+# education entry and a job's date from leaking onto an undated project.
+_EDU_GAP = 30
+_PROJECT_GAP = 12
+# A COMPANY span below this confidence only anchors a job when a role-looking
+# JOB_TITLE sits right beside it — guards against phantom jobs the model
+# fabricates from a low-confidence fragment (e.g. "JSC" split off a project).
+_MIN_ANCHOR_CONFIDENCE = 0.6
+_ANCHOR_GAP = 6
 
 
 @dataclass(frozen=True)
@@ -57,59 +105,54 @@ class EntitySpan:
 
 
 def build_profile(entities: Iterable[EntitySpan], document_text: str, model_used: bool) -> dict:
-    """Build legacy frontend-ready profile fields (unchanged contract)."""
-    spans = list(entities)
-    grouped: dict[str, list[EntitySpan]] = {}
-    for span in spans:
-        cleaned = _clean_text(span.text)
-        if not cleaned:
-            continue
-        grouped.setdefault(span.label.upper(), []).append(
-            EntitySpan(span.label.upper(), cleaned, span.confidence)
-        )
+    """Build the legacy frontend-ready profile fields (unchanged contract).
 
+    This is now a pure *projection* of :func:`build_canonical`: the span-grouping
+    rules (work/education/project reconstruction) run exactly once, inside
+    ``build_canonical``, right after the LayoutLM output is available. The flat
+    legacy shape below is derived from that single canonical structure instead of
+    re-grouping the spans a second, divergent way.
+    """
+    canonical = build_canonical(entities, document_text, model_used)
+    personal = canonical["personal_information"]
+    by_label = canonical["entitiesByLabel"]
     sections = _extract_sections(document_text)
-    emails = _dedupe(
-        [span.text for span in grouped.get("EMAIL", [])]
-        + EMAIL_PATTERN.findall(document_text)
-    )
-    phones = _dedupe(
-        [span.text for span in grouped.get("PHONE", [])]
-        + [match.strip() for match in PHONE_PATTERN.findall(document_text)]
-    )
 
     skills = _dedupe(
-        [span.text for label in ("SKILL", "SOFT_SKILL") for span in grouped.get(label, [])]
-        + _split_list_section(sections.get("skills", []))
+        list(canonical["skills_and_expertise"]["skill"])
+        + list(canonical["skills_and_expertise"]["soft_skill"])
     )
+    # Use the grouped education blocks (degree — school, kept together) rather
+    # than the raw per-span fragments; fall back to section text on the
+    # heuristic (no-span) path.
     education = _dedupe(
-        [span.text for span in grouped.get("EDUCATION", [])]
-        + _clean_section_lines(sections.get("education", []))
+        [block["education"] for block in canonical["education_history"]]
+        or _clean_section_lines(sections.get("education", []))
     )
-    certifications = _dedupe(
-        [span.text for span in grouped.get("CERTIFICATION", [])]
-        + _clean_section_lines(sections.get("certifications", []))
-    )
+    summaries = by_label.get("SUMMARY", [])
 
-    names = _dedupe([span.text for span in grouped.get("NAME", [])])
-    locations = _dedupe(
-        [span.text for span in grouped.get("CANDIDATE_LOCATION", [])]
-        + [span.text for span in grouped.get("LOCATION", [])]
-    )
-    summaries = _dedupe(
-        [span.text for span in grouped.get("SUMMARY", [])]
-        + _clean_section_lines(sections.get("summary", []))
-    )
-    experiences = _build_experiences(
-        _clean_spans(spans), grouped, sections.get("experience", []), model_used
-    )
+    experiences = [
+        {
+            "companyName": block["company"],
+            "position": block["job_title"],
+            "time": block["date"],
+            "description": block["experience"],
+            "skills": "",
+            "certificates": "",
+        }
+        for block in canonical["work_experience"]
+    ]
+    if not experiences and not model_used:
+        # Only on the heuristic (no-model) path do we fall back to the label
+        # buckets. When the model DID run, an empty work list means the CV has no
+        # real jobs — the index-zip fallback would otherwise pair every stray
+        # JOB_TITLE with every DATE (certificate/education/project dates included)
+        # and fabricate phantom experience entries.
+        experiences = _experiences_from_text(by_label, sections.get("experience", []))
 
-    confidence_values = [span.confidence for span in spans if span.label.upper() != "O"]
-    confidence = (
-        round(sum(confidence_values) / len(confidence_values), 4)
-        if confidence_values
-        else None
-    )
+    address = personal["candidate_location"]
+    if not address and by_label.get("LOCATION"):
+        address = by_label["LOCATION"][0]
 
     warnings: list[str] = []
     if not model_used:
@@ -120,54 +163,34 @@ def build_profile(entities: Iterable[EntitySpan], document_text: str, model_used
         warnings.append("No readable text was found in the uploaded CV.")
 
     return {
-        "fullName": names[0] if names else _guess_name(document_text),
-        "detectedEmail": emails[0] if emails else None,
-        "phone": phones[0] if phones else None,
-        "address": locations[0] if locations else None,
+        "fullName": personal["name"],
+        "detectedEmail": personal["email"],
+        "phone": personal["phone"],
+        "address": address,
         "objective": "\n".join(summaries[:2]) if summaries else None,
         "skills": skills[:40],
         "experience": experiences[:15],
         "education": education[:15],
-        "certifications": certifications[:20],
-        "extractionMode": "layoutlmv3" if model_used else "heuristic",
-        "confidence": confidence,
+        "certifications": list(by_label.get("CERTIFICATION", []))[:20],
+        "extractionMode": canonical["extractionMode"],
+        "confidence": canonical["confidence"],
         "warnings": warnings,
     }
 
 
-def _build_experiences(
-    ordered_spans: list[EntitySpan],
-    grouped: dict[str, list[EntitySpan]],
-    section_lines: list[str],
-    model_used: bool,
+def _experiences_from_text(
+    by_label: dict[str, list[str]], section_lines: list[str]
 ) -> list[dict[str, str]]:
-    # On the model path reuse the canonical reading-order grouping: it anchors
-    # each entry on a COMPANY, recovers a COMPANY the model mislabelled as a
-    # JOB_TITLE (e.g. "THG Fulfillment"), and drops education dates. The legacy
-    # index-zip below instead pairs the Nth title/company/date/description, so a
-    # single job whose company was mislabelled to JOB_TITLE explodes into several
-    # phantom entries.
-    if model_used:
-        blocks = _group_work_experience(ordered_spans)
-        if blocks:
-            return [
-                {
-                    "companyName": block["company"],
-                    "position": block["job_title"],
-                    "time": block["date"],
-                    "description": block["experience"],
-                    "skills": "",
-                    "certificates": "",
-                }
-                for block in blocks
-            ]
+    """Index-zip fallback used only when no positioned work blocks were built.
 
-    titles = _dedupe([span.text for span in grouped.get("JOB_TITLE", [])])
-    companies = _dedupe([span.text for span in grouped.get("COMPANY", [])])
-    dates = _dedupe([span.text for span in grouped.get("DATE", [])])
+    Pairs the Nth title/company/date/description. Reserved for the heuristic
+    path; the model path uses the reading-order blocks from ``build_canonical``.
+    """
+    titles = list(by_label.get("JOB_TITLE", []))
+    companies = list(by_label.get("COMPANY", []))
+    dates = list(by_label.get("DATE", []))
     descriptions = _dedupe(
-        [span.text for span in grouped.get("EXPERIENCE", [])]
-        + _clean_section_lines(section_lines)
+        list(by_label.get("EXPERIENCE", [])) + _clean_section_lines(section_lines)
     )
 
     count = max(len(titles), len(companies), len(dates), len(descriptions))
@@ -210,10 +233,21 @@ def _extract_sections(text: str) -> dict[str, list[str]]:
     return sections
 
 
+# A leading "Category:" label on a skills line, e.g. "Programming: Python" or
+# "Soft Skills: Analytical Thinking". The category word(s) are dropped so only
+# the skill itself is kept. A colon inside a real skill is rare and the prefix
+# is bounded to short leading text to avoid eating "Ratio Analysis (x:y)".
+_CATEGORY_PREFIX = re.compile(r"^[A-Za-z][\w /&+.-]{0,28}:\s+")
+
+
+def _strip_category_prefix(value: str) -> str:
+    return _CATEGORY_PREFIX.sub("", value.strip())
+
+
 def _split_list_section(lines: list[str]) -> list[str]:
     values: list[str] = []
     for line in lines:
-        values.extend(re.split(r"[,;|•·]", line))
+        values.extend(_strip_category_prefix(part) for part in re.split(r"[,;|•·]", line))
     return _dedupe(values)
 
 
@@ -304,7 +338,10 @@ def build_canonical(entities: Iterable[EntitySpan], document_text: str, model_us
     }
     # Augment a few buckets with regex/section text so the heuristic path (no
     # spans) and sparse model output still expose data to the recommender.
-    by_label["EMAIL"] = _dedupe(by_label["EMAIL"] + EMAIL_PATTERN.findall(document_text))
+    by_label["EMAIL"] = _dedupe(
+        _clean_email(candidate)
+        for candidate in by_label["EMAIL"] + EMAIL_PATTERN.findall(document_text)
+    )
     by_label["PHONE"] = _dedupe(
         by_label["PHONE"] + [match.strip() for match in PHONE_PATTERN.findall(document_text)]
     )
@@ -313,9 +350,13 @@ def build_canonical(entities: Iterable[EntitySpan], document_text: str, model_us
     by_label["CERTIFICATION"] = _dedupe(
         by_label["CERTIFICATION"] + _clean_section_lines(sections.get("certifications", []))
     )
-    by_label["SUMMARY"] = _dedupe(
-        by_label["SUMMARY"] + _clean_section_lines(sections.get("summary", []))
-    )
+    # Only fall back to section text when the model tagged NO summary span.
+    # Merging both duplicates the objective (the model's clean paragraph plus the
+    # same text re-added as OCR-split section lines, which exact-dedupe misses)
+    # and, when a "Summary/Objective" heading over-captures, appends unrelated
+    # body text (dates, project titles, contact lines).
+    if not by_label["SUMMARY"]:
+        by_label["SUMMARY"] = _dedupe(_clean_section_lines(sections.get("summary", [])))
     # Trim list/bracket punctuation off the short keyword buckets so the canonical
     # output is clean ("Python," -> "Python", "(OpenWeatherMap" -> "OpenWeatherMap").
     # The recommender's TF-IDF tokenizer already ignores punctuation, so this only
@@ -323,19 +364,21 @@ def build_canonical(entities: Iterable[EntitySpan], document_text: str, model_us
     for keyword_label in ("SKILL", "SOFT_SKILL", "LANGUAGE", "CERTIFICATION"):
         by_label[keyword_label] = _dedupe_keywords(by_label[keyword_label])
 
+    work_experience = _group_work_experience(spans)
+
     return {
         "personal_information": {
             "name": by_label["NAME"][0] if by_label["NAME"] else _guess_name(document_text),
             "email": by_label["EMAIL"][0] if by_label["EMAIL"] else None,
             "phone": by_label["PHONE"][0] if by_label["PHONE"] else None,
-            "link": by_label["LINK"][0] if by_label["LINK"] else None,
+            "link": _pick_link(by_label["LINK"]),
             "candidate_location": (
                 by_label["CANDIDATE_LOCATION"][0] if by_label["CANDIDATE_LOCATION"] else None
             ),
         },
         "summary": "\n".join(by_label["SUMMARY"][:3]) if by_label["SUMMARY"] else None,
         "education_history": _group_education_history(spans),
-        "work_experience": _group_work_experience(spans),
+        "work_experience": work_experience,
         "projects": _group_projects(spans),
         "skills_and_expertise": {
             "skill": by_label["SKILL"][:40],
@@ -345,9 +388,12 @@ def build_canonical(entities: Iterable[EntitySpan], document_text: str, model_us
         "certifications": by_label["CERTIFICATION"][:20],
         # Internal fields for the recommendation pipeline (not part of the display schema).
         "entitiesByLabel": by_label,
-        # Years of *work* experience: a degree's "2022 - Present" date is excluded
-        # so studying time is not counted as job experience (see _work_date_texts).
-        "totalExperienceYears": total_experience_years(_work_date_texts(spans)),
+        # Years of *work* experience, summed from the dates of the detected jobs
+        # only — so certificate validity periods, project timelines and degree
+        # dates are never counted as employment.
+        "totalExperienceYears": total_experience_years(
+            [block["date"] for block in work_experience if block["date"]]
+        ),
         "extractionMode": "layoutlmv3" if model_used else "heuristic",
         "confidence": _mean_confidence(spans),
     }
@@ -406,11 +452,6 @@ def _ordered(spans: list[EntitySpan], labels: tuple[str, ...]) -> list[EntitySpa
     return sorted((span for span in spans if span.label in labels), key=_span_key)
 
 
-def _last_text(spans: list[EntitySpan], label: str) -> str:
-    texts = [span.text for span in spans if span.label == label]
-    return texts[-1] if texts else ""
-
-
 def _first_text(spans: list[EntitySpan], label: str) -> str:
     return next((span.text for span in spans if span.label == label), "")
 
@@ -431,6 +472,24 @@ def _cluster_by_gap(spans: list[EntitySpan], max_gap: int) -> list[list[EntitySp
     return clusters
 
 
+def _closest_text(spans: list[EntitySpan], label: str, anchor: tuple[int, int]) -> str:
+    """Text of the ``label`` span whose reading order is nearest ``anchor``.
+
+    Considers spans on both sides of the anchor, so a role/date printed just
+    *after* its company — or a faraway headline role at the top of the CV — is
+    paired correctly rather than always taking the span immediately before.
+    """
+    candidates = [span for span in spans if span.label == label]
+    if not candidates:
+        return ""
+
+    def distance(span: EntitySpan) -> tuple[int, int]:
+        key = _span_key(span)
+        return (abs(key[0] - anchor[0]), abs(key[1] - anchor[1]))
+
+    return min(candidates, key=distance).text
+
+
 def _nearest_text(spans: list[EntitySpan], start: tuple[int, int], end: tuple[int, int]) -> str:
     """Pick the span inside [start, end], else the closest one before, else after."""
     if not spans:
@@ -443,6 +502,29 @@ def _nearest_text(spans: list[EntitySpan], start: tuple[int, int], end: tuple[in
         return before[-1].text
     after = [span for span in spans if _span_key(span) > end]
     return after[0].text if after else ""
+
+
+def _nearest_within(
+    spans: list[EntitySpan], start: tuple[int, int], end: tuple[int, int], max_gap: int
+) -> str:
+    """Like ``_nearest_text`` but returns "" when the nearest span is too far.
+
+    Used for a block's DATE/GPA so a lone value far down the CV is not copied
+    onto an unrelated block (e.g. one GPA leaking onto every education entry).
+    """
+    if not spans:
+        return ""
+
+    def gap(span: EntitySpan) -> int:
+        key = _span_key(span)
+        if key[0] != start[0]:
+            return 10 ** 9
+        if start[1] <= key[1] <= end[1]:
+            return 0
+        return start[1] - key[1] if key[1] < start[1] else key[1] - end[1]
+
+    best = min(spans, key=gap)
+    return best.text if gap(best) <= max_gap else ""
 
 
 # Title words that mark a JOB_TITLE span as a *role* (vs an org name the model
@@ -458,6 +540,25 @@ _ROLE_KEYWORDS = (
 def _looks_like_role(text: str) -> bool:
     lowered = text.lower()
     return any(word in lowered for word in _ROLE_KEYWORDS)
+
+
+def _is_confident_company(company: EntitySpan, work: list[EntitySpan]) -> bool:
+    """Whether a COMPANY span is trustworthy enough to anchor a work entry.
+
+    High-confidence spans always qualify. A low-confidence one qualifies only
+    when a role-looking JOB_TITLE sits right next to it on the same page, which
+    signals a real (title, company) pair the model split rather than a stray
+    fragment (e.g. an org name lifted out of a project description).
+    """
+    if company.confidence >= _MIN_ANCHOR_CONFIDENCE:
+        return True
+    return any(
+        span.label == "JOB_TITLE"
+        and span.page == company.page
+        and abs(span.order - company.order) <= _ANCHOR_GAP
+        and _looks_like_role(span.text)
+        for span in work
+    )
 
 
 def _nearest_distance(span: EntitySpan, others: list[EntitySpan]) -> int | None:
@@ -490,16 +591,6 @@ def _education_date_keys(spans: list[EntitySpan]) -> set[tuple[int, int]]:
     return keys
 
 
-def _work_date_texts(spans: list[EntitySpan]) -> list[str]:
-    """DATE entity texts that belong to work history (education dates removed)."""
-    education_dates = _education_date_keys(spans)
-    return [
-        span.text
-        for span in spans
-        if span.label == "DATE" and _span_key(span) not in education_dates
-    ]
-
-
 def _work_block(
     *, company: str, job_title: str, date: str, location: str, experience: str
 ) -> dict[str, str]:
@@ -530,23 +621,31 @@ def _group_work_experience(spans: list[EntitySpan]) -> list[dict[str, str]]:
         for span in _ordered(spans, WORK_LABELS)
         if not (span.label == "DATE" and _span_key(span) in education_dates)
     ]
-    companies = [span for span in work if span.label == "COMPANY"]
+    all_companies = [span for span in work if span.label == "COMPANY"]
+    companies = [span for span in all_companies if _is_confident_company(span, work)]
     blocks: list[dict[str, str]] = []
 
-    if companies:
+    # If the CV had COMPANY spans but none survived the confidence guard, do NOT
+    # fall through to the DATE-anchored branch: that would fabricate jobs out of
+    # project/education dates. An empty result is the correct answer here.
+    if all_companies:
         keys = [_span_key(company) for company in companies]
         for index, company in enumerate(companies):
             previous = keys[index - 1] if index > 0 else (-1, -1)
             following = keys[index + 1] if index + 1 < len(keys) else (10 ** 9, 10 ** 9)
             window = [span for span in work if previous < _span_key(span) < following]
-            before = [span for span in window if _span_key(span) < _span_key(company)]
-            after = [span for span in window if _span_key(span) > _span_key(company)]
+            anchor = _span_key(company)
+            after = [span for span in window if _span_key(span) > anchor]
+            # Pair the title/date/location physically closest to this company,
+            # not merely the one just before it: real CVs print either
+            # DATE -> ROLE -> COMPANY or COMPANY -> DATE -> ROLE, and a headline
+            # target role at the very top must not be grabbed by the first job.
             blocks.append(
                 _work_block(
                     company=company.text,
-                    job_title=_last_text(before, "JOB_TITLE"),
-                    date=_last_text(before, "DATE"),
-                    location=_last_text(before, "LOCATION") or _first_text(after, "LOCATION"),
+                    job_title=_closest_text(window, "JOB_TITLE", anchor),
+                    date=_closest_text(window, "DATE", anchor),
+                    location=_closest_text(window, "LOCATION", anchor),
                     experience=" ".join(
                         span.text for span in after if span.label == "EXPERIENCE"
                     ),
@@ -559,6 +658,15 @@ def _group_work_experience(spans: list[EntitySpan]) -> list[dict[str, str]]:
             previous = keys[index - 1] if index > 0 else (-1, -1)
             following = keys[index + 1] if index + 1 < len(keys) else (10 ** 9, 10 ** 9)
             window = [span for span in work if previous < _span_key(span) < following]
+            experience = " ".join(
+                span.text for span in window if span.label == "EXPERIENCE"
+            )
+            # With no COMPANY to anchor on, a date only becomes a job when it
+            # actually owns work bullets. A bare (date, role) pair here is almost
+            # always a project row or a certificate/education period, not a job —
+            # so skip it instead of fabricating a phantom entry.
+            if not experience:
+                continue
             titles = [span.text for span in window if span.label == "JOB_TITLE"]
             roles_after = [
                 span.text
@@ -580,9 +688,7 @@ def _group_work_experience(spans: list[EntitySpan]) -> list[dict[str, str]]:
                     job_title=job_title,
                     date=date.text,
                     location=_first_text(window, "LOCATION"),
-                    experience=" ".join(
-                        span.text for span in window if span.label == "EXPERIENCE"
-                    ),
+                    experience=experience,
                 )
             )
 
@@ -598,13 +704,25 @@ def _group_education_history(spans: list[EntitySpan]) -> list[dict[str, str]]:
     blocks: list[dict[str, str]] = []
     for cluster in _cluster_by_gap(education, _CLUSTER_GAP):
         start, end = _span_key(cluster[0]), _span_key(cluster[-1])
-        school = next((span.text for span in cluster if _looks_like_school(span.text)), None)
+        # Keep both the school AND the degree/major from the same block instead
+        # of collapsing to just the school (which dropped "Bachelor of ..."). The
+        # school line is separated out; the remaining lines are the degree/major.
+        texts = [span.text for span in cluster if not _is_edu_noise(span.text)]
+        school = next((text for text in texts if _looks_like_school(text)), "")
+        degree = " ".join(text for text in texts if text != school)
+        display = " — ".join(part for part in (degree, school) if part)
+        # Prefer a dedicated GPA span; else recover a GPA written inline in the
+        # block text ("Bachelor Degree - GPA: 3.3"), which the model often tags
+        # as EDUCATION rather than GPA.
+        gpa = _nearest_within(gpas, start, end, _EDU_GAP) or _gpa_in_text(texts)
         blocks.append(
             {
-                "education": school or " ".join(span.text for span in cluster),
-                "gpa": _nearest_text(gpas, start, end),
-                "date": _nearest_text(dates, start, end),
-                "location": _nearest_text(locations, start, end),
+                "education": display or " ".join(texts),
+                "school": school,
+                "degree": degree,
+                "gpa": gpa,
+                "date": _nearest_within(dates, start, end, _EDU_GAP),
+                "location": _nearest_within(locations, start, end, _EDU_GAP),
             }
         )
     return blocks[:10]
@@ -614,16 +732,62 @@ def _group_projects(spans: list[EntitySpan]) -> list[dict[str, str]]:
     projects = _ordered(spans, ("PROJECT",))
     dates = _ordered(spans, ("DATE",))
 
+    # Start a new project at each title-looking span (short, no trailing period)
+    # and gather the description bullets under it, instead of gluing several
+    # projects into one cluster. Bullets before any title fall into a leading
+    # untitled block.
+    groups: list[list[EntitySpan]] = []
+    for span in projects:
+        if _looks_like_project_title(span.text) or not groups:
+            groups.append([span])
+        else:
+            groups[-1].append(span)
+
     blocks: list[dict[str, str]] = []
-    for cluster in _cluster_by_gap(projects, _CLUSTER_GAP):
-        start, end = _span_key(cluster[0]), _span_key(cluster[-1])
+    for group in groups:
+        start, end = _span_key(group[0]), _span_key(group[-1])
+        head = group[0].text
+        titled = _looks_like_project_title(head)
         blocks.append(
             {
-                "project": " ".join(span.text for span in cluster),
-                "date": _nearest_text(dates, start, end),
+                "project": head if titled else " ".join(span.text for span in group),
+                "description": " ".join(span.text for span in group[1:]) if titled else "",
+                # Only a DATE sitting next to the project counts; otherwise a
+                # faraway job's date must not be borrowed onto the project.
+                "date": _nearest_within(dates, start, end, _PROJECT_GAP),
             }
         )
     return blocks[:10]
+
+
+def _looks_like_project_title(text: str) -> bool:
+    """A short heading line (no trailing sentence punctuation) that names a project."""
+    stripped = _clean_text(text)
+    return bool(stripped) and len(stripped) <= 80 and not stripped.endswith((".", ":", ";"))
+
+
+# Connector fragments the model sometimes mislabels as EDUCATION between two
+# real lines ("and", "of", ...); dropped so they don't pollute the degree text.
+_EDU_NOISE = {"and", "or", "of", "the", "in", "at", "to", "-", "–", "—"}
+
+
+def _is_edu_noise(text: str) -> bool:
+    stripped = _clean_keyword(text).casefold()
+    return len(stripped) < 2 or stripped in _EDU_NOISE
+
+
+# A GPA written inline, e.g. "GPA: 3.3", "GPA 3.65/4.0", "GPA - 8.45 / 10".
+_GPA_RE = re.compile(
+    r"GPA[\s:._-]*([0-9]{1,2}(?:[.,][0-9]+)?(?:\s*/\s*[0-9]{1,2}(?:[.,][0-9]+)?)?)",
+    re.IGNORECASE,
+)
+
+
+def _gpa_in_text(texts: list[str]) -> str:
+    # Search the joined block text: the model often splits "GPA:" and the number
+    # ("3.3") into separate EDUCATION spans, so per-line search would miss it.
+    match = _GPA_RE.search(" ".join(texts))
+    return match.group(1).strip() if match else ""
 
 
 def _looks_like_school(text: str) -> bool:

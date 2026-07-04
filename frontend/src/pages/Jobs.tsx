@@ -302,9 +302,9 @@ export default function Jobs() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="rounded-lg border bg-card p-5 hover:shield-glow transition-all group"
+              className="rounded-lg border bg-card p-5 hover:shield-glow transition-all group flex flex-col"
             >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="flex flex-1 flex-col sm:flex-row sm:items-stretch justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-display font-semibold text-foreground group-hover:text-primary transition-colors">
@@ -337,28 +337,30 @@ export default function Jobs() {
                     {job.postedDate && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {job.postedDate}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0 space-y-2">
-                  {job.salaryRange && <p className="font-display font-semibold text-foreground text-sm">{job.salaryRange}</p>}
-                  {job.jobType && <p className="text-xs text-muted-foreground">{job.jobType}</p>}
-                  <div className="flex flex-col gap-1.5 mt-2">
-                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/jobs/${id}`)}>
+                <div className="text-right shrink-0 flex flex-col sm:w-44">
+                  <div className="space-y-1">
+                    {job.salaryRange && <p className="font-display font-semibold text-foreground text-sm">{job.salaryRange}</p>}
+                    {job.jobType && <p className="text-xs text-muted-foreground">{job.jobType}</p>}
+                  </div>
+                  <div className="flex flex-col gap-1.5 mt-auto pt-3">
+                    <Button size="sm" variant="outline" className="w-full justify-center gap-1 text-xs" onClick={() => navigate(`/jobs/${id}`)}>
                       <Eye className="w-3 h-3" /> View
                     </Button>
                     {role === "APPLICANT" && (
                       <>
                         <Button size="sm" disabled={isApplied}
-                          className="gap-1 text-xs" onClick={() => navigate(`/jobs/${id}`)}>
+                          className="w-full justify-center gap-1 text-xs" onClick={() => navigate(`/jobs/${id}`)}>
                           <Briefcase className="w-3 h-3" />
                           {isApplied ? "Applied" : "Apply"}
                         </Button>
                         <Button size="sm" variant="outline" disabled={savingId === id}
-                          className="gap-1 text-xs" onClick={() => handleSave(job)}>
+                          className="w-full justify-center gap-1 text-xs" onClick={() => handleSave(job)}>
                           {savingId === id ? <Loader2 className="w-3 h-3 animate-spin" /> :
                             <Bookmark className={`w-3 h-3 ${isSaved ? "fill-primary text-primary" : ""}`} />}
                           {isSaved ? "Saved" : "Save"}
                         </Button>
                         <Button size="sm" variant="outline"
-                          className="gap-1 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                          className="w-full justify-center gap-1 text-xs border-primary/30 text-primary hover:bg-primary/10"
                           disabled={singleLoading === id}
                           onClick={() => handleSingleSuggestion(job)}>
                           {singleLoading === id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}

@@ -55,6 +55,9 @@ class HardFilterResult:
     required_years: float = 0.0
     location_ok: bool = True
     gpa_ok: bool = True
+    # Soft experience-fit multiplier in [FLOOR, 1.0]; < 1.0 means the candidate is
+    # short on years but not enough to be rejected -- the final score is scaled by it.
+    exp_fit: float = 1.0
 
 
 @dataclass

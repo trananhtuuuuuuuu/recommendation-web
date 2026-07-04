@@ -31,6 +31,23 @@ class PostprocessTests(unittest.TestCase):
         self.assertEqual(profile["detectedEmail"], "nguyenvana@example.com")
         self.assertEqual(profile["extractionMode"], "layoutlmv3")
 
+    def test_model_path_does_not_fabricate_experience_from_stray_dates(self):
+        # A projects-only CV: JOB_TITLE headings + certificate/project DATE spans
+        # but no COMPANY/EXPERIENCE. The model ran, so no phantom jobs must be
+        # zipped together from the loose titles and dates.
+        profile = build_profile(
+            [
+                EntitySpan("JOB_TITLE", "Full Stack Developer", 0.99),
+                EntitySpan("JOB_TITLE", "Frontend Developer", 0.99),
+                EntitySpan("DATE", "Oct 2024 - Oct 2026", 0.99),
+                EntitySpan("DATE", "Aug 2025 - Aug 2027", 0.99),
+                EntitySpan("DATE", "Feb 2026 - Mar 2026", 0.99),
+            ],
+            "",
+            model_used=True,
+        )
+        self.assertEqual(profile["experience"], [])
+
     def test_text_fallback_extracts_sections_without_overstating_model_usage(self):
         profile = build_profile(
             [],

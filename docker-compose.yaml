@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: Dockerfile.ai
       args:
-        AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+        AI_WITH_MODEL: ${AI_WITH_MODEL:-true}
     container_name: rw-ai
     restart: unless-stopped
     extra_hosts:
@@ -33,14 +33,14 @@ services:
     networks:
       - rw-network
     environment:
-      AI_WITH_MODEL: ${AI_WITH_MODEL:-false}
+      AI_WITH_MODEL: ${AI_WITH_MODEL:-true}
       # ai/model is mounted at /app/model so BOTH the LayoutLMv3 dir and the
       # recommender_svm*.joblib files (config.MODEL_DIR=/app/model) are found.
       AI_MODEL_DIR: /app/model/layoutlmv3
       AI_MAX_PAGES: ${AI_MAX_PAGES:-3}
       AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
       AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}
-      AI_OCR_ENGINE: ${AI_OCR_ENGINE:-paddle}
+      AI_OCR_ENGINE: ${AI_OCR_ENGINE:-tesseract}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     volumes:
