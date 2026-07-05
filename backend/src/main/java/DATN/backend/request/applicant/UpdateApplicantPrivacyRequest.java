@@ -7,6 +7,7 @@ import lombok.Setter;
 @Setter
 public class UpdateApplicantPrivacyRequest {
     private Boolean profileVisibleToRecruiters;
+    private Boolean profileVisibleToOtherApplicants;
     private Boolean showFullName;
     private Boolean showContactInfo;
     private Boolean showAddress;

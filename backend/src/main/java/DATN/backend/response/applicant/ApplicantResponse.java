@@ -22,6 +22,7 @@ public class ApplicantResponse {
     private Long cvId;
     private CvResponse cv;
     private Boolean profileVisibleToRecruiters;
+    private Boolean profileVisibleToOtherApplicants;
     private Boolean showFullName;
     private Boolean showContactInfo;
     private Boolean showAddress;

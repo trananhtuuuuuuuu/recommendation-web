@@ -15,7 +15,7 @@ import lombok.Setter;
 public class CvJobMatchRequest {
 
     /** Use the local LLM (Ollama) for richer suggestions; slower. Defaults to false. */
-    private boolean llm = false;
+    private Boolean llm = false;
 
     /** Scoring method: "embedding" or "tfidf". Null/blank uses the AI service default. */
     private String method;

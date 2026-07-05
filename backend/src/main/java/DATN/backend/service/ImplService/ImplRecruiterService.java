@@ -40,8 +40,11 @@ public class ImplRecruiterService implements InterfaceRecruiterService {
             throw new AlreadyExistException("Email already exists");
         }
 
-        Role role = roleRepository.findByRoleName(request.getRoleName())
-                .orElseGet(() -> roleRepository.save(new Role(request.getRoleName(), request.getRoleName())));
+        String roleName = request.getRoleName() == null || request.getRoleName().isBlank()
+                ? "RECRUITER"
+                : request.getRoleName();
+        Role role = roleRepository.findByRoleName(roleName)
+                .orElseGet(() -> roleRepository.save(new Role(roleName, roleName)));
 
         Recruiter recruiter = RecruiterMapper.toNewRecruiter(request);
         recruiter.setPassword(passwordEncoder.encode(request.getPassword()));

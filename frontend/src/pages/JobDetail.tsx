@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
@@ -11,6 +11,7 @@ import {
   Building2,
   Calendar,
   Clock,
+  Info,
   Loader2,
   MapPin,
   ShieldCheck,
@@ -24,12 +25,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyJob,
+  fetchAnonymousCandidatePreviews,
+  fetchApplicantActivityCount,
   fetchJob,
   fetchJobApplicantCount,
   matchCvToJob,
   getApplyingDeadline,
   saveJob,
   type ApplicationField,
+  type AnonymousCandidatePreviews,
+  type ApplicantActivityCount,
   type CvJobMatch,
   type Job,
   type JobApplicantsCount,
@@ -44,6 +49,10 @@ export default function JobDetail() {
   const { user, role, isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [applicantsCount, setApplicantsCount] = useState<number | null>(null);
+  const [applicantActivity, setApplicantActivity] = useState<ApplicantActivityCount | null>(null);
+  const [applicantActivityLoading, setApplicantActivityLoading] = useState(false);
+  const [applicantActivityError, setApplicantActivityError] = useState<string | null>(null);
+  const [anonymousPreviews, setAnonymousPreviews] = useState<AnonymousCandidatePreviews | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -55,6 +64,32 @@ export default function JobDetail() {
   const [matchResult, setMatchResult] = useState<CvJobMatch | null>(null);
   const [matching, setMatching] = useState(false);
 
+  const loadApplicantPrivacy = useCallback(async (jobId: string | number, active = true) => {
+    setApplicantActivityLoading(true);
+    setApplicantActivityError(null);
+    const [countResult, previewResult] = await Promise.allSettled([
+      fetchApplicantActivityCount(jobId),
+      fetchAnonymousCandidatePreviews(jobId),
+    ]);
+    if (!active) return;
+    if (countResult.status === "fulfilled") {
+      setApplicantActivity(countResult.value);
+    } else {
+      setApplicantActivity(null);
+      setApplicantActivityError(
+        countResult.reason instanceof ApiError
+          ? countResult.reason.message
+          : "Applicant activity is unavailable right now.",
+      );
+    }
+    if (previewResult.status === "fulfilled" && previewResult.value.available) {
+      setAnonymousPreviews(previewResult.value);
+    } else {
+      setAnonymousPreviews(null);
+    }
+    setApplicantActivityLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!id) return;
     let active = true;
@@ -64,7 +99,9 @@ export default function JobDetail() {
       .catch((e) => { if (active) setError(e instanceof ApiError ? e.message : "Failed to load job"); })
       .finally(() => { if (active) setLoading(false); });
 
-    if (role === "RECRUITER" || role === "ADMIN") {
+    if (role === "APPLICANT") {
+      loadApplicantPrivacy(id, active);
+    } else if (role === "RECRUITER" || role === "ADMIN") {
       fetchJobApplicantCount(id)
         .then((res) => {
           if (!active) return;
@@ -74,7 +111,7 @@ export default function JobDetail() {
         .catch(() => { /* non-fatal */ });
     }
     return () => { active = false; };
-  }, [id, role]);
+  }, [id, role, loadApplicantPrivacy]);
 
   const handleSave = async () => {
     if (!isAuthenticated) { navigate("/auth"); return; }
@@ -121,6 +158,7 @@ export default function JobDetail() {
         portfolioUrl: applicationAnswers.portfolio_url || "",
         applicationAnswers: JSON.stringify(applicationAnswers),
       });
+      await loadApplicantPrivacy(id);
       setApplied(true);
       setShowApplyForm(false);
       toast.success("Application submitted.");
@@ -191,6 +229,55 @@ export default function JobDetail() {
           {job.benefits ? (
             <Section title="Benefits">
               <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">{job.benefits}</p>
+            </Section>
+          ) : null}
+
+          {role === "APPLICANT" ? (
+            <Section title="Applicant activity">
+              {applicantActivityLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading approximate applicant activity...
+                </div>
+              ) : applicantActivity ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">{applicantActivity.displayText}</p>
+                  <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    This count is intentionally approximate to protect applicant privacy.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {applicantActivityError ?? "Applicant activity is unavailable right now."}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => id && loadApplicantPrivacy(id)}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+            </Section>
+          ) : null}
+
+          {role === "APPLICANT" && anonymousPreviews?.available && anonymousPreviews.profiles.length > 0 ? (
+            <Section title="Anonymous candidate preview">
+              <p className="text-xs leading-5 text-muted-foreground">
+                These candidates chose to share a limited anonymous profile. Identifying details are hidden.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {anonymousPreviews.profiles.map((profile) => (
+                  <div key={profile.anonymousProfileId} className="rounded-lg border bg-card p-4">
+                    <p className="text-sm font-semibold text-foreground">Candidate</p>
+                    <div className="mt-3 space-y-1.5 text-xs leading-5 text-muted-foreground">
+                      <p>Experience: <span className="text-foreground">{profile.experienceLevel || "Not specified"}</span></p>
+                      <p>Areas: <span className="text-foreground">{profile.skillCategories?.join(", ") || "Not specified"}</span></p>
+                      <p>Education: <span className="text-foreground">{profile.educationLevel || "Not specified"}</span></p>
+                      <p>Region: <span className="text-foreground">{profile.generalRegion || "Not specified"}</span></p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </Section>
           ) : null}
 

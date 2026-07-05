@@ -59,7 +59,7 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
                 .orElseThrow(() -> new ResourcesNotFoundException("Job not found"));
 
         CvMatchAiResponse ai = cvAiService.matchCvToJob(
-                buildCanonical(cv), buildJd(job), request.isLlm(), request.getMethod());
+                buildCanonical(cv), buildJd(job), Boolean.TRUE.equals(request.getLlm()), request.getMethod());
 
         List<String> hardReasons = (ai.getHardFilter() == null || ai.getHardFilter().getReasons() == null)
                 ? List.of()

@@ -152,6 +152,28 @@ export interface JobApplicantsCount {
   count?: number;
 }
 
+export interface ApplicantActivityCount {
+  jobId: string | number;
+  approximateApplicantCount: number;
+  displayText: string;
+  approximate: boolean;
+}
+
+export interface AnonymousCandidatePreviewProfile {
+  anonymousProfileId: string;
+  experienceLevel?: string;
+  skillCategories?: string[];
+  educationLevel?: string;
+  generalRegion?: string;
+  currentRoleCategory?: string;
+}
+
+export interface AnonymousCandidatePreviews {
+  available: boolean;
+  message?: string;
+  profiles: AnonymousCandidatePreviewProfile[];
+}
+
 export interface JobApplicant {
   applicationId?: string | number;
   jobDescriptionId?: string | number;
@@ -245,6 +267,12 @@ export const fetchJob = (id: string | number) =>
 export const fetchJobApplicantCount = (id: string | number) =>
   apiRequest<number | JobApplicantsCount>(`/api/v1/browse-jobs/applicants/${id}`);
 
+export const fetchApplicantActivityCount = (id: string | number) =>
+  apiRequest<ApplicantActivityCount>(`/api/v1/jobs/${id}/applicant-count`);
+
+export const fetchAnonymousCandidatePreviews = (id: string | number) =>
+  apiRequest<AnonymousCandidatePreviews>(`/api/v1/jobs/${id}/anonymous-candidate-previews`);
+
 export const fetchJobApplicants = (jobId: string | number, recruiterId?: string | number) =>
   recruiterId
     ? apiRequest<JobApplicant[]>(`/api/v1/recruiters/jobs/${recruiterId}/${jobId}/applicants`)
@@ -310,6 +338,7 @@ export const updateApplicant = (id: string | number, body: Partial<Applicant>) =
 export type ApplicantPrivacySettings = Pick<
   Applicant,
   | "profileVisibleToRecruiters"
+  | "profileVisibleToOtherApplicants"
   | "showFullName"
   | "showContactInfo"
   | "showAddress"

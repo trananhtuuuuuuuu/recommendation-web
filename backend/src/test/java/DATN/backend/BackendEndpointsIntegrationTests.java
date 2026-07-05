@@ -32,13 +32,19 @@ import DATN.backend.Enum.ApplicantStatusEnum;
 import DATN.backend.Enum.GenderEnum;
 import DATN.backend.model.Applicant;
 import DATN.backend.model.ApplicantJob;
+import DATN.backend.model.Cv;
+import DATN.backend.model.Education;
+import DATN.backend.model.Experience;
 import DATN.backend.model.Job;
 import DATN.backend.model.Recruiter;
 import DATN.backend.model.Role;
 import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.CvRepository;
+import DATN.backend.repository.EducationRepository;
+import DATN.backend.repository.ExperienceRepository;
 import DATN.backend.repository.JobRepository;
+import DATN.backend.repository.PrivacyReleaseRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.repository.RoleRepository;
 import DATN.backend.repository.UserRepository;
@@ -60,9 +66,12 @@ class BackendEndpointsIntegrationTests {
   private final ApplicantRepository applicantRepository;
   private final ApplicantJobRepository applicantJobRepository;
   private final CvRepository cvRepository;
+  private final ExperienceRepository experienceRepository;
+  private final EducationRepository educationRepository;
   private final RecruiterRepository recruiterRepository;
   private final RoleRepository roleRepository;
   private final JobRepository jobDescriptionRepository;
+  private final PrivacyReleaseRepository privacyReleaseRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
 
@@ -75,7 +84,9 @@ class BackendEndpointsIntegrationTests {
   BackendEndpointsIntegrationTests(WebApplicationContext webApplicationContext, UserRepository userRepository,
       ApplicantRepository applicantRepository,
       ApplicantJobRepository applicantJobRepository, CvRepository cvRepository,
+      ExperienceRepository experienceRepository, EducationRepository educationRepository,
       RecruiterRepository recruiterRepository, RoleRepository roleRepository,
+      PrivacyReleaseRepository privacyReleaseRepository,
       JobRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
       JwtService jwtService) {
     this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
@@ -85,8 +96,11 @@ class BackendEndpointsIntegrationTests {
     this.applicantRepository = applicantRepository;
     this.applicantJobRepository = applicantJobRepository;
     this.cvRepository = cvRepository;
+    this.experienceRepository = experienceRepository;
+    this.educationRepository = educationRepository;
     this.recruiterRepository = recruiterRepository;
     this.roleRepository = roleRepository;
+    this.privacyReleaseRepository = privacyReleaseRepository;
     this.jobDescriptionRepository = jobDescriptionRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
@@ -95,11 +109,14 @@ class BackendEndpointsIntegrationTests {
   @BeforeEach
   void cleanDatabase() {
     applicantJobRepository.deleteAll();
+    privacyReleaseRepository.deleteAll();
     jobDescriptionRepository.deleteAll();
     applicantRepository.deleteAll();
     recruiterRepository.deleteAll();
     userRepository.deleteAll();
     cvRepository.deleteAll();
+    educationRepository.deleteAll();
+    experienceRepository.deleteAll();
     roleRepository.deleteAll();
   }
 
@@ -622,6 +639,119 @@ class BackendEndpointsIntegrationTests {
   }
 
   @Test
+  void applicantFacingCountShouldBeDifferentiallyPrivateStickyAndDistinct() throws Exception {
+    Applicant viewer = seedApplicant("viewer", "viewer@example.com");
+    Applicant duplicateApplicant = seedApplicant("duplicate", "duplicate@example.com");
+    Applicant savedOnlyApplicant = seedApplicant("savedonly", "savedonly@example.com");
+    Applicant withdrawnApplicant = seedApplicant("withdrawn", "withdrawn@example.com");
+    Applicant browsingApplicant = seedApplicant("browser", "browser@example.com");
+    Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+    Job job = seedJob(recruiter, "Backend Engineer");
+
+    applicantJobRepository.save(new ApplicantJob(viewer, job, "APPLIED"));
+    applicantJobRepository.save(new ApplicantJob(duplicateApplicant, job, "APPLIED"));
+    applicantJobRepository.save(new ApplicantJob(duplicateApplicant, job, "APPLIED"));
+    applicantJobRepository.save(new ApplicantJob(savedOnlyApplicant, job, "SAVED"));
+    applicantJobRepository.save(new ApplicantJob(withdrawnApplicant, job, "WITHDRAWN"));
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.applicantCount").value(3));
+
+    org.assertj.core.api.Assertions
+        .assertThat(applicantJobRepository.countDistinctApplicantsByJobAndActionType(job.getId(), "APPLIED"))
+        .isEqualTo(2);
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.jobId").value(job.getId()))
+        .andExpect(jsonPath("$.data.approximateApplicantCount").isNumber())
+        .andExpect(jsonPath("$.data.displayText").value(org.hamcrest.Matchers.startsWith("Approximately ")))
+        .andExpect(jsonPath("$.data.approximate").value(true))
+        .andExpect(jsonPath("$.data.rawCount").doesNotExist())
+        .andExpect(jsonPath("$.data.noise").doesNotExist());
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(browsingApplicant)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.displayText").value(org.hamcrest.Matchers.startsWith("Approximately ")));
+
+    String firstResponse = mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andReturn().getResponse().getContentAsString();
+    String secondResponse = mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(duplicateApplicant)))
+        .andReturn().getResponse().getContentAsString();
+    org.assertj.core.api.Assertions.assertThat(secondResponse).isEqualTo(firstResponse);
+  }
+
+  @Test
+  void anonymousCandidatePreviewShouldBeConsentBasedScopedAndRateLimited() throws Exception {
+    Applicant viewer = seedApplicant("viewer", "viewer@example.com");
+    Applicant savedOnly = seedApplicant("savedonly", "savedonly@example.com");
+    Applicant optedOut = seedApplicant("optedout", "optedout@example.com");
+    Applicant recruiterVisibleOnly = seedApplicant("recruiteronly", "recruiteronly@example.com");
+    Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+    Job job = seedJob(recruiter, "Backend Engineer");
+
+    applicantJobRepository.save(new ApplicantJob(viewer, job, "APPLIED"));
+    applicantJobRepository.save(new ApplicantJob(savedOnly, job, "SAVED"));
+    applicantJobRepository.save(new ApplicantJob(optedOut, job, "APPLIED"));
+    recruiterVisibleOnly.setProfileVisibleToRecruiters(true);
+    recruiterVisibleOnly.setProfileVisibleToOtherApplicants(false);
+    applicantRepository.save(recruiterVisibleOnly);
+    applicantJobRepository.save(new ApplicantJob(recruiterVisibleOnly, job, "APPLIED"));
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.available").value(false))
+        .andExpect(jsonPath("$.data.profiles.length()").value(0));
+
+    for (int index = 0; index < 3; index++) {
+      Applicant candidate = seedApplicant("candidate" + index, "candidate" + index + "@example.com");
+      candidate.setProfileVisibleToOtherApplicants(true);
+      candidate.setAddress("Ho Chi Minh City");
+      candidate.setCv(seedCv("Java, Spring Boot, PostgreSQL", "1-3 years"));
+      applicantRepository.save(candidate);
+      applicantJobRepository.save(new ApplicantJob(candidate, job, "APPLIED"));
+    }
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(savedOnly)))
+        .andExpect(status().isForbidden());
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.available").value(true))
+        .andExpect(jsonPath("$.data.profiles.length()").value(2))
+        .andExpect(jsonPath("$.data.profiles[0].anonymousProfileId")
+            .value(org.hamcrest.Matchers.startsWith("candidate-")))
+        .andExpect(jsonPath("$.data.profiles[0].skillCategories[0]").value("Backend"))
+        .andExpect(jsonPath("$.data.profiles[0].educationLevel").value("Bachelor's degree"))
+        .andExpect(jsonPath("$.data.profiles[0].generalRegion").value("Southern Vietnam"))
+        .andExpect(jsonPath("$.data.profiles[0].id").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].applicantId").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].fullName").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].email").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].phone").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].address").doesNotExist())
+        .andExpect(jsonPath("$.data.profiles[0].cvFileUrl").doesNotExist())
+        .andExpect(jsonPath("$.data.page").doesNotExist());
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk());
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errors[0]").value("Anonymous candidate preview rate limit exceeded"));
+  }
+
+  @Test
   void applicantShouldMatchCvToJobWithAuthenticatedEndpoint() throws Exception {
     Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
     Applicant otherApplicant = seedApplicant("applicant02", "other-applicant@example.com");
@@ -721,6 +851,26 @@ class BackendEndpointsIntegrationTests {
     jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));
     jobDescription.setRecruiter(recruiter);
     return jobDescriptionRepository.save(jobDescription);
+  }
+
+  private Cv seedCv(String skills, String period) {
+    Experience experience = new Experience();
+    experience.setCompanyName("Hidden Company");
+    experience.setJobTitle("Backend Engineer");
+    experience.setField("Java");
+    experience.setTime(period);
+    Education education = new Education();
+    education.setName("Hidden University");
+    education.setDegree(DATN.backend.Enum.DegreeEnum.BSc);
+    Cv cv = new Cv();
+    cv.setSkills(java.util.Arrays.stream(skills.split(","))
+        .map(String::trim)
+        .toList());
+    cv.setExperienceObj(experienceRepository.save(experience));
+    cv.setEducationObj(educationRepository.save(education));
+    cv.setAddress("Ho Chi Minh City");
+    cv.setCvFileUrl("https://example.com/private.pdf");
+    return cvRepository.save(cv);
   }
 
   private String authorizationHeader(Applicant applicant) {

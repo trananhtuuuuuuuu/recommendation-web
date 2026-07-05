@@ -73,8 +73,11 @@ public class ImplApplicantService implements InterfaceApplicantService {
             throw new AlreadyExistException("Email already exists");
         }
 
-        Role role = roleRepository.findByRoleName(request.getRoleName())
-                .orElseGet(() -> roleRepository.save(new Role(request.getRoleName(), request.getRoleName())));
+        String roleName = request.getRoleName() == null || request.getRoleName().isBlank()
+                ? "APPLICANT"
+                : request.getRoleName();
+        Role role = roleRepository.findByRoleName(roleName)
+                .orElseGet(() -> roleRepository.save(new Role(roleName, roleName)));
 
         Applicant applicant = ApplicantMapper.toNewApplicant(request);
         applicant.setPassword(passwordEncoder.encode(request.getPassword()));

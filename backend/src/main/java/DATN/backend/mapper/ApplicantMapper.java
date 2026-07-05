@@ -76,6 +76,7 @@ public class ApplicantMapper {
                                                                 showExperience, showEducation, showCertifications,
                                                                 showCvFile),
                                 profileVisible,
+                                isVisible(applicant.getProfileVisibleToOtherApplicants(), false),
                                 showFullName,
                                 showContactInfo,
                                 showAddress,
@@ -136,6 +137,7 @@ public class ApplicantMapper {
                                 applicant.getCv() == null ? null : applicant.getCv().getId(),
                                 applicant.getCv() == null ? null : toCvResponse(applicant.getCv()),
                                 isVisible(applicant.getProfileVisibleToRecruiters(), true),
+                                isVisible(applicant.getProfileVisibleToOtherApplicants(), false),
                                 isVisible(applicant.getShowFullName(), false),
                                 isVisible(applicant.getShowContactInfo(), false),
                                 isVisible(applicant.getShowAddress(), false),
@@ -193,6 +195,9 @@ public class ApplicantMapper {
         public static Applicant updateApplicantPrivacy(Applicant applicant, UpdateApplicantPrivacyRequest request) {
                 if (request.getProfileVisibleToRecruiters() != null) {
                         applicant.setProfileVisibleToRecruiters(request.getProfileVisibleToRecruiters());
+                }
+                if (request.getProfileVisibleToOtherApplicants() != null) {
+                        applicant.setProfileVisibleToOtherApplicants(request.getProfileVisibleToOtherApplicants());
                 }
                 if (request.getShowFullName() != null) {
                         applicant.setShowFullName(request.getShowFullName());

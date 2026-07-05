@@ -31,3 +31,18 @@ app:
   ai:
     enabled: ${AI_CV_ENABLED:true}
     base-url: ${AI_CV_BASE_URL:http://localhost:8001}
+
+privacy:
+  differential:
+    enabled: true
+    applicant-count:
+      epsilon: ${DP_APPLICANT_COUNT_EPSILON:0.5}
+      release-window: ${DP_APPLICANT_COUNT_RELEASE_WINDOW:P7D}
+      release-secret: ${DP_RELEASE_SECRET:local-development-dp-release-secret-change-me}
+  anonymous-candidate-preview:
+    enabled: true
+    minimum-eligible-candidates: ${ANON_PREVIEW_MINIMUM_ELIGIBLE_CANDIDATES:10}
+    maximum-previews: ${ANON_PREVIEW_MAXIMUM_PREVIEWS:3}
+    rotation-window: ${ANON_PREVIEW_ROTATION_WINDOW:P7D}
+    rate-limit-per-window: ${ANON_PREVIEW_RATE_LIMIT_PER_WINDOW:20}
+    token-secret: ${ANON_PREVIEW_TOKEN_SECRET:${DP_RELEASE_SECRET:local-development-anonymous-preview-secret-change-me}}

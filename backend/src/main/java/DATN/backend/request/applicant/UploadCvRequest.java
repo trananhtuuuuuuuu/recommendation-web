@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonSetter;
 
 import DATN.backend.Enum.DegreeEnum;
 import DATN.backend.model.Certificate;
@@ -14,12 +15,10 @@ import DATN.backend.model.Education;
 import DATN.backend.model.Experience;
 import DATN.backend.utils.StringListConverter;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
 public class UploadCvRequest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -29,7 +28,7 @@ public class UploadCvRequest {
     private String address;
     private String phone;
     private String objective;
-    private List<String> skills;
+    private Object skills;
     private Experience experience;
     private Education education;
     private Certificate certifications;
@@ -53,17 +52,20 @@ public class UploadCvRequest {
     }
 
     public void setSkills(Object skills) {
-        this.skills = StringListConverter.fromAny(skills);
+        this.skills = skills;
     }
 
+    @JsonSetter("experience")
     public void setExperience(Object experience) {
         this.experience = toExperience(experience);
     }
 
+    @JsonSetter("education")
     public void setEducation(Object education) {
         this.education = toEducation(education);
     }
 
+    @JsonSetter("certifications")
     public void setCertifications(Object certifications) {
         this.certifications = toCertificate(certifications);
     }
@@ -74,6 +76,46 @@ public class UploadCvRequest {
 
     public void setCvFile(MultipartFile cvFile) {
         this.cvFile = cvFile;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public String getObjective() {
+        return objective;
+    }
+
+    public List<String> getSkills() {
+        return StringListConverter.fromAny(skills);
+    }
+
+    public Experience getExperience() {
+        return experience;
+    }
+
+    public Education getEducation() {
+        return education;
+    }
+
+    public Certificate getCertifications() {
+        return certifications;
+    }
+
+    public String getCvFileUrl() {
+        return cvFileUrl;
+    }
+
+    public MultipartFile getCvFile() {
+        return cvFile;
     }
 
     public static Experience parseExperience(Object value) {
