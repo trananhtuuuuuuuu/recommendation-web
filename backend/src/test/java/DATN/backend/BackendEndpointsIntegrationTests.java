@@ -652,6 +652,9 @@ class BackendEndpointsIntegrationTests {
   @Test
   void browseJobsEndpointsShouldListDetailAndApplicantCount() throws Exception {
     Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
+    applicant.setShowFullName(true);
+    applicant.setShowContactInfo(true);
+    applicantRepository.save(applicant);
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
     Job jobDescription = seedJob(recruiter, "Backend Engineer");
     ApplicantJob application = new ApplicantJob(applicant, jobDescription);
@@ -676,13 +679,8 @@ class BackendEndpointsIntegrationTests {
 
     mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].kAnonymityApplied").value(true))
-        .andExpect(jsonPath("$.data[0].kAnonymitySatisfied").value(false))
-        .andExpect(jsonPath("$.data[0].anonymityGroupSize").value(1))
-        .andExpect(jsonPath("$.data[0].anonymityK").value(3))
-        .andExpect(jsonPath("$.data[0].applicant.userName").doesNotExist())
-        .andExpect(jsonPath("$.data[0].applicant.fullName").value("Candidate"))
-        .andExpect(jsonPath("$.data[0].applicant.cv").doesNotExist());
+        .andExpect(jsonPath("$.data[0].applicant.fullName").value("Applicant One"))
+        .andExpect(jsonPath("$.data[0].applicant.email").value("applicant@example.com"));
   }
 
   @Test

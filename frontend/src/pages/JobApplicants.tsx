@@ -124,19 +124,14 @@ export default function JobApplicants() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:justify-end">
-                  {item.kAnonymityApplied ? (
-                    <Badge variant="outline">
-                      k={item.anonymityK ?? 3}, n={item.anonymityGroupSize ?? applicants.length}
-                    </Badge>
-                  ) : null}
                   <Badge className="bg-primary/10 text-primary">
                     Applied
                   </Badge>
                 </div>
               </div>
-              {(item.privacyNotice || applicant.privacyNotice) && (
+              {applicant.privacyNotice && (
                 <div className="rounded-lg border bg-secondary/30 p-3 text-xs text-muted-foreground">
-                  {item.privacyNotice || applicant.privacyNotice}
+                  {applicant.privacyNotice}
                 </div>
               )}
               <div className="grid md:grid-cols-[1fr_auto] gap-4 border-t border-border pt-4">

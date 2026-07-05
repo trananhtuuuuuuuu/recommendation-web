@@ -93,37 +93,6 @@ public class ApplicantMapper {
                                                 : null);
         }
 
-        public static ApplicantResponse toKAnonymousApplicantResponse(Applicant applicant, int groupSize, int k) {
-                ApplicantResponse response = toRecruiterVisibleApplicantResponse(applicant);
-                boolean belowThreshold = groupSize < k;
-                response.setUserName(null);
-                response.setEmail(null);
-                response.setFullName(belowThreshold ? "Candidate" : anonymizedName(applicant));
-                response.setPhone(null);
-                response.setAddress(null);
-                response.setGender(null);
-                response.setAnonymized(true);
-                response.setPrivacyApplied(true);
-                response.setPrivacyNotice(belowThreshold
-                                ? "Shortlist has fewer than " + k
-                                                + " applicants, so quasi-identifiers are suppressed for k-anonymity."
-                                : "Quasi-identifiers are generalized for k-anonymity.");
-                if (belowThreshold) {
-                        response.setCv(null);
-                        response.setCvId(null);
-                } else if (response.getCv() != null) {
-                        response.getCv().setFullName(anonymizedName(applicant));
-                        response.getCv().setAddress(null);
-                        response.getCv().setPhone(null);
-                        response.getCv().setObjective(null);
-                        response.getCv().setExperience(null);
-                        response.getCv().setEducation(null);
-                        response.getCv().setCertifications(null);
-                        response.getCv().setCvFileUrl(null);
-                }
-                return response;
-        }
-
         private static ApplicantResponse toFullApplicantResponse(Applicant applicant) {
                 return new ApplicantResponse(
                                 applicant.getId(),

@@ -29,7 +29,6 @@ import lombok.RequiredArgsConstructor;
 public class ImplJobService implements InterfaceJobService {
 
         private static final String APPLIED_ACTION = "APPLIED";
-        private static final int K_ANONYMITY_THRESHOLD = 3;
 
         private final JobRepository jobDescriptionRepository;
         private final RecruiterRepository recruiterRepository;
@@ -78,33 +77,19 @@ public class ImplJobService implements InterfaceJobService {
                 }
                 List<ApplicantJob> applications = applicantJobRepository.findByJob_IdAndActionType(jobId,
                                 APPLIED_ACTION);
-                int groupSize = applications.size();
-                boolean kSatisfied = groupSize >= K_ANONYMITY_THRESHOLD;
                 return applications.stream()
-                                .map(relation -> toKAnonymousJobApplicantResponse(relation, jobId, groupSize,
-                                                kSatisfied))
+                                .map(relation -> toJobApplicantResponse(relation, jobId))
                                 .toList();
         }
 
-        private JobApplicantResponse toKAnonymousJobApplicantResponse(ApplicantJob relation, Long jobId, int groupSize,
-                        boolean kSatisfied) {
-                String notice = kSatisfied
-                                ? "Applicant shortlist is k-anonymous; quasi-identifiers are generalized."
-                                : "Applicant shortlist has fewer than " + K_ANONYMITY_THRESHOLD
-                                                + " applicants, so identifying details are suppressed.";
+        private JobApplicantResponse toJobApplicantResponse(ApplicantJob relation, Long jobId) {
                 return new JobApplicantResponse(
                                 relation.getId(),
                                 jobId,
-                                ApplicantMapper.toKAnonymousApplicantResponse(relation.getApplicant(), groupSize,
-                                                K_ANONYMITY_THRESHOLD),
+                                ApplicantMapper.toRecruiterVisibleApplicantResponse(relation.getApplicant()),
                                 null,
                                 null,
-                                null,
-                                true,
-                                kSatisfied,
-                                groupSize,
-                                K_ANONYMITY_THRESHOLD,
-                                notice);
+                                null);
         }
 
         @Override

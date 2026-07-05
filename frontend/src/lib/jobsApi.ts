@@ -203,11 +203,6 @@ export interface JobApplicant {
   coverLetter?: string;
   portfolioUrl?: string;
   applicationAnswers?: string;
-  kAnonymityApplied?: boolean;
-  kAnonymitySatisfied?: boolean;
-  anonymityGroupSize?: number;
-  anonymityK?: number;
-  privacyNotice?: string;
 }
 
 export interface ApplicationField {
