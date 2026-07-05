@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -73,6 +74,16 @@ public class GlobalException {
                 HttpStatus.BAD_REQUEST,
                 "Validation failed",
                 errors));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(
+                "Invalid request body",
+                HttpStatus.BAD_REQUEST,
+                exception.getMostSpecificCause().getMessage(),
+                List.of(exception.getMostSpecificCause().getMessage())));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -578,12 +578,50 @@ class BackendEndpointsIntegrationTests {
               "jobTitle": "Frontend Engineer",
               "aboutCompany": "Product team",
               "jobDescription": "Build UI",
+              "requirements": "React\\nTypeScript",
+              "benefits": "Health insurance\\nLearning budget",
               "location": "Remote",
-              "postedDate": "2026-05-16"
+              "salaryRange": "3K$",
+              "jobType": "Full-time",
+              "yoe": 3,
+              "experienceLevel": "Senior",
+              "industry": "Software",
+              "postedDate": "2026-05-16",
+              "applyingDeadline": "2026-06-16",
+              "startDate": "2026-07-01",
+              "endDate": "2027-07-01",
+              "customApplicationFields": "[{\\"id\\":\\"portfolio_url\\",\\"label\\":\\"Portfolio URL\\",\\"type\\":\\"url\\"}]"
             }
             """))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.jobTitle").value("Frontend Engineer"));
+        .andExpect(jsonPath("$.data.jobTitle").value("Frontend Engineer"))
+        .andExpect(jsonPath("$.data.aboutCompany").value("Product team"))
+        .andExpect(jsonPath("$.data.requirements").value("React\nTypeScript"))
+        .andExpect(jsonPath("$.data.benefits[0]").value("Health insurance"))
+        .andExpect(jsonPath("$.data.benefits[1]").value("Learning budget"))
+        .andExpect(jsonPath("$.data.salaryRange").value("3K$"))
+        .andExpect(jsonPath("$.data.jobType").value("Full-time"))
+        .andExpect(jsonPath("$.data.yoe").value("3"))
+        .andExpect(jsonPath("$.data.experienceLevel").value("Senior"))
+        .andExpect(jsonPath("$.data.industry").value("Software"))
+        .andExpect(jsonPath("$.data.applyingDeadline").value("2026-06-16"))
+        .andExpect(jsonPath("$.data.startDate").value("2026-07-01"))
+        .andExpect(jsonPath("$.data.endDate").value("2027-07-01"))
+        .andExpect(jsonPath("$.data.customApplicationFields")
+            .value("[{\"id\":\"portfolio_url\",\"label\":\"Portfolio URL\",\"type\":\"url\"}]"));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "jobTitle": "Title Only Job"
+            }
+            """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.jobTitle").value("Title Only Job"))
+        .andExpect(jsonPath("$.data.jobType").doesNotExist())
+        .andExpect(jsonPath("$.data.salaryRange").doesNotExist())
+        .andExpect(jsonPath("$.data.applyingDeadline").doesNotExist());
 
     mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(),
         existingJob.getId())
@@ -593,13 +631,22 @@ class BackendEndpointsIntegrationTests {
               "jobTitle": "Senior Backend Engineer",
               "aboutCompany": "Platform team",
               "jobDescription": "Build APIs",
+              "requirements": "",
+              "benefits": "",
               "location": "Hybrid",
-              "postedDate": "2026-05-16"
+              "experienceLevel": "Lead",
+              "industry": "Platform",
+              "postedDate": "2026-05-16",
+              "customApplicationFields": ""
             }
             """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.jobTitle").value("Senior Backend Engineer"))
-        .andExpect(jsonPath("$.data.location").value("Hybrid"));
+        .andExpect(jsonPath("$.data.aboutCompany").value("Platform team"))
+        .andExpect(jsonPath("$.data.location").value("Hybrid"))
+        .andExpect(jsonPath("$.data.experienceLevel").value("Lead"))
+        .andExpect(jsonPath("$.data.industry").value("Platform"))
+        .andExpect(jsonPath("$.data.customApplicationFields").doesNotExist());
   }
 
   @Test

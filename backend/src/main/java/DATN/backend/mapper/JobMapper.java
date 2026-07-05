@@ -20,30 +20,42 @@ public class JobMapper {
         Job jobDescription = new Job();
         jobDescription.setRecruiter(recruiter);
         jobDescription.setJobTitle(request.getJobTitle());
+        jobDescription.setAboutCompany(blankToNull(request.getAboutCompany()));
         jobDescription.setJobDesc(request.getJobDescription());
         jobDescription.setRequirements(StringListConverter.fromString(request.getRequirements()));
         jobDescription.setBenefits(request.getBenefits());
         jobDescription.setLocation(request.getLocation());
         jobDescription.setSalaryRange(parseSalaryRange(request.getSalaryRange()));
         jobDescription.setJobType(request.getJobType());
+        jobDescription.setExperienceLevel(blankToNull(request.getExperienceLevel()));
+        jobDescription.setIndustry(blankToNull(request.getIndustry()));
         jobDescription.setPostedDate(parseDate(request.getPostedDate()));
         jobDescription.setApplyingDeadline(parseDate(request.getApplyingDeadline()));
+        jobDescription.setStartDate(parseDate(request.getStartDate()));
+        jobDescription.setEndDate(parseDate(request.getEndDate()));
         jobDescription.setYoe(request.getYoe());
+        jobDescription.setCustomApplicationFields(blankToNull(request.getCustomApplicationFields()));
         jobDescription.setApplicationForm(toApplicationFormReference(request.getCustomApplicationFieldsId()));
         return jobDescription;
     }
 
     public static Job updateJob(Job jobDescription, RecruiterJobRequest request) {
         jobDescription.setJobTitle(request.getJobTitle());
+        jobDescription.setAboutCompany(blankToNull(request.getAboutCompany()));
         jobDescription.setJobDesc(request.getJobDescription());
         jobDescription.setRequirements(StringListConverter.fromString(request.getRequirements()));
         jobDescription.setBenefits(request.getBenefits());
         jobDescription.setLocation(request.getLocation());
         jobDescription.setSalaryRange(parseSalaryRange(request.getSalaryRange()));
         jobDescription.setJobType(request.getJobType());
+        jobDescription.setExperienceLevel(blankToNull(request.getExperienceLevel()));
+        jobDescription.setIndustry(blankToNull(request.getIndustry()));
         jobDescription.setPostedDate(parseDate(request.getPostedDate()));
         jobDescription.setApplyingDeadline(parseDate(request.getApplyingDeadline()));
+        jobDescription.setStartDate(parseDate(request.getStartDate()));
+        jobDescription.setEndDate(parseDate(request.getEndDate()));
         jobDescription.setYoe(request.getYoe());
+        jobDescription.setCustomApplicationFields(blankToNull(request.getCustomApplicationFields()));
         jobDescription.setApplicationForm(toApplicationFormReference(request.getCustomApplicationFieldsId()));
         return jobDescription;
     }
@@ -52,17 +64,23 @@ public class JobMapper {
         return new JobResponse(
                 jobDescription.getId(),
                 jobDescription.getJobTitle(),
+                jobDescription.getAboutCompany(),
                 jobDescription.getJobDesc(),
                 StringListConverter.join(jobDescription.getRequirements()),
                 jobDescription.getBenefits(),
                 jobDescription.getLocation(),
                 jobDescription.getSalaryRange() == null ? null : jobDescription.getSalaryRange().toString(),
                 jobDescription.getJobType(),
+                jobDescription.getExperienceLevel(),
+                jobDescription.getIndustry(),
                 jobDescription.getPostedDate() == null ? null : jobDescription.getPostedDate().toString(),
                 jobDescription.getApplyingDeadline() == null ? null
                         : jobDescription.getApplyingDeadline().toString(),
+                jobDescription.getStartDate() == null ? null : jobDescription.getStartDate().toString(),
+                jobDescription.getEndDate() == null ? null : jobDescription.getEndDate().toString(),
                 jobDescription.getYoe(),
                 jobDescription.getApplicationForm() == null ? null : jobDescription.getApplicationForm().getId(),
+                jobDescription.getCustomApplicationFields(),
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getId(),
                 jobDescription.getRecruiter() == null ? null : jobDescription.getRecruiter().getCompanyName());
     }
@@ -79,6 +97,13 @@ public class JobMapper {
     }
 
     private static String parseSalaryRange(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
+    }
+
+    private static String blankToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }

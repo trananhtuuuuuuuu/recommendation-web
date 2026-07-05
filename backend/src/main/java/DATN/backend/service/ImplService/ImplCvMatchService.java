@@ -148,15 +148,17 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
     private Map<String, Object> buildJd(Job job) {
         Map<String, Object> jd = new HashMap<>();
         jd.put("jobTitle", nullToEmpty(job.getJobTitle()));
-        jd.put("aboutCompany", nullToEmpty(job.getRecruiter() != null ? job.getRecruiter().getCompanyDesc() : ""));
+        jd.put("aboutCompany", nullToEmpty(job.getAboutCompany() != null ? job.getAboutCompany()
+                : job.getRecruiter() != null ? job.getRecruiter().getCompanyDesc() : ""));
         jd.put("jobDescription", nullToEmpty(job.getJobDesc()));
         jd.put("requirements", nullToEmpty(StringListConverter.join(job.getRequirements())));
         jd.put("benefits", nullToEmpty(StringListConverter.join(job.getBenefits())));
         jd.put("location", nullToEmpty(job.getLocation()));
         jd.put("salaryRange", job.getSalaryRange() == null ? "" : job.getSalaryRange().toString());
         jd.put("jobType", nullToEmpty(job.getJobType()));
-        jd.put("experienceLevel", job.getYoe() == null ? "" : job.getYoe().toString());
-        jd.put("industry", "");
+        jd.put("experienceLevel", nullToEmpty(job.getExperienceLevel() != null ? job.getExperienceLevel()
+                : job.getYoe() == null ? "" : job.getYoe()));
+        jd.put("industry", nullToEmpty(job.getIndustry()));
         return jd;
     }
 

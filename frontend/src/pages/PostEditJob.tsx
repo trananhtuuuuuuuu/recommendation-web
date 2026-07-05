@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 const empty: Job = {
   jobTitle: "", aboutCompany: "", jobDescription: "", requirements: "", benefits: "",
-  location: "", salaryRange: "", jobType: "Full-time", experienceLevel: "", industry: "",
+  location: "", salaryRange: "", jobType: "", yoe: "", experienceLevel: "", industry: "",
   postedDate: "", applyingDeadline: "", startDate: "", endDate: "",
   customApplicationFields: "",
 };
@@ -93,13 +93,13 @@ export default function PostEditJob() {
     return <div className="text-center pt-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
   }
 
-  const field = (k: keyof Job, label: string, opts: { placeholder?: string; type?: string; rows?: number; textarea?: boolean } = {}) => (
+  const field = (k: keyof Job, label: string, opts: { placeholder?: string; type?: string; rows?: number; textarea?: boolean; required?: boolean } = {}) => (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label>{label}{opts.required ? " *" : ""}</Label>
       {opts.textarea ? (
-        <Textarea rows={opts.rows ?? 3} value={String(form[k] ?? "")} onChange={(e) => update(k, e.target.value)} placeholder={opts.placeholder} />
+        <Textarea rows={opts.rows ?? 3} value={String(form[k] ?? "")} onChange={(e) => update(k, e.target.value)} placeholder={opts.placeholder} required={opts.required} />
       ) : (
-        <Input type={opts.type ?? "text"} value={String(form[k] ?? "")} onChange={(e) => update(k, e.target.value)} placeholder={opts.placeholder} />
+        <Input type={opts.type ?? "text"} value={String(form[k] ?? "")} onChange={(e) => update(k, e.target.value)} placeholder={opts.placeholder} required={opts.required} />
       )}
       {errors[k as string] && <p className="text-xs text-destructive">{errors[k as string]}</p>}
     </div>
@@ -120,9 +120,10 @@ export default function PostEditJob() {
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6 items-start">
           <div className="space-y-5">
             <div className="grid sm:grid-cols-2 gap-4">
-              {field("jobTitle", "Job Title", { placeholder: "Senior Developer" })}
+              {field("jobTitle", "Job Title", { placeholder: "Senior Developer", required: true })}
               {field("location", "Location", { placeholder: "Remote" })}
               {field("jobType", "Job Type")}
+              {field("yoe", "Years of Experience", { placeholder: "3+ years" })}
               {field("experienceLevel", "Experience Level", { placeholder: "Mid / Senior" })}
               {field("industry", "Industry")}
               {field("salaryRange", "Salary Range", { placeholder: "$100K - $140K" })}

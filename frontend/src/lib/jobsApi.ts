@@ -13,6 +13,7 @@ export interface Job {
   location?: string;
   salaryRange?: string;
   jobType?: string;
+  yoe?: string;
   experienceLevel?: string;
   industry?: string;
   postedDate?: string;
@@ -23,8 +24,29 @@ export interface Job {
   companyName?: string;
   recruiterId?: string | number;
   recruiterName?: string;
+  customApplicationFieldsId?: number;
   customApplicationFields?: string;
   [k: string]: unknown;
+}
+
+export interface RecruiterJobPayload {
+  jobTitle?: string;
+  aboutCompany?: string;
+  jobDescription?: string;
+  requirements?: string;
+  benefits?: string[];
+  location?: string;
+  salaryRange?: string;
+  jobType?: string;
+  postedDate?: string;
+  applyingDeadline?: string;
+  yoe?: string;
+  customApplicationFieldsId?: number;
+  experienceLevel?: string;
+  industry?: string;
+  startDate?: string;
+  endDate?: string;
+  customApplicationFields?: string;
 }
 
 export interface CvExperience {
@@ -245,9 +267,36 @@ const toPageParams = (page = 0, size = 5, sort = "id,desc") =>
     sort,
   }).toString();
 
-const toJobPayload = (job: Job): Job => ({
-  ...job,
-  applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
+const cleanString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const toTextList = (value: Job["benefits"]): string[] | undefined => {
+  const values = Array.isArray(value) ? value : value?.split(/[\n,;|]/);
+  const normalized = values?.map((item) => item.trim()).filter(Boolean) ?? [];
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+export const toRecruiterJobPayload = (job: Job): RecruiterJobPayload => ({
+  jobTitle: cleanString(job.jobTitle),
+  aboutCompany: cleanString(job.aboutCompany),
+  jobDescription: cleanString(job.jobDescription ?? job.description),
+  requirements: cleanString(job.requirements),
+  benefits: toTextList(job.benefits),
+  location: cleanString(job.location),
+  salaryRange: cleanString(job.salaryRange),
+  jobType: cleanString(job.jobType),
+  postedDate: cleanString(job.postedDate),
+  applyingDeadline: cleanString(job.applyingDeadline ?? job.applicationDeadline),
+  yoe: cleanString(job.yoe),
+  customApplicationFieldsId: typeof job.customApplicationFieldsId === "number" ? job.customApplicationFieldsId : undefined,
+  experienceLevel: cleanString(job.experienceLevel),
+  industry: cleanString(job.industry),
+  startDate: cleanString(job.startDate),
+  endDate: cleanString(job.endDate),
+  customApplicationFields: cleanString(job.customApplicationFields),
 });
 
 export const fetchHome = () => apiRequest<HomeSummary>("/api/v1/home", { auth: false });
@@ -316,7 +365,7 @@ export const fetchRecruiterJobs = (recruiterId: string | number) =>
 export const createRecruiterJob = (recruiterId: string | number, body: Job) =>
   apiRequest<Job>(`/api/v1/recruiters/jobs/${recruiterId}`, {
     method: "POST",
-    body: toJobPayload(body),
+    body: toRecruiterJobPayload(body),
   }).then(normalizeJob);
 
 export const updateRecruiterJob = (
@@ -326,7 +375,7 @@ export const updateRecruiterJob = (
 ) =>
   apiRequest<Job>(`/api/v1/recruiters/jobs/${recruiterId}/${jobId}`, {
     method: "PUT",
-    body: toJobPayload(body),
+    body: toRecruiterJobPayload(body),
   }).then(normalizeJob);
 
 export const fetchApplicants = () => apiRequest<Applicant[]>("/api/v1/applicants");

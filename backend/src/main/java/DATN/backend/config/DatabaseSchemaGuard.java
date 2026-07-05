@@ -1,7 +1,11 @@
 package DATN.backend.config;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -59,6 +63,10 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                 ALTER TABLE IF EXISTS jobs
                                 ADD COLUMN IF NOT EXISTS job_desc TEXT
                                 """);
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS about_company TEXT
+                                """);
                 if (columnExists("jobs", "job_description")) {
                         jdbcTemplate.execute("""
                                         UPDATE jobs
@@ -68,28 +76,91 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                 }
                 jdbcTemplate.execute("""
                                 ALTER TABLE IF EXISTS jobs
-                                ADD COLUMN IF NOT EXISTS requirement TEXT
+                                ADD COLUMN IF NOT EXISTS requirements TEXT
                                 """);
-                if (columnExists("jobs", "requirements")) {
+                if (columnExists("jobs", "requirement")) {
                         jdbcTemplate.execute("""
                                         UPDATE jobs
-                                        SET requirement = requirements
-                                        WHERE requirement IS NULL AND requirements IS NOT NULL
+                                        SET requirements = requirement
+                                        WHERE requirements IS NULL AND requirement IS NOT NULL
                                         """);
                 }
                 jdbcTemplate.execute("""
                                 ALTER TABLE IF EXISTS jobs
-                                ADD COLUMN IF NOT EXISTS yoe INTEGER
+                                ADD COLUMN IF NOT EXISTS yoe VARCHAR(255)
+                                """);
+                if (columnExists("jobs", "yoe") && !isTextColumn("jobs", "yoe")) {
+                        jdbcTemplate.execute("""
+                                        ALTER TABLE jobs
+                                        ALTER COLUMN yoe TYPE VARCHAR(255)
+                                        USING yoe::TEXT
+                                        """);
+                }
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS experience_level VARCHAR(255)
+                                """);
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS industry VARCHAR(255)
+                                """);
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS start_date DATE
+                                """);
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS end_date DATE
+                                """);
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS custom_application_fields TEXT
                                 """);
                 jdbcTemplate.execute("""
                                 ALTER TABLE IF EXISTS jobs
                                 ADD COLUMN IF NOT EXISTS custom_application_fields_id BIGINT
                                 """);
-                if (isTextColumn("jobs", "salary_range")) {
+                if (columnExists("jobs", "custom_application_fields_id")
+                                && !isBigIntColumn("jobs", "custom_application_fields_id")) {
                         jdbcTemplate.execute("""
                                         ALTER TABLE jobs
-                                        ALTER COLUMN salary_range TYPE DOUBLE PRECISION
-                                        USING NULLIF(substring(salary_range::TEXT FROM '[0-9]+(\\.[0-9]+)?'), '')::DOUBLE PRECISION
+                                        ALTER COLUMN custom_application_fields_id TYPE BIGINT
+                                        USING CASE
+                                                WHEN custom_application_fields_id::TEXT ~ '^[0-9]+$'
+                                                        THEN custom_application_fields_id::TEXT::BIGINT
+                                                ELSE NULL
+                                        END
+                                        """);
+                }
+                if (tableExists("jobs") && tableExists("application_forms")
+                                && columnExists("jobs", "custom_application_fields_id")
+                                && !foreignKeyExists("jobs", "custom_application_fields_id", "application_forms")) {
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET custom_application_fields_id = NULL
+                                        WHERE custom_application_fields_id IS NOT NULL
+                                          AND NOT EXISTS (
+                                                SELECT 1
+                                                FROM application_forms
+                                                WHERE application_forms.id = jobs.custom_application_fields_id
+                                          )
+                                        """);
+                        jdbcTemplate.execute("""
+                                        ALTER TABLE jobs
+                                        ADD CONSTRAINT fk_jobs_custom_application_fields_id
+                                        FOREIGN KEY (custom_application_fields_id)
+                                        REFERENCES application_forms(id)
+                                        """);
+                }
+                jdbcTemplate.execute("""
+                                ALTER TABLE IF EXISTS jobs
+                                ADD COLUMN IF NOT EXISTS salary_range VARCHAR(255)
+                                """);
+                if (columnExists("jobs", "salary_range") && !isTextColumn("jobs", "salary_range")) {
+                        jdbcTemplate.execute("""
+                                        ALTER TABLE jobs
+                                        ALTER COLUMN salary_range TYPE VARCHAR(255)
+                                        USING salary_range::TEXT
                                         """);
                 }
                 jdbcTemplate.execute("""
@@ -171,6 +242,7 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                 SELECT COUNT(*) > 0
                                 FROM information_schema.tables
                                 WHERE LOWER(table_name) = LOWER(?)
+                                  AND table_schema = current_schema()
                                 """, Boolean.class, tableName));
         }
 
@@ -180,6 +252,7 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                 FROM information_schema.columns
                                 WHERE LOWER(table_name) = LOWER(?)
                                   AND LOWER(column_name) = LOWER(?)
+                                  AND table_schema = current_schema()
                                 """, Boolean.class, tableName, columnName));
         }
 
@@ -189,7 +262,45 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                 FROM information_schema.columns
                                 WHERE LOWER(table_name) = LOWER(?)
                                   AND LOWER(column_name) = LOWER(?)
+                                  AND table_schema = current_schema()
                                 """, rs -> rs.next() ? rs.getString("data_type") : null, tableName, columnName);
                 return dataType != null && (dataType.contains("character") || dataType.equalsIgnoreCase("text"));
+        }
+
+        private boolean isBigIntColumn(String tableName, String columnName) {
+                String dataType = jdbcTemplate.query("""
+                                SELECT data_type
+                                FROM information_schema.columns
+                                WHERE LOWER(table_name) = LOWER(?)
+                                  AND LOWER(column_name) = LOWER(?)
+                                  AND table_schema = current_schema()
+                                """, rs -> rs.next() ? rs.getString("data_type") : null, tableName, columnName);
+                return dataType != null && dataType.equalsIgnoreCase("bigint");
+        }
+
+        private boolean foreignKeyExists(String tableName, String columnName, String referencedTableName) {
+                return Boolean.TRUE.equals(jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
+                        String schema = connection.getSchema();
+                        return foreignKeyExists(connection, connection.getCatalog(), schema, tableName, columnName,
+                                        referencedTableName)
+                                        || foreignKeyExists(connection, connection.getCatalog(), schema,
+                                                        tableName.toUpperCase(), columnName,
+                                                        referencedTableName.toUpperCase());
+                }));
+        }
+
+        private boolean foreignKeyExists(Connection connection, String catalog, String schema, String tableName,
+                        String columnName,
+                        String referencedTableName) throws java.sql.SQLException {
+                try (ResultSet resultSet = connection.getMetaData().getImportedKeys(catalog, schema, tableName)) {
+                        while (resultSet.next()) {
+                                if (columnName.equalsIgnoreCase(resultSet.getString("FKCOLUMN_NAME"))
+                                                && referencedTableName
+                                                                .equalsIgnoreCase(resultSet.getString("PKTABLE_NAME"))) {
+                                        return true;
+                                }
+                        }
+                }
+                return false;
         }
 }

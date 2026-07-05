@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 
 import DATN.backend.utils.StringListConverter;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -20,15 +21,18 @@ public class RecruiterJobRequest {
     @NotBlank(message = "Job title is required")
     private String jobTitle;
 
+    private String aboutCompany;
     private String jobDescription;
     private String requirements;
-    private List<String> benefits;
+    @Setter(AccessLevel.NONE)
+    private Object benefits;
     private String location;
     private String salaryRange;
     private String jobType;
     private String postedDate;
     private String applyingDeadline;
-    private Integer yoe;
+    @Setter(AccessLevel.NONE)
+    private String yoe;
     private Long customApplicationFieldsId;
 
     private String experienceLevel;
@@ -38,7 +42,16 @@ public class RecruiterJobRequest {
     private String customApplicationFields;
 
     @JsonSetter("benefits")
-    public void setBenefitsFromJson(Object benefits) {
-        this.benefits = StringListConverter.fromAny(benefits);
+    public void setBenefits(Object benefits) {
+        this.benefits = benefits;
+    }
+
+    public List<String> getBenefits() {
+        return StringListConverter.fromAny(benefits);
+    }
+
+    @JsonSetter("yoe")
+    public void setYoe(Object yoe) {
+        this.yoe = yoe == null ? null : yoe.toString();
     }
 }

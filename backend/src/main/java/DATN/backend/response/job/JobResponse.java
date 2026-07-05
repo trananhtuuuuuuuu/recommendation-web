@@ -14,16 +14,22 @@ import lombok.Setter;
 public class JobResponse {
     private Long id;
     private String jobTitle;
+    private String aboutCompany;
     private String jobDescription;
     private String requirements;
     private List<String> benefits;
     private String location;
     private String salaryRange;
     private String jobType;
+    private String experienceLevel;
+    private String industry;
     private String postedDate;
     private String applyingDeadline;
-    private Integer yoe;
+    private String startDate;
+    private String endDate;
+    private String yoe;
     private Long customApplicationFieldsId;
+    private String customApplicationFields;
     private Long recruiterId;
     private String recruiterName;
 }
