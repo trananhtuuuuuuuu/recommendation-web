@@ -3,7 +3,7 @@
 Aggregates the per-field similarity scores from Groups 3 and 4 into a single
 match score. A trained LinearSVC (Field-to-Field Weighting) is used when present;
 otherwise a heuristic weighted average provides a sensible cold-start score.
-The "Lý do khuyến nghị" picks the field with the highest weight x score.
+The recommendation reason picks the field with the highest weight x score.
 """
 
 from __future__ import annotations

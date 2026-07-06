@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { fetchJobsPage, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch, type PageResponse } from "@/lib/jobsApi";
+import { AI_MATCH_OPTIONS, fetchJobsPage, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch, type PageResponse } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -175,7 +175,7 @@ export default function Jobs() {
     setSingleLoading(id);
     try {
       // Single job -> richer Ollama (qwen2.5:3b) suggestions; "Compare All" stays fast (llm:false).
-      const analysis = toAnalysis(await matchCvToJob(user.id, id, { llm: true }));
+      const analysis = toAnalysis(await matchCvToJob(user.id, id, AI_MATCH_OPTIONS));
       setSingleResults((prev) => ({ ...prev, [id]: analysis }));
       setExpandedSuggestion(id);
     } catch (e) {
@@ -347,7 +347,7 @@ export default function Jobs() {
                         </Badge>
                       ) : (
                         <Badge className="text-[10px] font-bold bg-muted text-muted-foreground">
-                          Chưa đạt điều kiện
+                          Does not meet requirements
                         </Badge>
                       )
                     )}
@@ -404,19 +404,19 @@ export default function Jobs() {
                     <div className="mt-4 pt-4 border-t border-border space-y-3">
                       {result.reason && (
                         <div className="space-y-1">
-                          <h4 className="text-xs font-semibold text-foreground">Lý do</h4>
+                          <h4 className="text-xs font-semibold text-foreground">Reason</h4>
                           <p className="text-xs text-muted-foreground">{result.reason}</p>
                         </div>
                       )}
                       {!result.passedFilter && result.hardFilterReasons.length > 0 && (
                         <div className="space-y-1">
-                          <h4 className="text-xs font-semibold text-destructive">Chưa đạt điều kiện lọc</h4>
+                          <h4 className="text-xs font-semibold text-destructive">Did not pass required filters</h4>
                           <ul className="space-y-1">{result.hardFilterReasons.map((c, idx) => <li key={idx} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
                         </div>
                       )}
                       {result.suggestions.length > 0 && (
                         <div className="space-y-1">
-                          <h4 className="text-xs font-semibold text-primary">Gợi ý cải thiện</h4>
+                          <h4 className="text-xs font-semibold text-primary">Improvement suggestions</h4>
                           <ul className="space-y-1">{result.suggestions.map((s, idx) => <li key={idx} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
                         </div>
                       )}

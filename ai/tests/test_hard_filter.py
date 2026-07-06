@@ -72,7 +72,7 @@ class ExperienceTests(unittest.TestCase):
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.exp_fit, 0.0)
-        self.assertTrue(any("kinh nghiệm" in reason.lower() for reason in result.reasons))
+        self.assertTrue(any("experience gap is too large" in reason.lower() for reason in result.reasons))
 
     def test_pass_when_enough_experience(self):
         result = run_hard_filter(

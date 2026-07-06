@@ -70,13 +70,14 @@ def run_hard_filter(
     reasons: list[str] = []
     if not years_ok:
         reasons.append(
-            f"Thiếu kinh nghiệm quá nhiều: ứng viên có {candidate_years:.1f} năm, "
-            f"yêu cầu {required_years:.0f} năm (chênh hơn {EXPERIENCE_HARD_GAP_YEARS:.0f} năm)."
+            f"Experience gap is too large: the candidate has {candidate_years:.1f} years, "
+            f"while the role requires {required_years:.0f} years "
+            f"(more than a {EXPERIENCE_HARD_GAP_YEARS:.0f}-year gap)."
         )
     if not location_ok:
-        reasons.append(f"Địa điểm không phù hợp: vị trí yêu cầu '{jd.location}'.")
+        reasons.append(f"Location does not match: the role requires '{jd.location}'.")
     if not gpa_ok:
-        reasons.append("GPA chưa đạt mức tối thiểu mà JD yêu cầu.")
+        reasons.append("GPA is below the minimum requirement in the job description.")
 
     return HardFilterResult(
         passed=years_ok and location_ok and gpa_ok,

@@ -809,8 +809,8 @@ class BackendEndpointsIntegrationTests {
         true,
         0.82,
         82,
-        "Khuyến nghị chủ yếu nhờ độ phù hợp cao về Kỹ năng (0.88).",
-        java.util.List.of("Bổ sung chứng chỉ AWS."),
+        "Recommendation is mainly driven by a strong technical skills match (88%).",
+        java.util.List.of("Add an AWS certification if it is relevant to your target role."),
         java.util.Map.of("SKILL", 0.88, "EXPERIENCE", 0.70),
         java.util.List.of(),
         "tfidf",
@@ -835,7 +835,7 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.modelUsed").value("svm"))
         .andExpect(jsonPath("$.data.differentialPrivacyApplied").value(true))
         .andExpect(jsonPath("$.data.privacyEpsilon").value(2.0))
-        .andExpect(jsonPath("$.data.suggestions[0]").value("Bổ sung chứng chỉ AWS."));
+        .andExpect(jsonPath("$.data.suggestions[0]").value("Add an AWS certification if it is relevant to your target role."));
 
     // Body omitted (default options) → still 200
     mockMvc.perform(post("/api/v1/applicants/{applicantId}/match/{jobId}",

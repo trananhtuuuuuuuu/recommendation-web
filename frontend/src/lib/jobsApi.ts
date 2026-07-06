@@ -457,6 +457,8 @@ export interface CvJobMatch {
   privacyMechanism?: string;
 }
 
+export const AI_MATCH_OPTIONS = { llm: true, method: "tfidf" } as const;
+
 export const matchCvToJob = (
   applicantId: string | number,
   jobId: string | number,

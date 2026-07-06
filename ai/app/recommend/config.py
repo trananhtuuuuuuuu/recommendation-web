@@ -45,23 +45,8 @@ JD_FIELD_SOURCES: dict[str, tuple[str, ...]] = {
     "PROJECT": ("job_description", "requirements"),
 }
 
-# Vietnamese display names used in the "Lý do khuyến nghị" explanation.
+# Reader-facing English display names used in match explanations.
 FIELD_DISPLAY_NAMES: dict[str, str] = {
-    "SKILL": "Kỹ năng",
-    "SOFT_SKILL": "Kỹ năng mềm",
-    "LANGUAGE": "Ngoại ngữ",
-    "CERTIFICATION": "Chứng chỉ",
-    "JOB_TITLE": "Chức danh",
-    "COMPANY": "Công ty",
-    "EDUCATION": "Học vấn",
-    "SUMMARY": "Tóm tắt",
-    "EXPERIENCE": "Kinh nghiệm",
-    "PROJECT": "Dự án",
-}
-
-# English display names used for the match reason + LLM suggestions (natural,
-# reader-facing phrasing rather than the raw entity labels).
-FIELD_DISPLAY_NAMES_EN: dict[str, str] = {
     "SKILL": "technical skills",
     "SOFT_SKILL": "soft skills",
     "LANGUAGE": "languages",
@@ -73,6 +58,8 @@ FIELD_DISPLAY_NAMES_EN: dict[str, str] = {
     "EXPERIENCE": "work experience",
     "PROJECT": "projects",
 }
+
+FIELD_DISPLAY_NAMES_EN = FIELD_DISPLAY_NAMES
 
 # Heuristic fallback weights (used before an SVM is trained). Sum ~= 1.0.
 _DEFAULT_WEIGHTS: dict[str, float] = {

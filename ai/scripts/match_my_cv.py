@@ -46,7 +46,7 @@ def main() -> None:
         default=os.getenv("AI_MODEL_DIR", str(AI_DIR / "model" / "layoutlmv3")),
     )
     parser.add_argument("--method", default="tfidf", choices=["tfidf", "word2vec", "embedding"])
-    parser.add_argument("--llm", action="store_true", help="use Ollama for Vietnamese suggestions")
+    parser.add_argument("--llm", action="store_true", help="use Ollama for English suggestions")
     parser.add_argument(
         "--save-canonical",
         type=pathlib.Path,
@@ -95,17 +95,17 @@ def main() -> None:
 
     rows.sort(key=lambda row: row[4], reverse=True)
 
-    print("\n\n========== RANKING theo semantic fit (5 JD) ==========")
-    print("(semantic = bỏ qua hard-filter; Gate = có qua bộ lọc cứng không)")
+    print("\n\n========== RANKING by semantic fit (5 JD) ==========")
+    print("(semantic = ignores hard filter; Gate = whether the hard filter passed)")
     print(f"hard-filter input: totalExperienceYears = {canonical.get('totalExperienceYears')}\n")
     for rank, (jd_raw, jd, result, per_field, raw_score) in enumerate(rows, start=1):
         gate = "PASS ✅" if result.passed_filter else "FILTERED ⛔"
         print(f"#{rank}  [{jd_raw.get('id')}] {jd.job_title:24} semantic={raw_score:6.1%}  Gate={gate}")
         print(f"      fields: {_fmt_scores(per_field)}")
         if not result.passed_filter:
-            print(f"      lý do loại: {'; '.join(result.hard_filter.reasons)}")
+            print(f"      filter reasons: {'; '.join(result.hard_filter.reasons)}")
         if result.suggestions:
-            print("      Gợi ý:")
+            print("      Suggestions:")
             for suggestion in result.suggestions:
                 print(f"        - {suggestion}")
 

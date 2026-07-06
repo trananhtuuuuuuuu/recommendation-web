@@ -40,6 +40,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(result.passed_filter)
         self.assertEqual(result.per_field_scores, {})
         self.assertEqual(result.match_score, 0.0)
+        self.assertIn("Experience gap is too large", result.reason)
         self.assertIsNone(result.suggestions)
 
     def test_pass_produces_scores_reason_and_suggestions(self):

@@ -204,7 +204,7 @@ public class ApplicantController {
 
         /**
          * Matches the authenticated applicant's stored CV against a job and returns a
-         * score plus Vietnamese improvement suggestions.
+         * score plus English improvement suggestions.
          *
          * @param applicantId    applicant owner identifier
          * @param jobId          job description identifier

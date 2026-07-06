@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -10,6 +10,8 @@ import {
   Briefcase,
   Building2,
   Calendar,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Info,
   Loader2,
@@ -25,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyJob,
+  AI_MATCH_OPTIONS,
   fetchAnonymousCandidatePreviews,
   fetchApplicantActivityCount,
   fetchJob,
@@ -63,6 +66,7 @@ export default function JobDetail() {
   const [applicationAnswers, setApplicationAnswers] = useState<Record<string, string>>({});
   const [matchResult, setMatchResult] = useState<CvJobMatch | null>(null);
   const [matching, setMatching] = useState(false);
+  const [matchExpanded, setMatchExpanded] = useState(false);
 
   const loadApplicantPrivacy = useCallback(async (jobId: string | number, active = true) => {
     setApplicantActivityLoading(true);
@@ -133,8 +137,9 @@ export default function JobDetail() {
     if (!user?.id || !id) return;
     setMatching(true);
     try {
-      const result = await matchCvToJob(user.id, id, { llm: true, method: "tfidf" });
+      const result = await matchCvToJob(user.id, id, AI_MATCH_OPTIONS);
       setMatchResult(result);
+      setMatchExpanded(true);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Match failed. Make sure your CV is uploaded.");
     } finally { setMatching(false); }
@@ -347,7 +352,9 @@ export default function JobDetail() {
             <MatchPanel
               matching={matching}
               matchResult={matchResult}
+              expanded={matchExpanded}
               onCheck={handleMatch}
+              onToggle={() => setMatchExpanded((current) => !current)}
             />
           ) : null}
         </aside>
@@ -450,9 +457,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ── AI Match Panel ────────────────────────────────────────────────────────────
 
 const FIELD_LABELS: Record<string, string> = {
-  SKILL: "Kỹ năng", SOFT_SKILL: "Kỹ năng mềm", LANGUAGE: "Ngoại ngữ",
-  CERTIFICATION: "Chứng chỉ", JOB_TITLE: "Chức danh", COMPANY: "Công ty",
-  EDUCATION: "Học vấn", SUMMARY: "Tóm tắt", EXPERIENCE: "Kinh nghiệm", PROJECT: "Dự án",
+  SKILL: "Technical skills", SOFT_SKILL: "Soft skills", LANGUAGE: "Languages",
+  CERTIFICATION: "Certifications", JOB_TITLE: "Job title", COMPANY: "Company background",
+  EDUCATION: "Education", SUMMARY: "Professional summary", EXPERIENCE: "Work experience", PROJECT: "Projects",
 };
 
 function ScoreRing({ percent }: { percent: number }) {
@@ -477,11 +484,13 @@ function ScoreRing({ percent }: { percent: number }) {
 }
 
 function MatchPanel({
-  matching, matchResult, onCheck,
+  matching, matchResult, expanded, onCheck, onToggle,
 }: {
   matching: boolean;
   matchResult: CvJobMatch | null;
+  expanded: boolean;
   onCheck: () => void;
+  onToggle: () => void;
 }) {
   const fieldOrder = [
     "SKILL", "JOB_TITLE", "EXPERIENCE", "EDUCATION",
@@ -507,86 +516,107 @@ function MatchPanel({
             onClick={onCheck}
             disabled={matching}
             variant="outline"
-            className="w-full gap-2"
+            className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10"
           >
             {matching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {matching ? "Analysing…" : "Check My Match"}
+            {matching ? "Analysing..." : "AI Suggestion"}
           </Button>
         </>
       ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
-        >
-          <div className="flex items-center gap-4">
-            <ScoreRing percent={matchResult.matchPercent ?? 0} />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">
-                {matchResult.passedFilter ? "Passed initial filter" : "Did not pass filter"}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-foreground line-clamp-3">
-                {matchResult.reason}
-              </p>
-            </div>
-          </div>
-
-          {matchResult.perFieldScores && Object.keys(matchResult.perFieldScores).length > 0 ? (
-            <div className="space-y-1.5">
-              {fieldOrder
-                .filter((f) => matchResult.perFieldScores![f] !== undefined)
-                .map((field) => {
-                  const pct = Math.round((matchResult.perFieldScores![field] ?? 0) * 100);
-                  return (
-                    <div key={field}>
-                      <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
-                        <span>{FIELD_LABELS[field] ?? field}</span>
-                        <span>{pct}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          ) : null}
-
-          {matchResult.hardFilterReasons && matchResult.hardFilterReasons.length > 0 ? (
-            <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive space-y-1">
-              {matchResult.hardFilterReasons.map((r, i) => <p key={i}>{r}</p>)}
-            </div>
-          ) : null}
-
-          {matchResult.suggestions && matchResult.suggestions.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Gợi ý cải thiện</p>
-              <ul className="space-y-1.5">
-                {matchResult.suggestions.map((s, i) => (
-                  <li key={i} className="flex gap-2 text-xs leading-5 text-foreground">
-                    <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-bold">{i + 1}</span>
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
+        <>
           <Button
-            id="recheck-match-btn"
-            onClick={onCheck}
+            id="check-match-btn"
+            onClick={onToggle}
             disabled={matching}
-            variant="ghost"
-            size="sm"
-            className="w-full gap-1 text-muted-foreground"
+            variant="outline"
+            className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10"
           >
-            {matching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            Re-check
+            {matching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {expanded ? "Hide AI" : "Show AI"}
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
-        </motion.div>
+
+          <AnimatePresence>
+            {expanded ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-4 pt-1">
+                  <div className="flex items-center gap-4">
+                    <ScoreRing percent={matchResult.matchPercent ?? 0} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {matchResult.passedFilter ? "Passed initial filter" : "Did not pass filter"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-foreground line-clamp-3">
+                        {matchResult.reason}
+                      </p>
+                    </div>
+                  </div>
+
+                  {matchResult.perFieldScores && Object.keys(matchResult.perFieldScores).length > 0 ? (
+                    <div className="space-y-1.5">
+                      {fieldOrder
+                        .filter((f) => matchResult.perFieldScores![f] !== undefined)
+                        .map((field) => {
+                          const pct = Math.round((matchResult.perFieldScores![field] ?? 0) * 100);
+                          return (
+                            <div key={field}>
+                              <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
+                                <span>{FIELD_LABELS[field] ?? field}</span>
+                                <span>{pct}%</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : null}
+
+                  {matchResult.hardFilterReasons && matchResult.hardFilterReasons.length > 0 ? (
+                    <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+                      {matchResult.hardFilterReasons.map((r, i) => <p key={i}>{r}</p>)}
+                    </div>
+                  ) : null}
+
+                  {matchResult.suggestions && matchResult.suggestions.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Improvement suggestions</p>
+                      <ul className="space-y-1.5">
+                        {matchResult.suggestions.map((s, i) => (
+                          <li key={i} className="flex gap-2 text-xs leading-5 text-foreground">
+                            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-bold">{i + 1}</span>
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <Button
+                    id="recheck-match-btn"
+                    onClick={onCheck}
+                    disabled={matching}
+                    variant="ghost"
+                    size="sm"
+                    className="w-full gap-1 text-muted-foreground"
+                  >
+                    {matching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Re-check
+                  </Button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </>
       )}
     </div>
   );

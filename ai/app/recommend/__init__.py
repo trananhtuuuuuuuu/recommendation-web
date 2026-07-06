@@ -8,9 +8,9 @@ structured job description:
 3. Vector space      -- TF-IDF (primary) / Word2Vec+WMD (comparison) per field.
 4. Semantic matching -- TF-IDF cosine over the long free-text fields.
 5. Decision model    -- LinearSVC (Field-to-Field Weighting) or heuristic fallback,
-                        with an explainable "Lý do khuyến nghị".
+                        with an explainable recommendation reason.
 
-The result is handed to a local Ollama LLM that writes Vietnamese suggestions.
+The result is handed to a local Ollama LLM that writes English suggestions.
 """
 
 from .pipeline import run_match

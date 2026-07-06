@@ -2,7 +2,7 @@ import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Jobs from "@/pages/Jobs";
-import type { Job, PageResponse } from "@/lib/jobsApi";
+import { AI_MATCH_OPTIONS, type Job, type PageResponse } from "@/lib/jobsApi";
 
 const authState = vi.hoisted(() => ({
   user: { id: "1", userName: "candidate", email: "candidate@example.com" },
@@ -76,5 +76,36 @@ describe("Jobs page pagination", () => {
     await waitFor(() => expect(apiMocks.fetchJobsPage).toHaveBeenCalledWith(1, 10));
     expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("calls the same AI match API options from the job card suggestion button", async () => {
+    apiMocks.fetchJobsPage.mockResolvedValue(pageOf([
+      {
+        id: 1,
+        jobTitle: "Backend Engineer",
+        companyName: "Example Corp",
+        location: "Remote",
+        jobType: "Full-time",
+      },
+    ], 0));
+    apiMocks.matchCvToJob.mockResolvedValue({
+      matchPercent: 77,
+      passedFilter: true,
+      reason: "Backend response from AI match service",
+      suggestions: ["Add one more production API example"],
+      hardFilterReasons: [],
+    });
+
+    render(<MemoryRouter><Jobs /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "AI Suggestion" }));
+
+    await waitFor(() => expect(apiMocks.matchCvToJob).toHaveBeenCalledWith(
+      "1",
+      "1",
+      AI_MATCH_OPTIONS,
+    ));
+    expect(await screen.findByText("77% Match")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Hide AI/i })).toBeInTheDocument();
   });
 });

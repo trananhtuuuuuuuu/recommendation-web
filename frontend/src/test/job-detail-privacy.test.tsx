@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import JobDetail from "@/pages/JobDetail";
 import { ApiError } from "@/lib/api";
+import { AI_MATCH_OPTIONS } from "@/lib/jobsApi";
 
 const authState = vi.hoisted(() => ({
   user: { id: "7", userName: "candidate", email: "candidate@example.com" },
@@ -104,5 +105,48 @@ describe("Job detail applicant privacy", () => {
 
     await waitFor(() => expect(apiMocks.fetchApplicantActivityCount).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("Approximately 21 candidates have applied")).toBeInTheDocument();
+  });
+
+  it("runs the AI suggestion from the UI and toggles the result panel", async () => {
+    apiMocks.fetchApplicantActivityCount.mockResolvedValue({
+      jobId: 123,
+      approximateApplicantCount: 18,
+      displayText: "Approximately 18 candidates have applied",
+      approximate: true,
+    });
+    apiMocks.matchCvToJob.mockResolvedValue({
+      matchPercent: 82,
+      passedFilter: true,
+      reason: "Strong backend match",
+      suggestions: ["Add more Spring Boot project detail"],
+      hardFilterReasons: [],
+      perFieldScores: {
+        SKILL: 0.9,
+        EXPERIENCE: 0.75,
+      },
+    });
+
+    renderJobDetail();
+
+    fireEvent.click(await screen.findByRole("button", { name: /AI Suggestion/i }));
+
+    await waitFor(() => expect(apiMocks.matchCvToJob).toHaveBeenCalledWith(
+      "7",
+      "123",
+      AI_MATCH_OPTIONS,
+    ));
+    expect(await screen.findByRole("button", { name: /Hide AI/i })).toBeInTheDocument();
+    expect(screen.getByText("82%")).toBeInTheDocument();
+    expect(screen.getByText("Strong backend match")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hide AI/i }));
+
+    expect(await screen.findByRole("button", { name: /Show AI/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Strong backend match")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Show AI/i }));
+
+    expect(await screen.findByRole("button", { name: /Hide AI/i })).toBeInTheDocument();
+    expect(screen.getByText("Strong backend match")).toBeInTheDocument();
   });
 });

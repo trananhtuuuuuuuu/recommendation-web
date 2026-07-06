@@ -69,10 +69,10 @@ Five groups run in order on a parsed CV and a structured JD:
 2. **Hard filter** — rule-based location + years-of-experience (from DATE) + GPA gate; rejects before the expensive steps.
 3. **Vector space (TF-IDF, primary)** — per-field cosine for SKILL, SOFT_SKILL, LANGUAGE, CERTIFICATION, JOB_TITLE, COMPANY, EDUCATION. Word2Vec + WMD is an opt-in comparison baseline.
 4. **Semantic matching (TF-IDF)** — per-field cosine for SUMMARY, EXPERIENCE, PROJECT.
-5. **Decision (SVM + Field-to-Field Weighting)** — aggregates the field scores into a match score with an explainable "Lý do khuyến nghị". Falls back to a heuristic weighted average until the SVM is trained.
+5. **Decision (SVM + Field-to-Field Weighting)** — aggregates the field scores into a match score with an explainable recommendation reason. Falls back to a heuristic weighted average until the SVM is trained.
 
 The result feeds a local **Ollama** LLM (`OLLAMA_MODEL`, default `gemma2:2b`) that writes
-Vietnamese suggestions; a deterministic template is used when Ollama is unreachable.
+English suggestions; a deterministic template is used when Ollama is unreachable.
 
 ### Recommender dependencies and offline tools
 

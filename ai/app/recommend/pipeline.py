@@ -46,7 +46,7 @@ def run_match(
             per_field_scores={},
             match_score=0.0,
             scoring_method=method,
-            reason=hard.reasons[0] if hard.reasons else "Không vượt qua bộ lọc cứng.",
+            reason=hard.reasons[0] if hard.reasons else "Did not pass the hard filter.",
             model_used="n/a",
             suggestions=None,
         )
@@ -63,7 +63,7 @@ def run_match(
     # score down rather than rejecting the candidate outright.
     if hard.exp_fit < 1.0:
         match_score = round(match_score * hard.exp_fit, 4)
-        reason += f" (Điều chỉnh do thiếu kinh nghiệm: hệ số {hard.exp_fit:.2f}.)"
+        reason += f" (Adjusted for limited experience: multiplier {hard.exp_fit:.2f}.)"
     suggestions = suggest(
         match_score=match_score,
         jd_title=jd.job_title,
