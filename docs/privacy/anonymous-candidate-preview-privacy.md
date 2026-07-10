@@ -1,26 +1,26 @@
-# Anonymous Candidate Preview Privacy
+# Privacy Cho Anonymous Candidate Preview
 
-This feature is separate from differential privacy.
+Anonymous candidate preview là tính năng cho applicant xem một vài thông tin tổng quát về các ứng viên khác đã ứng tuyển cùng công việc.
 
-Differential privacy protects aggregate results, such as:
+Tính năng này tách riêng với differential privacy.
+
+Differential privacy bảo vệ aggregate result, ví dụ:
 
 ```text
-Approximately 18 candidates have applied
+Khoảng 18 ứng viên đã ứng tuyển
 ```
 
-Anonymous candidate preview shares limited information about one real candidate.
+Anonymous candidate preview chia sẻ thông tin giới hạn của một ứng viên thật. Vì vậy nó cần consent, access control và data minimization.
 
-That is not the same privacy model.
+## 1. Khác Nhau Giữa Hai Cơ Chế
 
-## Differential Privacy Versus Anonymous Profile Sharing
-
-| Topic | Differentially private count | Anonymous profile preview |
+| Chủ đề | Differentially private count | Anonymous profile preview |
 |---|---|---|
-| Data type | Aggregate result | One real person's information |
-| Output | Approximate count | Limited profile fields |
-| Protection method | Controlled noise | Consent, minimization, access control |
-| Can expose individual profile? | No | Yes, limited and consent-based |
-| Main risk | Repeated count inference | Re-identification |
+| Kiểu dữ liệu | Kết quả tổng hợp | Thông tin của một người thật |
+| Output | Số gần đúng | Một số trường profile đã rút gọn |
+| Cách bảo vệ | Thêm noise có kiểm soát | Consent, access control, giảm dữ liệu |
+| Có expose profile cá nhân không | Không | Có, nhưng giới hạn |
+| Rủi ro chính | Suy luận từ count lặp lại | Tái định danh |
 
 ```mermaid
 flowchart LR
@@ -32,64 +32,62 @@ flowchart LR
   E --> H[Only broad fields]
 ```
 
-## Consent
+## 2. Consent
 
-The field is:
+Field cho phép applicant khác xem preview:
 
 ```java
 Applicant.profileVisibleToOtherApplicants
 ```
 
-Default:
+Giá trị mặc định:
 
 ```text
 false
 ```
 
-Recruiter visibility is separate:
+Field visibility với recruiter là riêng:
 
 ```java
 Applicant.profileVisibleToRecruiters
 ```
 
-Setting recruiter visibility to true does not allow applicant-to-applicant preview.
+Nếu `profileVisibleToRecruiters = true`, điều đó không có nghĩa là applicant khác được xem preview.
 
-## Access Control
+## 3. Access Control
 
-An applicant may view anonymous previews only when:
+Một applicant chỉ được xem anonymous previews khi:
 
-- they are authenticated;
-- they have the applicant role;
-- they applied for the same job;
-- the job exists;
-- the preview feature is enabled;
-- the target candidate opted in;
-- the target candidate has an active `APPLIED` relation;
-- the eligible group is large enough.
+- đã đăng nhập;
+- có role applicant;
+- đã ứng tuyển vào cùng job;
+- job tồn tại;
+- feature đang enabled;
+- target candidate đã opt-in;
+- target candidate có relation `APPLIED` còn hiệu lực;
+- nhóm eligible đủ lớn theo ngưỡng cấu hình.
 
-A user who merely saved the job must not access previews.
+Người chỉ saved job không được xem preview.
 
-The caller cannot choose a candidate ID.
+Client không được chọn candidate ID. Backend phải tự chọn eligible previews.
 
-The backend selects eligible previews.
+## 4. Trường Được Phép Trả Về
 
-## Allowed Fields
+Chỉ trả về các trường rộng, khó định danh:
 
-Allowed broad fields:
-
-- experience bucket, such as `1-3 years`;
+- experience bucket, ví dụ `1-3 years`;
 - broad education level;
 - approved skill categories;
 - broad region;
 - broad current role category.
 
-Current DTO:
+DTO hiện tại:
 
 ```java
 AnonymousCandidatePreviewProfileResponse
 ```
 
-Fields:
+Fields được phép:
 
 - `anonymousProfileId`;
 - `experienceLevel`;
@@ -98,9 +96,9 @@ Fields:
 - `generalRegion`;
 - `currentRoleCategory`.
 
-## Prohibited Fields
+## 5. Trường Cấm Trả Về
 
-Never expose to another applicant:
+Không bao giờ expose cho applicant khác:
 
 - database applicant ID;
 - user ID;
@@ -110,7 +108,7 @@ Never expose to another applicant:
 - phone number;
 - exact address;
 - date of birth;
-- gender unless explicitly justified and consented;
+- gender, trừ khi có lý do rõ ràng và consent riêng;
 - CV file URL;
 - profile image;
 - exact company name;
@@ -123,19 +121,17 @@ Never expose to another applicant:
 - unique free-text biography;
 - internal identifier.
 
-## Skill Minimization
+## 6. Skill Minimization
 
-Exact skills can identify someone.
+Exact skills có thể làm lộ danh tính nếu kết hợp với thông tin bên ngoài.
 
-Example:
+Ví dụ:
 
 ```text
 Rust, Kubernetes, medical image segmentation, University X project
 ```
 
-This combination may be unique.
-
-So the service maps raw skills into broad categories:
+Tổ hợp này có thể chỉ có một người. Vì vậy service phải map raw skill về nhóm rộng:
 
 - Backend;
 - Frontend;
@@ -149,26 +145,28 @@ So the service maps raw skills into broad categories:
 - Product Design;
 - General Software.
 
-## Anonymous Identifier
+Raw free-text skill không nên trả trực tiếp.
 
-The preview ID must not be `applicant_id`.
+## 7. Anonymous Identifier
 
-The service creates a temporary scoped token using HMAC.
+Preview ID không được là `applicant_id`.
 
-Scoped means it depends on:
+Service tạo temporary scoped token bằng HMAC.
+
+Token nên phụ thuộc vào:
 
 - candidate;
 - viewer;
 - job;
 - rotation window.
 
-This reduces correlation across jobs and time.
+Cách này giảm khả năng correlate cùng một candidate qua nhiều job hoặc trong thời gian dài.
 
-## Small-Group Protection
+## 8. Small-Group Protection
 
-If too few candidates opted in, previews are unavailable.
+Nếu quá ít candidate opted in, preview phải unavailable.
 
-Example:
+Ví dụ response:
 
 ```json
 {
@@ -178,47 +176,67 @@ Example:
 }
 ```
 
-The response does not reveal the exact eligible count.
+Response không được lộ exact eligible count.
 
-## Rate Limiting
+## 9. Rate Limiting
 
-The service limits preview requests per viewer, job, and window.
+Service cần giới hạn số request preview theo viewer, job và window.
 
-This reduces scraping and repeated probing.
+Mục tiêu:
 
-The current implementation uses an in-memory map. For multiple backend instances, use a shared rate limiter such as Redis.
+- giảm scraping;
+- giảm probing lặp lại;
+- giảm khả năng suy luận bằng cách gọi API nhiều lần.
 
-## Limitations
+Implementation hiện tại dùng in-memory map. Nếu chạy nhiều backend instance, nên chuyển sang shared rate limiter như Redis.
 
-Anonymous preview reduces direct identification risk.
+## 10. Giới Hạn
 
-It does not make re-identification impossible.
+Anonymous preview giảm rủi ro lộ định danh trực tiếp, nhưng không thể bảo đảm ẩn danh tuyệt đối.
 
-Re-identification means connecting "anonymous" information back to a real person using outside knowledge.
+Re-identification là việc gắn một profile "anonymous" với một người thật bằng cách kết hợp thông tin trong preview với kiến thức bên ngoài.
 
-Example:
+Ví dụ:
 
-If only one person in a class has 4+ years of mobile experience in Da Nang, a broad profile may still be guessed.
+```text
+Nếu chỉ có một người trong lớp có hơn 4 năm kinh nghiệm Mobile tại Đà Nẵng,
+một preview tổng quát vẫn có thể bị đoán ra.
+```
 
-That is why this feature needs:
+Vì vậy tính năng này cần:
 
-- consent;
+- consent rõ ràng;
 - broad categories;
 - small-group suppression;
 - request limits;
-- no exact fields.
+- không trả exact fields;
+- rotate anonymous identifier.
 
-## Common Mistake
+## 11. Câu Nội Dung Nên Dùng
 
-Wrong statement:
-
-```text
-We added noise to one applicant profile, so the profile is differentially private.
-```
-
-Correct statement:
+Sai:
 
 ```text
-The applicant count is differentially private. Anonymous profile preview is separate consent-based data minimization.
+Chúng ta thêm noise vào một applicant profile, nên profile đó là differentially private.
 ```
 
+Đúng:
+
+```text
+Applicant count là differential privacy. Anonymous profile preview là consent-based data minimization riêng.
+```
+
+## 12. Checklist Khi Sửa Code
+
+Kiểm tra:
+
+- default opt-in là `false`;
+- recruiter visibility không cấp quyền applicant visibility;
+- saved-job user bị từ chối;
+- target candidate phải có `APPLIED` active;
+- response không có direct identifier;
+- raw skill được map về category rộng;
+- anonymous ID không phải database ID;
+- small group không lộ exact eligible count;
+- rate limit hoạt động;
+- test privacy liên quan đã pass.

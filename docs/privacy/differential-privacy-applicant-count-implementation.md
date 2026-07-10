@@ -1,34 +1,34 @@
-# Differential Privacy Applicant Count Implementation
+# Triển Khai Differential Privacy Cho Applicant Count
 
-This document explains how the applicant-facing approximate count works in this repository.
+Tài liệu này mô tả cách endpoint applicant-facing approximate count hoạt động trong repository.
 
-## Repository Map
+## 1. Bản Đồ Thành Phần Trong Project
 
-| Mathematical or privacy concept | Real project component |
+| Khái niệm privacy/kỹ thuật | Thành phần trong project |
 |---|---|
-| Raw job | `backend/src/main/java/DATN/backend/model/Job.java` |
-| Raw applicant | `backend/src/main/java/DATN/backend/model/Applicant.java` |
-| Applicant-job relation | `backend/src/main/java/DATN/backend/model/ApplicantJob.java` |
-| Application action | `ApplicantJob.actionType`, string value `APPLIED` |
+| Job gốc | `backend/src/main/java/DATN/backend/model/Job.java` |
+| Applicant gốc | `backend/src/main/java/DATN/backend/model/Applicant.java` |
+| Quan hệ applicant-job | `backend/src/main/java/DATN/backend/model/ApplicantJob.java` |
+| Hành động ứng tuyển | `ApplicantJob.actionType`, giá trị string `APPLIED` |
 | Raw count query | `ApplicantJobRepository.countDistinctApplicantsByJobAndActionType` |
-| Privacy configuration | `PrivacyProperties` |
+| Cấu hình privacy | `PrivacyProperties` |
 | Sticky release row | `PrivacyRelease` |
-| Sticky release store | `PrivacyReleaseRepository` |
+| Nơi lưu sticky release | `PrivacyReleaseRepository` |
 | Privacy service | `ImplApplicantPrivacyService` |
-| Applicant-facing controller | `JobPrivacyController` |
-| Safe response DTO | `ApplicantActivityCountResponse` |
-| Frontend API function | `fetchApplicantActivityCount` in `jobsApi.ts` |
-| Frontend UI | `JobDetail.tsx` applicant activity section |
+| Controller applicant-facing | `JobPrivacyController` |
+| DTO response an toàn | `ApplicantActivityCountResponse` |
+| Frontend API function | `fetchApplicantActivityCount` trong `jobsApi.ts` |
+| Frontend UI | Applicant activity section trong `JobDetail.tsx` |
 | Tests | `BackendEndpointsIntegrationTests` |
 
-## Endpoint
+## 2. Endpoint
 
 ```http
 GET /api/v1/jobs/{jobId}/applicant-count
 Authorization: Bearer <applicant-token>
 ```
 
-Safe response:
+Response an toàn:
 
 ```json
 {
@@ -45,7 +45,7 @@ Safe response:
 }
 ```
 
-The response must not include:
+Response không được có:
 
 - `rawCount`;
 - `noise`;
@@ -54,91 +54,91 @@ The response must not include:
 - random seed;
 - secret.
 
-## Count Semantics
+## 3. Count Semantics
 
-The raw count is:
+Raw count:
 
 ```sql
 COUNT(DISTINCT applicant_id)
 ```
 
-filtered to:
+Điều kiện:
 
 ```text
 actionType = "APPLIED"
 ```
 
-and non-deleted relation, applicant, and job records.
+và relation, applicant, job đều không bị delete.
 
-This excludes:
+Query này phải loại trừ:
 
 - saved jobs;
 - bookmarks;
 - withdrawn applications;
-- cancelled applications when represented by non-`APPLIED` action;
+- cancelled applications nếu biểu diễn bằng action khác `APPLIED`;
 - deleted records;
 - duplicate application rows.
 
-The actual project currently stores action type as a string on `ApplicantJob`, not as a Java enum.
+Project hiện lưu action type dạng string trong `ApplicantJob`, không phải Java enum.
 
-## Why Sensitivity Is 1
+## 4. Vì Sao Sensitivity Là 1
 
-Sensitivity means the largest possible change caused by one person.
+Sensitivity là mức thay đổi lớn nhất của câu trả lời thật khi thêm hoặc bớt một người.
 
-Because the query counts distinct applicant IDs, one applicant can add at most one to the count.
+Vì query đếm distinct applicant ID, một applicant chỉ có thể làm count tăng hoặc giảm tối đa 1:
 
 ```text
 Delta f = 1
 ```
 
-If duplicate rows were counted, this would not be safe. One applicant could create multiple rows and change the count by more than one.
+Nếu duplicate rows bị đếm nhiều lần, giả định này sẽ sai và privacy guarantee không còn đúng.
 
-## Noise Mechanism
+## 5. Noise Mechanism
 
-The service uses integer-valued discrete Laplace style noise.
+Service dùng integer-valued discrete Laplace style noise.
 
 ```text
 q = exp(-epsilon)
 P(Z = k) = ((1 - q) / (1 + q)) * q^abs(k)
 ```
 
-For `epsilon = 0.5`:
+Với `epsilon = 0.5`:
 
 ```text
 q = exp(-0.5)
-q approximately 0.6065
+q xấp xỉ 0.6065
 ```
 
-The released value is:
+Giá trị released:
 
 ```text
 releasedCount = max(0, rawCount + Z)
 ```
 
-`Z` is the generated integer noise.
+`Z` là integer noise được sinh ra trong backend.
 
-## Sticky Release
+## 6. Sticky Release Flow
 
-The service builds a release key:
+Service tạo release key:
 
 ```text
 JOB_APPLICANT_COUNT|jobId={jobId}|audience=APPLICANT|window={window}
 ```
 
-It first checks `privacy_releases`.
+Flow:
 
-If a release already exists, it reuses it.
+1. Kiểm tra `privacy_releases`.
+2. Nếu release đã tồn tại, tái sử dụng giá trị đã lưu.
+3. Nếu chưa có release, tính raw distinct count.
+4. Tạo deterministic random bytes bằng HMAC-SHA-256.
+5. Sample integer noise.
+6. Clamp kết quả về tối thiểu 0.
+7. Lưu released value vào PostgreSQL.
+8. Trả về DTO an toàn.
 
-If no release exists, it:
+Bảng `PrivacyRelease` chỉ nên lưu giá trị đã công bố, không lưu raw count hoặc noise.
 
-1. computes the raw distinct count;
-2. derives deterministic random bytes using HMAC-SHA-256;
-3. samples integer noise;
-4. clamps the result at zero;
-5. stores the release in PostgreSQL;
-6. returns only the safe DTO.
-
-## Data Flow Diagram
+## 7. Data Flow
 
 ```mermaid
 flowchart LR
@@ -153,7 +153,7 @@ flowchart LR
   I --> B
 ```
 
-## Privacy Boundary
+## 8. Privacy Boundary
 
 ```mermaid
 flowchart TB
@@ -170,67 +170,53 @@ flowchart TB
   TrustedBackend --> O
 ```
 
-## Class Responsibilities
+Chỉ backend được thấy raw count, noise, epsilon internals và secret. React chỉ nhận DTO đã bảo vệ.
+
+## 9. Trách Nhiệm Các Class
 
 ### `PrivacyProperties`
 
-Why it exists:
+Dùng để bind cấu hình privacy từ YAML/environment variables.
 
-It binds typed privacy configuration from YAML/environment variables.
-
-Receives:
+Nhận:
 
 - `epsilon`;
 - release window;
 - release secret;
 - anonymous preview settings.
 
-Returns:
-
-- validated Java configuration objects.
-
-Must never expose:
-
-- secrets to API responses.
+Không được expose secret ra API response.
 
 ### `JobPrivacyController`
 
-Why it exists:
+Dùng để expose privacy endpoint cho applicant.
 
-It exposes applicant-facing privacy endpoints.
-
-Receives:
+Nhận:
 
 - job ID;
 - authenticated token.
 
-Returns:
+Trả:
 
-- `ApiResponse` containing safe DTOs.
+- `ApiResponse` chứa safe DTO.
 
-Must never expose:
-
-- entities;
-- raw count;
-- noise.
+Không được trả entity, raw count hoặc noise.
 
 ### `ImplApplicantPrivacyService`
 
-Why it exists:
+Dùng để chứa business logic nhạy cảm về privacy.
 
-It owns privacy-sensitive business logic.
-
-Receives:
+Nhận:
 
 - job ID;
-- applicant identity from token.
+- applicant identity từ token.
 
-Returns:
+Trả:
 
-- safe approximate count DTO;
-- safe anonymous preview DTO.
+- approximate count DTO;
+- anonymous preview DTO nếu endpoint liên quan.
 
-Must never expose or log:
+Không được expose hoặc log:
 
 - raw count;
 - generated noise;
@@ -240,29 +226,25 @@ Must never expose or log:
 
 ### `ApplicantJobRepository`
 
-Why it exists:
+Dùng để query quan hệ applicant-job.
 
-It queries applicant-job relations.
-
-Important method:
+Method quan trọng:
 
 ```java
 countDistinctApplicantsByJobAndActionType(jobId, "APPLIED")
 ```
 
-Must ensure:
+Cần đảm bảo:
 
-- saved jobs do not count;
-- withdrawn rows do not count;
-- duplicate rows count once.
+- saved jobs không được đếm;
+- withdrawn rows không được đếm;
+- duplicate rows chỉ tính một lần.
 
 ### `PrivacyRelease`
 
-Why it exists:
+Dùng để lưu một sticky released value theo release key.
 
-It stores one sticky released value per release key.
-
-Receives:
+Nên lưu:
 
 - release key;
 - metric name;
@@ -271,7 +253,7 @@ Receives:
 - release window;
 - released value.
 
-Must never store:
+Không được lưu:
 
 - raw count;
 - generated noise;
@@ -279,62 +261,70 @@ Must never store:
 
 ### `ApplicantActivityCountResponse`
 
-Why it exists:
+DTO an toàn cho frontend.
 
-It is the applicant-facing safe DTO.
+Được phép có:
 
-Returns only:
+- `jobId`;
+- `approximateApplicantCount`;
+- `displayText`;
+- `approximate`.
 
-- job ID;
-- approximate count;
-- display text;
-- approximate flag.
+Không được có:
 
-## Configuration
+- raw count;
+- noise;
+- debug calculation;
+- secret-related values.
 
-```yaml
-privacy:
-  differential:
-    enabled: true
-    applicant-count:
-      epsilon: ${DP_APPLICANT_COUNT_EPSILON:0.5}
-      release-window: ${DP_APPLICANT_COUNT_RELEASE_WINDOW:P7D}
-      release-secret: ${DP_RELEASE_SECRET:local-development-dp-release-secret-change-me}
+## 10. Lỗi Cần Tránh
+
+Sai:
+
+```text
+Nếu privacy service lỗi, trả raw count cho frontend.
 ```
 
-`epsilon`:
+Đúng:
 
-Selected privacy parameter. Must be greater than zero.
+```text
+Trả error hoặc unavailable state.
+```
 
-`release-window`:
+Sai:
 
-Time period where one sticky value is reused.
+```text
+Gửi raw count về React rồi React cộng noise.
+```
 
-`release-secret`:
+Đúng:
 
-Backend secret used for HMAC-derived randomness. Must be changed for production.
+```text
+Backend cộng noise và chỉ trả approximate count.
+```
 
-## Frontend Behavior
+Sai:
 
-`JobDetail.tsx` calls the applicant count endpoint for logged-in applicants.
+```text
+Lưu raw count và noise trong privacy_releases để debug.
+```
 
-It shows:
+Đúng:
 
-- loading state;
-- approximate count success state;
-- error state with retry;
-- explanatory text.
+```text
+Chỉ lưu released value và metadata cần thiết.
+```
 
-It does not:
+## 11. Checklist Khi Sửa Code
 
-- call exact count endpoint for applicants;
-- add noise in React;
-- display raw count.
+Trước khi merge, kiểm tra:
 
-## Operational Notes
-
-- Configure `DP_RELEASE_SECRET` outside source control.
-- Avoid daily releases unless the privacy budget allows it.
-- Do not log raw counts or generated noise.
-- If the privacy service fails, return unavailable/error, not exact count.
-
+- raw count query dùng `COUNT(DISTINCT applicant_id)`;
+- chỉ đếm `APPLIED`;
+- saved/withdrawn/deleted/duplicate không làm sai count;
+- `epsilon > 0`;
+- release key không phụ thuộc vào viewer với aggregate count;
+- sticky release được persist;
+- response không có raw count/noise/secret;
+- frontend hiển thị label approximate;
+- test backend liên quan đã pass.

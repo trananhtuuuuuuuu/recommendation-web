@@ -1,8 +1,8 @@
-# Differential Privacy Testing Guide
+# Hướng Dẫn Kiểm Thử Privacy
 
-This guide explains what to test and why.
+Tài liệu này mô tả các nhóm test cần có cho differential privacy count và anonymous candidate preview.
 
-## How To Run Tests
+## 1. Lệnh Chạy Test
 
 Backend:
 
@@ -11,7 +11,7 @@ cd backend
 ./mvnw test
 ```
 
-Focused backend privacy test:
+Chạy riêng privacy integration test:
 
 ```bash
 cd backend
@@ -25,116 +25,97 @@ cd frontend
 npm run build
 ```
 
-Frontend tests:
+Frontend test:
 
 ```bash
 cd frontend
 npm run test
 ```
 
-## 1. Count Query Tests
+## 2. Test Cho Raw Count Query
 
-### Test: distinct genuine applications are counted
+### Đếm distinct ứng viên đã ứng tuyển
 
-Why:
+Cần đảm bảo query đúng:
 
-The privacy math assumes one applicant changes the count by at most one.
+```sql
+COUNT(DISTINCT applicant_id)
+```
 
-If duplicate rows count multiple times, sensitivity is wrong.
+Lý do: differential privacy giả định rằng một ứng viên chỉ làm count thay đổi tối đa 1.
 
-### Test: saved jobs are excluded
+### Không đếm saved job
 
-Why:
+Lưu việc không phải ứng tuyển. Saved job không được làm tăng applicant count.
 
-Saving a job is not applying.
+### Không đếm withdrawn application
 
-Including saved jobs would produce the wrong raw count.
+Ứng viên đã rút hồ sơ không nên được tính là ứng viên đang ứng tuyển.
 
-### Test: withdrawn applications are excluded
+### Không đếm deleted record
 
-Why:
+Application, applicant hoặc job đã delete không được ảnh hưởng count đang hiển thị.
 
-A withdrawn candidate should not count as actively applied.
+### Không đếm duplicate row nhiều lần
 
-### Test: deleted records are excluded
+Nếu một ứng viên có nhiều row liên quan đến cùng job, count vẫn chỉ tăng 1.
 
-Why:
+## 3. Test Cho Noise Generator
 
-Deleted application, applicant, or job records should not affect the live count.
+### Epsilon phải lớn hơn 0
 
-## 2. Noise Generator Tests
+`epsilon = 0` hoặc epsilon âm là cấu hình không hợp lệ.
 
-### Test: epsilon must be greater than zero
+### Epsilon nhỏ tạo noise rộng hơn
 
-Why:
+Epsilon nhỏ nghĩa là bảo vệ privacy mạnh hơn, nên output phải có độ phân tán lớn hơn.
 
-The formula needs positive epsilon. Zero or negative epsilon is invalid.
+### Epsilon lớn tạo noise hẹp hơn
 
-### Test: smaller epsilon gives more spread
+Epsilon lớn nghĩa là privacy yếu hơn, output gần raw count hơn.
 
-Why:
+### Không viết test random quá mong manh
 
-Smaller epsilon means stronger privacy and more noise.
+Một lần sample không chứng minh distribution đúng. Nếu cần test hành vi thống kê, sample nhiều lần và chỉ kiểm tra xu hướng rộng.
 
-### Test: larger epsilon gives less spread
+Production path hiện dùng deterministic HMAC-derived bytes, nên sticky release test có thể deterministic.
 
-Why:
+## 4. Test Cho Sticky Release
 
-Larger epsilon means weaker privacy and less noise.
+### Cùng job và release window trả cùng một giá trị
 
-### Statistical caution
+Refresh nhiều lần không được tạo noise mới liên tục, vì người dùng có thể lấy trung bình để đoán raw count.
 
-One random output does not prove a distribution is correct.
+### Nhiều applicant thấy cùng một release
 
-For development, sample many outputs and check broad behavior.
+Release key của aggregate count không phụ thuộc vào viewer identity. Hai applicant khác nhau xem cùng job trong cùng window nên nhận cùng approximate count.
 
-Avoid fragile CI tests with strict random thresholds.
+### Release được persist
 
-The current production path uses deterministic HMAC-derived bytes, so sticky release tests can be deterministic.
+Giá trị đã công bố phải tồn tại qua restart và dùng được với nhiều backend instance chung PostgreSQL.
 
-## 3. Sticky Release Tests
+## 5. Test Bảo Mật API
 
-### Test: same job and release window returns same value
+### Endpoint yêu cầu applicant role
 
-Why:
+Applicant-facing count chỉ dành cho applicant đã xác thực.
 
-Fresh noise on each refresh can be averaged toward the exact count.
+### Response không serialize raw data
 
-### Test: multiple applicants see the same release
+Cấm trả về:
 
-Why:
+- `rawCount`;
+- `noise`;
+- `secret`;
+- `seed`;
+- `epsilonCalculation`;
+- HMAC digest.
 
-The release key uses job, metric, audience, and window. It should not depend on viewer identity for the aggregate count.
+### Không có exact fallback
 
-### Test: release is persisted
+Khi privacy logic lỗi, API phải trả error/unavailable thay vì raw count.
 
-Why:
-
-The same value should survive backend restarts and work across backend instances using the same PostgreSQL database.
-
-## 4. Security Tests
-
-### Test: applicant role is required
-
-Why:
-
-The endpoint is applicant-facing.
-
-### Test: raw count and noise are not serialized
-
-Why:
-
-Returning raw count or noise defeats the purpose.
-
-### Test: exact fallback is forbidden
-
-Why:
-
-If privacy logic fails, the API must not return the raw count.
-
-## 5. Controller Tests
-
-### Test: safe DTO shape
+## 6. Test DTO Shape
 
 Expected fields:
 
@@ -151,67 +132,51 @@ Forbidden fields:
 - `seed`;
 - `epsilonCalculation`.
 
-## 6. Frontend Tests
+## 7. Test Frontend
 
-### Test: applicant sees approximate label
+### Applicant thấy label approximate
 
-Why:
-
-The UI must not imply exactness.
-
-Expected text:
+UI phải hiển thị ý nghĩa gần đúng, ví dụ:
 
 ```text
 Approximately N candidates have applied
 ```
 
-and:
+hoặc bản tiếng Việt:
 
 ```text
-This count is intentionally approximate to protect applicant privacy.
+Khoảng N ứng viên đã ứng tuyển
 ```
 
-### Test: loading, error, and retry states exist
+### Có loading, error và retry state
 
-Why:
+Nếu request lỗi, UI không nên im lặng ẩn thông tin. Cần có trạng thái lỗi và cách thử lại.
 
-The UI should not silently hide applicant activity when a request fails.
+### Frontend không gọi exact count endpoint cho applicant
 
-### Test: frontend does not call exact count endpoint for applicants
+Applicant không được nhận raw count từ bất kỳ API nào.
 
-Why:
+## 8. Test Anonymous Candidate Preview
 
-Applicants should not receive exact counts.
+### Chỉ ứng viên đã opt-in mới được hiển thị
 
-## 7. Anonymous Preview Tests
+Trường `profileVisibleToOtherApplicants` phải là `true`.
 
-### Test: only opted-in candidates are eligible
+### Recruiter visibility không thay thế applicant visibility
 
-Why:
+`profileVisibleToRecruiters = true` không có nghĩa là cho phép ứng viên khác xem preview.
 
-Applicant-to-applicant visibility requires separate consent.
+### Saved-job user không được xem preview
 
-### Test: recruiter visibility alone does not count
+Người chỉ lưu công việc nhưng chưa ứng tuyển không được truy cập preview.
 
-Why:
+### Nhóm quá nhỏ bị suppress
 
-Recruiter visibility and applicant visibility are different permissions.
+Nếu số ứng viên hợp lệ quá ít, API phải trả unavailable và không lộ exact eligible count.
 
-### Test: saved-job users cannot access previews
+### Không trả direct identifier
 
-Why:
-
-Preview access requires applying to the same job.
-
-### Test: small groups are suppressed
-
-Why:
-
-Small groups are easier to re-identify.
-
-### Test: no direct identifiers are serialized
-
-Forbidden:
+Cấm trả:
 
 - applicant ID;
 - user ID;
@@ -223,19 +188,22 @@ Forbidden:
 - exact company;
 - exact university.
 
-## Current Test Coverage In This Repo
+### Anonymous ID phải scoped và rotate
 
-`BackendEndpointsIntegrationTests` includes privacy assertions for:
+Anonymous ID phải phụ thuộc vào viewer, job, candidate và rotation window để giảm khả năng correlate qua thời gian và qua job.
+
+## 9. Test Coverage Hiện Tại
+
+`BackendEndpointsIntegrationTests` đang bao phủ các điểm chính:
 
 - distinct count semantics;
-- saved and withdrawn exclusion;
-- sticky releases;
-- multiple applicants seeing the same release;
-- response not exposing raw count or noise;
-- opt-in anonymous previews;
-- saved-only users denied for previews;
-- small group suppression;
+- saved và withdrawn exclusion;
+- sticky release;
+- nhiều applicant thấy cùng release;
+- response không lộ raw count/noise;
+- opt-in anonymous preview;
+- saved-only user bị từ chối;
+- small-group suppression;
 - broad skill categories;
 - scoped anonymous IDs;
 - rate limiting.
-

@@ -1,52 +1,110 @@
-# Differential Privacy And Anonymous Candidate Preview
+# Differential Privacy Và Anonymous Candidate Preview
 
-## Part A: Differentially Private Aggregate Count
+Tài liệu này phân biệt hai tính năng privacy trong project:
 
-The applicant-facing applicant activity count is an aggregate query only. It counts distinct applicants with genuine submitted applications for a job:
+- applicant count được bảo vệ bằng differential privacy;
+- anonymous candidate preview được bảo vệ bằng consent, access control và data minimization.
 
-`COUNT(DISTINCT applicant_id)` where `action_type = 'APPLIED'`, excluding saved jobs, bookmarks, withdrawn applications, cancelled applications, deleted applications, and duplicate application records.
+Hai tính năng này đều liên quan đến quyền riêng tư, nhưng không dùng cùng một mô hình bảo vệ.
 
-Differential privacy is used only for this aggregate count. Individual applicant profiles are not treated as differential privacy outputs.
+## Phần A: Applicant Count Có Differential Privacy
 
-For this count query, global sensitivity is:
+Applicant-facing count là một aggregate query. Nó chỉ đếm số ứng viên khác nhau đã thật sự ứng tuyển vào một job:
 
-`Delta f = 1`
+```sql
+COUNT(DISTINCT applicant_id)
+```
 
-Epsilon is selected by the system owner as a privacy parameter. It is not calculated from the raw count, it is not an error percentage, and it is not the number of candidates added or removed. Smaller epsilon provides stronger privacy and more noise. Larger epsilon provides weaker privacy and less noise.
+Điều kiện:
+
+- `action_type = 'APPLIED'`;
+- không đếm saved job;
+- không đếm bookmark;
+- không đếm withdrawn application;
+- không đếm cancelled application;
+- không đếm deleted record;
+- không đếm duplicate application row nhiều lần.
+
+Differential privacy chỉ áp dụng cho aggregate count này. Nó không biến hồ sơ riêng lẻ của một ứng viên thành differential privacy output.
+
+### Sensitivity
+
+Với count query trên:
+
+```text
+Delta f = 1
+```
+
+Một ứng viên được thêm vào hoặc bị xóa ra chỉ có thể làm count thay đổi tối đa 1.
+
+### Epsilon
+
+`epsilon` là tham số privacy do system owner chọn.
+
+`epsilon` không phải:
+
+- giá trị tính từ raw count;
+- phần trăm sai số;
+- số ứng viên được thêm hoặc bớt;
+- secret.
+
+Epsilon nhỏ bảo vệ privacy mạnh hơn nhưng noise lớn hơn. Epsilon lớn cho kết quả gần raw count hơn nhưng privacy yếu hơn.
+
+### Noise Mechanism
 
 Laplace mechanism:
 
-`b = Delta f / epsilon`
+```text
+b = Delta f / epsilon
+```
 
-For this count:
+Với applicant count:
 
-`b = 1 / epsilon`
+```text
+b = 1 / epsilon
+```
 
 Laplace density:
 
-`f(z) = 1 / (2b) * exp(-abs(z) / b)`
+```text
+f(z) = 1 / (2b) * exp(-abs(z) / b)
+```
 
-Released value:
+Project dùng biến thể integer-only discrete Laplace / two-sided geometric:
 
-`max(0, round(rawCount + z))`
+```text
+q = exp(-epsilon)
+P(Z = k) = ((1 - q) / (1 + q)) * q^abs(k)
+```
 
-The implementation uses the integer-only discrete Laplace/two-sided geometric alternative:
+Giá trị công bố:
 
-`q = exp(-epsilon)`
+```text
+max(0, rawCount + Z)
+```
 
-`P(Z = k) = ((1 - q) / (1 + q)) * q^abs(k)`
+### Sticky Release
 
-Released value:
+Release được giữ cố định cho cùng job, metric, audience và release window.
 
-`max(0, rawCount + Z)`
+Dạng release key:
 
-Releases are sticky for the same job ID, metric name, audience, and release window. The release key shape is:
+```text
+JOB_APPLICANT_COUNT|jobId=123|audience=APPLICANT|window=epoch-window-N
+```
 
-`JOB_APPLICANT_COUNT|jobId=123|audience=APPLICANT|window=epoch-window-N`
+Backend dùng HMAC-SHA-256 với `DP_RELEASE_SECRET` để tạo deterministic randomness. Giá trị released được lưu trong PostgreSQL tại bảng `privacy_releases`, nên nó tồn tại qua restart và dùng được với nhiều backend instance.
 
-HMAC-SHA-256 with `DP_RELEASE_SECRET` derives deterministic randomness. Sticky released values are persisted in PostgreSQL in `privacy_releases`, so they survive restarts and work across backend instances. Applicant-facing responses never serialize the raw count, epsilon internals, HMAC digest, random seed, generated noise, or secret.
+Applicant-facing response không bao giờ được serialize:
 
-Operational configuration:
+- raw count;
+- epsilon internals;
+- HMAC digest;
+- random seed;
+- generated noise;
+- secret.
+
+### Cấu Hình
 
 ```yaml
 privacy:
@@ -58,42 +116,132 @@ privacy:
       release-secret: ${DP_RELEASE_SECRET}
 ```
 
-## Part B: Consent-Based Anonymous Candidate Preview
+## Phần B: Anonymous Candidate Preview
 
-The anonymous candidate preview is not differential privacy. It is consent-based, access-controlled, data-minimized profile sharing.
+Anonymous candidate preview không phải differential privacy.
 
-Differential privacy protects aggregate queries. It does not make one real applicant profile anonymous. Adding random noise to one applicant profile would not make that profile differentially private.
+Nó là cơ chế chia sẻ một phần thông tin hồ sơ ứng viên theo các nguyên tắc:
 
-Consent is separate from recruiter visibility. Candidates appear only when `profile_visible_to_other_applicants = true`, which defaults to false. Recruiter visibility alone does not imply applicant-to-applicant visibility.
+- ứng viên phải đồng ý;
+- chỉ applicant cùng ứng tuyển vào job mới được xem;
+- chỉ trả về trường tổng quát;
+- không trả định danh trực tiếp;
+- không hiển thị khi nhóm ứng viên quá nhỏ.
 
-Allowed fields are broad and non-identifying:
+Thêm noise vào một profile riêng lẻ không làm profile đó trở thành differential privacy.
 
-- broad experience bucket
-- approved broad skill categories
-- education level
-- broad geographic region
-- broad current-role category
+### Consent
 
-Prohibited fields include database applicant ID, user ID, full name, username, email, phone number, exact address, date of birth, gender, CV URL, profile image, exact company name, exact university name, exact employment dates, exact application timestamp, certificate serial number, social media URL, portfolio URL, unique biography, and internal identifiers.
+Ứng viên chỉ xuất hiện trong preview khi:
 
-Skills are mapped into approved categories such as Backend, Frontend, Database, Cloud, DevOps, Data, Machine Learning, Mobile, Quality Assurance, and Product Design. Raw free-text skill values are not returned.
+```text
+profile_visible_to_other_applicants = true
+```
 
-Anonymous identifiers are opaque HMAC-derived tokens scoped to viewer, job, candidate, and rotation window. They cannot be used to correlate the same candidate across jobs or long periods.
+Giá trị mặc định phải là `false`.
 
-Access requires:
+Recruiter visibility là quyền riêng:
 
-- authenticated applicant role
-- viewer has applied to the same job
-- target candidate has applied and has not withdrawn
-- target candidate opted in to applicant visibility
-- job exists
-- feature is enabled
+```text
+profile_visible_to_recruiters = true
+```
 
-Users who merely saved the job cannot access previews. Callers cannot choose candidate IDs; the backend selects a small deterministic sample within the rotation window.
+Quyền này không đồng nghĩa với việc cho applicant khác xem preview.
 
-Small-group suppression prevents previews unless the eligible opted-in group meets the configured threshold. The response does not expose the exact eligible count.
+### Trường Được Phép Trả Về
 
-Operational configuration:
+Chỉ nên trả các trường rộng và khó định danh:
+
+- experience bucket;
+- approved broad skill categories;
+- education level;
+- broad geographic region;
+- broad current-role category.
+
+### Trường Cấm Trả Về
+
+Không được trả:
+
+- database applicant ID;
+- user ID;
+- full name;
+- username;
+- email;
+- phone number;
+- exact address;
+- date of birth;
+- gender, trừ khi có lý do rõ ràng và consent riêng;
+- CV URL;
+- profile image;
+- exact company name;
+- exact university name;
+- exact employment dates;
+- exact application timestamp;
+- certificate serial number;
+- social media URL;
+- portfolio URL;
+- unique biography;
+- internal identifiers.
+
+### Skill Minimization
+
+Raw skill text có thể làm lộ danh tính nếu quá hiếm. Vì vậy service map skill về các nhóm rộng:
+
+- Backend;
+- Frontend;
+- Database;
+- Cloud;
+- DevOps;
+- Data;
+- Machine Learning;
+- Mobile;
+- Quality Assurance;
+- Product Design;
+- General Software.
+
+### Anonymous ID
+
+Anonymous identifier phải là opaque token tạo bằng HMAC, không phải `applicant_id`.
+
+Token nên scope theo:
+
+- viewer;
+- job;
+- candidate;
+- rotation window.
+
+Như vậy một candidate khó bị correlate qua các job khác nhau hoặc qua thời gian dài.
+
+### Điều Kiện Truy Cập
+
+Người gọi API phải thỏa:
+
+- đã xác thực;
+- có role applicant;
+- đã ứng tuyển vào cùng job;
+- job tồn tại;
+- feature đang enabled;
+- target candidate đã opt-in;
+- target candidate có relation `APPLIED` còn hiệu lực;
+- số ứng viên eligible đạt ngưỡng tối thiểu.
+
+Người chỉ saved job không được xem preview. Client cũng không được chọn candidate ID; backend tự chọn sample nhỏ trong rotation window.
+
+### Small-Group Suppression
+
+Nếu nhóm opted-in eligible quá nhỏ, API phải trả unavailable và không lộ exact eligible count.
+
+Ví dụ:
+
+```json
+{
+  "available": false,
+  "message": "Anonymous candidate previews are unavailable for this job.",
+  "profiles": []
+}
+```
+
+### Cấu Hình
 
 ```yaml
 privacy:
@@ -106,6 +254,36 @@ privacy:
     token-secret: ${ANON_PREVIEW_TOKEN_SECRET}
 ```
 
-Limitations and re-identification risks remain: broad categories reduce direct identifiers but cannot guarantee anonymity if a viewer combines the preview with external knowledge. Keep thresholds conservative, avoid rare categories, rotate identifiers, and monitor access patterns.
+## Giới Hạn Cần Chấp Nhận
 
-Test strategy covers distinct aggregate semantics, saved/withdrawn exclusions, epsilon validation/noise behavior, clamping, sticky releases, response minimization, consent separation, same-job access control, saved-job denial, small-group suppression, field prohibitions, broad skill mapping, scoped/rotating anonymous IDs, no unrestricted pagination, rate limiting, and withdrawn applicant exclusion.
+Anonymous preview giảm rủi ro định danh trực tiếp, nhưng không bảo đảm ẩn danh tuyệt đối. Nếu người xem có kiến thức bên ngoài, họ vẫn có thể suy đoán trong một số trường hợp.
+
+Cần giữ các biện pháp sau:
+
+- threshold đủ lớn;
+- category đủ rộng;
+- identifier có rotate;
+- rate limiting;
+- logging và monitoring hợp lý;
+- không trả exact field.
+
+## Checklist Test
+
+Cần test:
+
+- distinct aggregate semantics;
+- saved/withdrawn exclusion;
+- epsilon validation;
+- clamping về 0;
+- sticky release;
+- response minimization;
+- consent separation;
+- same-job access control;
+- saved-job denial;
+- small-group suppression;
+- prohibited fields;
+- broad skill mapping;
+- scoped/rotating anonymous IDs;
+- không có unrestricted pagination;
+- rate limiting;
+- withdrawn applicant exclusion.
