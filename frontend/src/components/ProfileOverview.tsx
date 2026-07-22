@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { readProfileAvatar } from "@/lib/profileAvatar";
+import { resolveApiAssetUrl } from "@/lib/api";
 
 export default function ProfileOverview() {
   const { user, role } = useAuth();
@@ -55,17 +56,17 @@ function ApplicantOverview({
 }) {
   const name = applicant?.fullName || applicant?.userName || fallbackName || "Applicant";
   const skills = toList(applicant?.cv?.skills);
-  const completion = completionPercentage([
-    name,
-    applicant?.email,
-    applicant?.phone,
-    applicant?.address,
-    applicant?.status,
-    applicant?.cv?.objective,
-    applicant?.cv?.skills,
-    applicant?.cv?.experience,
-    applicant?.cv?.education,
-    applicant?.cv?.cvFileUrl,
+  const completion = profileCompletion([
+    ["full name", applicant?.fullName],
+    ["email", applicant?.email],
+    ["phone", applicant?.phone],
+    ["address", applicant?.address],
+    ["work status", applicant?.status],
+    ["career objective", applicant?.cv?.objective],
+    ["skills", applicant?.cv?.skills],
+    ["experience", applicant?.cv?.experience],
+    ["education", applicant?.cv?.education],
+    ["CV file", applicant?.cv?.cvFileUrl],
   ]);
 
   return (
@@ -111,23 +112,27 @@ function RecruiterOverview({
   avatarUrl: string;
 }) {
   const name = recruiter?.companyName || recruiter?.userName || fallbackName || "Recruiter";
-  const completion = completionPercentage([
-    name,
-    recruiter?.email,
-    recruiter?.companyDescription,
-    recruiter?.companyLocation || recruiter?.address,
-    recruiter?.companySize,
-    recruiter?.industry,
-    recruiter?.website,
-    recruiter?.contactEmail,
-    recruiter?.contactPhone,
-    recruiter?.logoUrl,
+  const completion = profileCompletion([
+    ["company name", recruiter?.companyName],
+    ["account email", recruiter?.email],
+    ["company description", recruiter?.companyDescription],
+    ["company location", recruiter?.companyLocation || recruiter?.address],
+    ["company size", recruiter?.companySize],
+    ["industry", recruiter?.industry],
+    ["website", recruiter?.website],
+    ["hiring email", recruiter?.contactEmail],
+    ["hiring phone", recruiter?.contactPhone],
+    ["logo", recruiter?.logoUrl],
+    ["cover image", recruiter?.coverImageUrl],
+    ["tax code", recruiter?.taxCode],
+    ["established date", recruiter?.establishedDate],
   ]);
 
   return (
     <OverviewCard
       icon={Building2}
-      imageUrl={avatarUrl || recruiter?.logoUrl}
+      imageUrl={avatarUrl || (recruiter?.logoUrl ? resolveApiAssetUrl(recruiter.logoUrl) : undefined)}
+      coverImageUrl={recruiter?.coverImageUrl ? resolveApiAssetUrl(recruiter.coverImageUrl) : undefined}
       name={name}
       subtitle={recruiter?.industry || "Recruiter account"}
       badge="Recruiter"
@@ -152,6 +157,7 @@ function RecruiterOverview({
 function OverviewCard({
   icon: Icon,
   imageUrl,
+  coverImageUrl,
   name,
   subtitle,
   badge,
@@ -164,10 +170,11 @@ function OverviewCard({
 }: {
   icon: LucideIcon;
   imageUrl?: string;
+  coverImageUrl?: string;
   name: string;
   subtitle: string;
   badge: string;
-  completion: number;
+  completion: ProfileCompletion;
   primaryHref: string;
   primaryLabel: string;
   secondaryHref: string;
@@ -176,7 +183,10 @@ function OverviewCard({
 }) {
   return (
     <aside className="rounded-xl border bg-card shadow-sm xl:sticky xl:top-20">
-      <div className="relative overflow-hidden rounded-t-xl bg-[linear-gradient(135deg,hsl(var(--primary)/0.18),hsl(var(--trust)/0.12),hsl(var(--accent)/0.12))] p-5">
+      <div
+        className="relative overflow-hidden rounded-t-xl bg-[linear-gradient(135deg,hsl(var(--primary)/0.18),hsl(var(--trust)/0.12),hsl(var(--accent)/0.12))] bg-cover bg-center p-5"
+        style={coverImageUrl ? { backgroundImage: `linear-gradient(hsl(var(--card) / 0.72), hsl(var(--card) / 0.9)), url(${coverImageUrl})` } : undefined}
+      >
         <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/20 blur-2xl" />
         <div className="relative flex items-start gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/20 bg-card/90 text-primary shadow-sm">
@@ -196,12 +206,15 @@ function OverviewCard({
         <div>
           <div className="mb-2 flex items-center justify-between gap-3 text-xs">
             <span className="font-medium text-foreground">Profile completeness</span>
-            <span className="font-semibold text-primary">{completion}%</span>
+            <span className="font-semibold text-primary">{completion.percent}%</span>
           </div>
-          <Progress value={completion} className="h-1.5" />
-          {completion < 100 ? (
+          <Progress value={completion.percent} className="h-1.5" />
+          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+            {completion.completed}/{completion.total} profile sections complete.
+          </p>
+          {completion.missing.length > 0 ? (
             <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-              Add missing details from your profile to improve this overview.
+              Missing: {completion.missing.slice(0, 3).join(", ")}{completion.missing.length > 3 ? ", …" : ""}
             </p>
           ) : null}
         </div>
@@ -266,12 +279,29 @@ function ProfileOverviewSkeleton() {
   );
 }
 
-function completionPercentage(values: unknown[]) {
-  const completed = values.filter((value) => {
-    if (typeof value === "string") return value.trim().length > 0;
-    return value !== null && value !== undefined;
-  }).length;
-  return Math.round((completed / values.length) * 100);
+interface ProfileCompletion {
+  percent: number;
+  completed: number;
+  total: number;
+  missing: string[];
+}
+
+function profileCompletion(criteria: [string, unknown][]): ProfileCompletion {
+  const missing = criteria.filter(([, value]) => !hasProfileValue(value)).map(([label]) => label);
+  const completed = criteria.length - missing.length;
+  return {
+    percent: criteria.length === 0 ? 0 : Math.round((completed / criteria.length) * 100),
+    completed,
+    total: criteria.length,
+    missing,
+  };
+}
+
+function hasProfileValue(value: unknown): boolean {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(hasProfileValue);
+  if (value && typeof value === "object") return Object.values(value).some(hasProfileValue);
+  return value !== null && value !== undefined;
 }
 
 function toList(value?: string | string[] | null) {

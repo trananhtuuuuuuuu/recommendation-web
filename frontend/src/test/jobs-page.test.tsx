@@ -108,4 +108,29 @@ describe("Jobs page pagination", () => {
     expect(await screen.findByText("77% Match")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Hide AI/i })).toBeInTheDocument();
   });
+
+  it("keeps AI suggestions expanded independently for multiple jobs", async () => {
+    apiMocks.fetchJobsPage.mockResolvedValue(pageOf([
+      { id: 1, jobTitle: "Backend Engineer" },
+      { id: 2, jobTitle: "Frontend Engineer" },
+    ], 0));
+    apiMocks.matchCvToJob.mockImplementation((_applicantId: string, jobId: string) => Promise.resolve({
+      matchPercent: jobId === "1" ? 81 : 72,
+      passedFilter: true,
+      reason: jobId === "1" ? "Backend match reason" : "Frontend match reason",
+      suggestions: [],
+      hardFilterReasons: [],
+    }));
+
+    render(<MemoryRouter><Jobs /></MemoryRouter>);
+
+    const suggestionButtons = await screen.findAllByRole("button", { name: "AI Suggestion" });
+    fireEvent.click(suggestionButtons[0]);
+    expect(await screen.findByText("Backend match reason")).toBeInTheDocument();
+
+    fireEvent.click(suggestionButtons[1]);
+    expect(await screen.findByText("Frontend match reason")).toBeInTheDocument();
+    expect(screen.getByText("Backend match reason")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Hide AI/i })).toHaveLength(2);
+  });
 });

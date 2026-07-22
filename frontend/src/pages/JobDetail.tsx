@@ -33,6 +33,7 @@ import {
   fetchJob,
   fetchJobApplicantCount,
   matchCvToJob,
+  matchRecruiterApplicants,
   getApplyingDeadline,
   saveJob,
   type ApplicationField,
@@ -41,6 +42,7 @@ import {
   type CvJobMatch,
   type Job,
   type JobApplicantsCount,
+  type RecruiterApplicantMatch,
 } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,6 +69,9 @@ export default function JobDetail() {
   const [matchResult, setMatchResult] = useState<CvJobMatch | null>(null);
   const [matching, setMatching] = useState(false);
   const [matchExpanded, setMatchExpanded] = useState(false);
+  const [recruiterMatches, setRecruiterMatches] = useState<RecruiterApplicantMatch[] | null>(null);
+  const [recruiterMatching, setRecruiterMatching] = useState(false);
+  const [recruiterMatchExpanded, setRecruiterMatchExpanded] = useState(false);
 
   const loadApplicantPrivacy = useCallback(async (jobId: string | number, active = true) => {
     setApplicantActivityLoading(true);
@@ -145,6 +150,20 @@ export default function JobDetail() {
     } finally { setMatching(false); }
   };
 
+  const handleRecruiterMatch = async () => {
+    if (!user?.id || !id || role !== "RECRUITER") return;
+    setRecruiterMatching(true);
+    try {
+      const ranking = await matchRecruiterApplicants(user.id, id, { llm: false, method: "tfidf" });
+      setRecruiterMatches(ranking);
+      setRecruiterMatchExpanded(true);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Unable to rank candidates for this job.");
+    } finally {
+      setRecruiterMatching(false);
+    }
+  };
+
   const customFields = parseApplicationFields(job?.customApplicationFields);
   const applicationFields = customFields.length > 0 ? customFields : defaultApplicationFields;
   const handleApply = async () => {
@@ -185,6 +204,9 @@ export default function JobDetail() {
       </div>
     );
   }
+
+  const isPostingRecruiter = role === "RECRUITER"
+    && String(job.recruiterId ?? "") === String(user?.id ?? "");
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -323,7 +345,7 @@ export default function JobDetail() {
                   </Button>
                 </>
               ) : null}
-              {(role === "RECRUITER" || role === "ADMIN") && id ? (
+              {(isPostingRecruiter || role === "ADMIN") && id ? (
                 <Button variant="outline" onClick={() => navigate(`/jobs/${id}/applicants`)} className="w-full gap-2">
                   <Users className="h-4 w-4" /> View applicants
                 </Button>
@@ -355,6 +377,17 @@ export default function JobDetail() {
               expanded={matchExpanded}
               onCheck={handleMatch}
               onToggle={() => setMatchExpanded((current) => !current)}
+            />
+          ) : null}
+
+          {isPostingRecruiter ? (
+            <RecruiterMatchPanel
+              matching={recruiterMatching}
+              matches={recruiterMatches}
+              expanded={recruiterMatchExpanded}
+              onCheck={handleRecruiterMatch}
+              onToggle={() => setRecruiterMatchExpanded((current) => !current)}
+              onViewAll={() => navigate(`/jobs/${id}/applicants`)}
             />
           ) : null}
         </aside>
@@ -620,4 +653,71 @@ function MatchPanel({
       )}
     </div>
   );
+}
+
+function RecruiterMatchPanel({
+  matching,
+  matches,
+  expanded,
+  onCheck,
+  onToggle,
+  onViewAll,
+}: {
+  matching: boolean;
+  matches: RecruiterApplicantMatch[] | null;
+  expanded: boolean;
+  onCheck: () => void;
+  onToggle: () => void;
+  onViewAll: () => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border bg-card p-5">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <h2 className="font-display text-sm font-semibold text-foreground">AI candidate ranking</h2>
+      </div>
+      <p className="text-xs leading-5 text-muted-foreground">
+        Run the real CV-to-JD matcher for applicants to this published role. Scores are returned without added noise.
+      </p>
+      <Button
+        onClick={matches ? onToggle : onCheck}
+        disabled={matching}
+        variant="outline"
+        className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10"
+      >
+        {matching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        {matching ? "Matching candidates..." : matches ? (expanded ? "Hide AI" : "Show AI") : "AI Suggestion"}
+      </Button>
+      {matches && expanded ? (
+        <div className="space-y-3 border-t pt-4">
+          {matches.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No applications are available to rank yet.</p>
+          ) : matches.slice(0, 3).map((item, index) => (
+            <div key={String(item.applicationId)} className="rounded-lg bg-primary/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  Rank {index + 1} · Candidate {ordinal(item.applicationOrder)}
+                </p>
+                <Badge className="bg-primary text-primary-foreground">{item.match.matchPercent ?? 0}%</Badge>
+              </div>
+              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{item.match.reason}</p>
+            </div>
+          ))}
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="ghost" size="sm" onClick={onCheck} disabled={matching}>Re-run</Button>
+            <Button size="sm" onClick={onViewAll}>View ranking</Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ordinal(value: number) {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
 }

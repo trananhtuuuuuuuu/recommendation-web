@@ -39,7 +39,31 @@ public class Recruiter extends User {
     private String contact;
 
     @Column(nullable = true, length = 2048)
+    private String website;
+
+    @Column(nullable = true, name = "contact_email")
+    private String contactEmail;
+
+    @Column(nullable = true, name = "contact_phone")
+    private String contactPhone;
+
+    @Column(nullable = true, name = "tax_code")
+    private String taxCode;
+
+    @Column(nullable = true, name = "business_license", length = 2048)
+    private String businessLicense;
+
+    @Column(nullable = true, name = "company_type")
+    private String companyType;
+
+    @Column(nullable = true, length = 2048)
     private String avatarUrl;
+
+    @Column(nullable = true, name = "logo_url", length = 2048)
+    private String logoUrl;
+
+    @Column(nullable = true, name = "cover_image_url", length = 2048)
+    private String coverImageUrl;
 
     @Column(nullable = true)
     private Date establishedDate;

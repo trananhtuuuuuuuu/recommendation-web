@@ -5,21 +5,17 @@ import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
-import { fetchJob, fetchJobApplicantCount, fetchJobApplicants, type Job, type JobApplicant } from "@/lib/jobsApi";
+import {
+  fetchJob,
+  fetchJobApplicantCount,
+  fetchJobApplicants,
+  matchRecruiterApplicants,
+  type CvJobMatch,
+  type Job,
+  type JobApplicant,
+  type RecruiterApplicantMatch,
+} from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface Analysis { matchPercent: number; pros: string[]; cons: string[]; suggestions: string[] }
-
-function applicantAnalysis(applicantName: string, jobTitle: string): Analysis {
-  const seed = `${applicantName}-${jobTitle}`;
-  const n = [...seed].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-  return {
-    matchPercent: 55 + (n % 41),
-    pros: ["Relevant profile keywords found", "Candidate details are complete enough for screening"],
-    cons: ["CV depth cannot be fully verified by the demo AI", "Some job-specific requirements may need interview validation"],
-    suggestions: ["Ask for one project aligned with this role", "Confirm availability and salary expectations early"],
-  };
-}
 
 export default function JobApplicants() {
   const { jobId } = useParams();
@@ -28,7 +24,10 @@ export default function JobApplicants() {
   const [job, setJob] = useState<Job | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<JobApplicant[]>([]);
+  const [rankedMatches, setRankedMatches] = useState<RecruiterApplicantMatch[] | null>(null);
   const [aiOpen, setAiOpen] = useState<Record<string, boolean>>({});
+  const [matching, setMatching] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +47,37 @@ export default function JobApplicants() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [jobId, role, user?.id]);
+
+  const handleAiMatch = async () => {
+    if (!jobId || !user?.id || role !== "RECRUITER") return;
+    setMatching(true);
+    setAiError(null);
+    try {
+      const ranking = await matchRecruiterApplicants(user.id, jobId, { llm: false, method: "tfidf" });
+      setRankedMatches(ranking);
+      setAiOpen(Object.fromEntries(ranking.map((item) => [String(item.applicationId), true])));
+    } catch (e) {
+      setAiError(e instanceof ApiError ? e.message : "AI matching failed");
+    } finally {
+      setMatching(false);
+    }
+  };
+
+  const visibleApplicants: JobApplicant[] = rankedMatches
+    ? rankedMatches.map((item) => {
+        const application = applicants.find((candidate) => String(candidate.applicationId) === String(item.applicationId));
+        return {
+          ...application,
+          applicationId: item.applicationId,
+          applicationOrder: item.applicationOrder,
+          jobDescriptionId: jobId,
+          applicant: item.applicant,
+        };
+      })
+    : applicants;
+  const matchByApplication = new Map(
+    (rankedMatches ?? []).map((item) => [String(item.applicationId), item.match]),
+  );
 
   if (loading) {
     return <div className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
@@ -94,8 +124,28 @@ export default function JobApplicants() {
         </div>
       </motion.div>
 
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-foreground">Applied candidates</h2>
+          <p className="text-xs text-muted-foreground">
+            {rankedMatches ? "Ranked descending by the final AI match percentage." : "Ordered by application submission."}
+          </p>
+        </div>
+        {role === "RECRUITER" && applicants.length > 0 ? (
+          <Button onClick={handleAiMatch} disabled={matching} className="gap-2">
+            {matching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {matching ? "Matching candidates..." : rankedMatches ? "Re-run AI Match" : "AI Match"}
+          </Button>
+        ) : null}
+      </div>
+      {aiError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {aiError}
+        </div>
+      ) : null}
+
       <div className="space-y-3">
-        {applicants.length === 0 ? (
+        {visibleApplicants.length === 0 ? (
           <div className="glass-card rounded-xl p-6">
             <h2 className="font-display font-semibold text-foreground mb-2 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-primary" /> No Applications Yet
@@ -104,16 +154,21 @@ export default function JobApplicants() {
               Saved jobs are not counted here. This view only shows applicants who submitted an application.
             </p>
           </div>
-        ) : applicants.map((item) => {
+        ) : visibleApplicants.map((item, visibleIndex) => {
           const applicant = item.applicant ?? {};
-          const analysis = applicantAnalysis(applicant.fullName || applicant.userName || "Applicant", job.jobTitle ?? job.title ?? "Job");
           const itemKey = String(item.applicationId);
+          const match = matchByApplication.get(itemKey);
+          const applicationOrder = item.applicationOrder ?? visibleIndex + 1;
+          const candidateLabel = `Candidate ${ordinal(applicationOrder)}`;
+          const sharedName = applicant.fullName && applicant.fullName !== "Candidate" ? applicant.fullName : null;
           const answers = parseAnswers(item.applicationAnswers);
           return (
             <motion.div key={String(item.applicationId)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-xl p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
-                  <h2 className="font-display text-lg font-semibold text-foreground">{applicant.fullName || applicant.userName}</h2>
+                  <h2 className="font-display text-lg font-semibold text-foreground">
+                    {candidateLabel}{sharedName ? ` · ${sharedName}` : ""}
+                  </h2>
                   <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-2">
                     {applicant.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {applicant.email}</span>}
                     {applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {applicant.phone}</span>}
@@ -127,6 +182,7 @@ export default function JobApplicants() {
                   <Badge className="bg-primary/10 text-primary">
                     Applied
                   </Badge>
+                  {match ? <MatchBadge match={match} rank={visibleIndex + 1} /> : null}
                 </div>
               </div>
               {applicant.privacyNotice && (
@@ -144,22 +200,14 @@ export default function JobApplicants() {
                 </div>
                 <div className="flex flex-wrap md:flex-col gap-2 md:items-end">
                   <Button size="sm" variant="outline" onClick={() => navigate(`/applicants/${applicant.id}`)}>View Profile</Button>
-                  <Button size="sm" onClick={() => setAiOpen((current) => ({ ...current, [itemKey]: !current[itemKey] }))} className="gap-1">
-                    <Sparkles className="w-3 h-3" /> {aiOpen[itemKey] ? "Hide AI" : "AI Suggestion"}
-                  </Button>
+                  {match ? (
+                    <Button size="sm" onClick={() => setAiOpen((current) => ({ ...current, [itemKey]: !current[itemKey] }))} className="gap-1">
+                      <Sparkles className="w-3 h-3" /> {aiOpen[itemKey] ? "Hide AI details" : "Show AI details"}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
-              {aiOpen[itemKey] && (
-                <div className="grid md:grid-cols-3 gap-4 rounded-lg border bg-primary/5 p-4">
-                  <div>
-                    <h3 className="text-xs font-semibold text-primary mb-2">{analysis.matchPercent}% Match</h3>
-                    <p className="text-xs text-muted-foreground">Hardcoded demo AI suggestion based on applicant and job data.</p>
-                  </div>
-                  <Insight title="Pros" items={analysis.pros} />
-                  <Insight title="Cons" items={analysis.cons} />
-                  <Insight title="Suggestions" items={analysis.suggestions} />
-                </div>
-              )}
+              {match && aiOpen[itemKey] ? <MatchDetails match={match} /> : null}
             </motion.div>
           );
         })}
@@ -182,13 +230,59 @@ function humanize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function Insight({ title, items }: { title: string; items: string[] }) {
+function MatchBadge({ match, rank }: { match: CvJobMatch; rank: number }) {
+  const percent = match.matchPercent ?? Math.round((match.matchScore ?? 0) * 100);
   return (
-    <div>
-      <h3 className="text-xs font-semibold text-foreground mb-2">{title}</h3>
-      <ul className="space-y-1">
-        {items.map((item) => <li key={item} className="text-xs text-muted-foreground">{item}</li>)}
-      </ul>
+    <Badge className="bg-primary text-primary-foreground">
+      Rank {rank} · {percent}% match
+    </Badge>
+  );
+}
+
+function MatchDetails({ match }: { match: CvJobMatch }) {
+  const percent = match.matchPercent ?? Math.round((match.matchScore ?? 0) * 100);
+  const fieldScores = Object.entries(match.perFieldScores ?? {}).sort(([, left], [, right]) => right - left);
+  return (
+    <div className="grid gap-4 rounded-lg border bg-primary/5 p-4 md:grid-cols-2">
+      <div>
+        <h3 className="text-sm font-semibold text-primary">{percent}% final match</h3>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">{match.reason || "No AI explanation was returned."}</p>
+        {match.hardFilterReasons && match.hardFilterReasons.length > 0 ? (
+          <ul className="mt-3 space-y-1 text-xs text-destructive">
+            {match.hardFilterReasons.map((reason) => <li key={reason}>• {reason}</li>)}
+          </ul>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold text-foreground">Field scores</h3>
+        {fieldScores.length > 0 ? fieldScores.map(([field, score]) => (
+          <div key={field}>
+            <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
+              <span>{humanize(field)}</span><span>{Math.round(score * 100)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(score * 100)}%` }} />
+            </div>
+          </div>
+        )) : <p className="text-xs text-muted-foreground">No per-field scores available.</p>}
+      </div>
+      {match.suggestions && match.suggestions.length > 0 ? (
+        <div className="md:col-span-2">
+          <h3 className="text-xs font-semibold text-foreground">AI suggestions</h3>
+          <ul className="mt-2 space-y-1">
+            {match.suggestions.map((suggestion) => <li key={suggestion} className="text-xs text-muted-foreground">• {suggestion}</li>)}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function ordinal(value: number) {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
 }

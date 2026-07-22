@@ -33,6 +33,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchApplicant,
   fetchRecruiter,
+  fetchRecruiterJobs,
   analyzeCv,
   deleteUploadedCvFile,
   updateApplicant,
@@ -44,6 +45,9 @@ import {
   type CvAnalysis,
   type CvExperienceSuggestion,
   type Recruiter,
+  type Job,
+  getJobId,
+  getJobTitle,
 } from "@/lib/jobsApi";
 import { API_BASE_URL, ApiError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -178,6 +182,8 @@ export default function Profile() {
   const { user: authUser, role } = useAuth();
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [recruiter, setRecruiter] = useState<Recruiter | null>(null);
+  const [recruiterJobs, setRecruiterJobs] = useState<Job[]>([]);
+  const [recruiterJobsError, setRecruiterJobsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingCvFile, setDeletingCvFile] = useState(false);
@@ -198,14 +204,24 @@ export default function Profile() {
     if (!authUser?.id) return;
     let active = true;
     setLoading(true);
-    const request = role === "RECRUITER" ? fetchRecruiter(authUser.id) : fetchApplicant(authUser.id);
+    setRecruiterJobsError(null);
+    const request = role === "RECRUITER"
+      ? Promise.all([
+          fetchRecruiter(authUser.id),
+          fetchRecruiterJobs(authUser.id).catch((error) => {
+            if (active) setRecruiterJobsError(error instanceof ApiError ? error.message : "Unable to load published jobs");
+            return [] as Job[];
+          }),
+        ])
+      : fetchApplicant(authUser.id);
 
     request
       .then((data) => {
         if (!active) return;
         if (role === "RECRUITER") {
-          const next = data as Recruiter;
+          const [next, jobs] = data as [Recruiter, Job[]];
           setRecruiter(next);
+          setRecruiterJobs(jobs);
           setRecruiterForm({
             userName: next.userName || authUser.userName || "",
             email: next.email || authUser.email || "",
@@ -483,10 +499,13 @@ export default function Profile() {
           ) : (
             <RecruiterView
               recruiter={recruiter}
+              jobs={recruiterJobs}
+              jobsError={recruiterJobsError}
               avatarUrl={avatarUrl}
               onAvatarUpload={handleAvatarUpload}
               onAvatarRemove={handleAvatarRemove}
               onEdit={() => setEditing(true)}
+              onOpenJob={(jobId) => window.location.assign(`/jobs/${jobId}`)}
             />
           )}
         </ProfileFrame>
@@ -972,16 +991,22 @@ function ApplicantView({
 
 function RecruiterView({
   recruiter,
+  jobs,
+  jobsError,
   avatarUrl,
   onAvatarUpload,
   onAvatarRemove,
   onEdit,
+  onOpenJob,
 }: {
   recruiter: Recruiter | null;
+  jobs: Job[];
+  jobsError: string | null;
   avatarUrl: string;
   onAvatarUpload: (file: File) => void;
   onAvatarRemove: () => void;
   onEdit: () => void;
+  onOpenJob: (jobId: string) => void;
 }) {
   const companyName = recruiter?.companyName || "Recruiter Company";
   const location = recruiter?.companyLocation || recruiter?.address || "Location not provided";
@@ -989,15 +1014,21 @@ function RecruiterView({
   return (
     <div className="space-y-4">
       <section className="overflow-hidden rounded-lg border bg-card">
-        <div
-          className="h-40 sm:h-48 bg-[linear-gradient(135deg,hsl(var(--primary)),hsl(var(--trust)),hsl(var(--accent)))]"
-          style={recruiter?.coverImageUrl ? { backgroundImage: `url(${recruiter.coverImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
-        />
+        <div className="relative h-44 overflow-hidden bg-[linear-gradient(135deg,hsl(var(--primary)),hsl(var(--trust)),hsl(var(--accent)))] sm:h-56">
+          {recruiter?.coverImageUrl ? (
+            <img
+              src={toAssetUrl(recruiter.coverImageUrl)}
+              alt={`${companyName} cover`}
+              className="h-full w-full object-cover"
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/20 to-transparent" />
+        </div>
         <div className="px-5 pb-5">
-          <div className="-mt-16 flex items-start justify-between gap-4">
-            <div className="w-28 h-28 rounded-xl border-4 border-card bg-secondary overflow-hidden shadow-sm flex items-center justify-center shrink-0">
+          <div className="relative -mt-16 flex items-start justify-between gap-4">
+            <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-card bg-white p-1 shadow-md sm:h-32 sm:w-32">
               {avatarUrl || recruiter?.logoUrl ? (
-                <img src={avatarUrl || recruiter?.logoUrl} alt={companyName} className="w-full h-full object-cover" />
+                <img src={avatarUrl || toAssetUrl(recruiter?.logoUrl || "")} alt={`${companyName} logo`} className="h-full w-full object-contain" />
               ) : (
                 <Building2 className="w-11 h-11 text-primary" />
               )}
@@ -1056,14 +1087,73 @@ function RecruiterView({
               <RecruiterAbout recruiter={recruiter} />
             </TabsContent>
             <TabsContent value="posts" className="mt-0">
-              <EmptyState icon={<Bell />} title="No company posts yet" />
+              <RecruiterPublishedJobs jobs={jobs} error={jobsError} variant="posts" onOpenJob={onOpenJob} />
             </TabsContent>
             <TabsContent value="jobs" className="mt-0">
-              <EmptyState icon={<Briefcase />} title="Posted jobs will appear here" />
+              <RecruiterPublishedJobs jobs={jobs} error={jobsError} variant="jobs" onOpenJob={onOpenJob} />
             </TabsContent>
           </div>
         </Tabs>
       </section>
+    </div>
+  );
+}
+
+function RecruiterPublishedJobs({
+  jobs,
+  error,
+  variant,
+  onOpenJob,
+}: {
+  jobs: Job[];
+  error: string | null;
+  variant: "posts" | "jobs";
+  onOpenJob: (jobId: string) => void;
+}) {
+  if (error) {
+    return <EmptyState icon={<Briefcase />} title={error} />;
+  }
+  if (jobs.length === 0) {
+    return (
+      <EmptyState
+        icon={variant === "posts" ? <Bell /> : <Briefcase />}
+        title={variant === "posts" ? "No company posts yet" : "No published jobs yet"}
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {jobs.map((job) => {
+        const jobId = getJobId(job);
+        return (
+          <button
+            key={jobId}
+            type="button"
+            onClick={() => onOpenJob(jobId)}
+            className="rounded-lg border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-display font-semibold text-foreground">{getJobTitle(job)}</p>
+                {variant === "posts" ? (
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+                    {job.jobDescription || job.description || "A new opportunity has been published."}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {[job.location, job.jobType, job.salaryRange].filter(Boolean).join(" · ") || "Job details available"}
+                  </p>
+                )}
+              </div>
+              <ExternalLink className="h-4 w-4 shrink-0 text-primary" />
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Published {job.postedDate || "date not specified"}
+            </p>
+          </button>
+        );
+      })}
     </div>
   );
 }

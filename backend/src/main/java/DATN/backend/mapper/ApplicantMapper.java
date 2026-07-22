@@ -40,15 +40,17 @@ public class ApplicantMapper {
 
         public static ApplicantResponse toRecruiterVisibleApplicantResponse(Applicant applicant) {
                 boolean profileVisible = isVisible(applicant.getProfileVisibleToRecruiters(), true);
-                boolean showFullName = profileVisible && isVisible(applicant.getShowFullName(), false);
-                boolean showContactInfo = profileVisible && isVisible(applicant.getShowContactInfo(), false);
-                boolean showAddress = profileVisible && isVisible(applicant.getShowAddress(), false);
-                boolean showCvFile = profileVisible && isVisible(applicant.getShowCvFile(), false);
-                boolean showObjective = profileVisible && isVisible(applicant.getShowObjective(), true);
-                boolean showSkills = profileVisible && isVisible(applicant.getShowSkills(), true);
-                boolean showExperience = profileVisible && isVisible(applicant.getShowExperience(), true);
-                boolean showEducation = profileVisible && isVisible(applicant.getShowEducation(), true);
-                boolean showCertifications = profileVisible && isVisible(applicant.getShowCertifications(), true);
+                // Discoverability is the master consent. If it is disabled, an
+                // applicant can still share individual sections explicitly.
+                boolean showFullName = profileVisible || isVisible(applicant.getShowFullName(), false);
+                boolean showContactInfo = profileVisible || isVisible(applicant.getShowContactInfo(), false);
+                boolean showAddress = profileVisible || isVisible(applicant.getShowAddress(), false);
+                boolean showCvFile = profileVisible || isVisible(applicant.getShowCvFile(), false);
+                boolean showObjective = profileVisible || isVisible(applicant.getShowObjective(), true);
+                boolean showSkills = profileVisible || isVisible(applicant.getShowSkills(), true);
+                boolean showExperience = profileVisible || isVisible(applicant.getShowExperience(), true);
+                boolean showEducation = profileVisible || isVisible(applicant.getShowEducation(), true);
+                boolean showCertifications = profileVisible || isVisible(applicant.getShowCertifications(), true);
                 boolean privacyApplied = !profileVisible
                                 || !showFullName
                                 || !showContactInfo
@@ -69,7 +71,7 @@ public class ApplicantMapper {
                                 showAddress ? applicant.getAddress() : null,
                                 null,
                                 profileVisible && applicant.getStatus() != null ? applicant.getStatus().name() : null,
-                                applicant.getCv() == null ? null : applicant.getCv().getId(),
+                                null,
                                 applicant.getCv() == null ? null
                                                 : toCvResponse(applicant.getCv(), showFullName, showAddress,
                                                                 showContactInfo, showObjective, showSkills,
@@ -89,7 +91,7 @@ public class ApplicantMapper {
                                 privacyApplied,
                                 privacyApplied,
                                 privacyApplied
-                                                ? "Candidate privacy settings hide one or more profile fields."
+                                                ? "The candidate shared only selected profile fields."
                                                 : null);
         }
 
@@ -279,7 +281,7 @@ public class ApplicantMapper {
         }
 
         private static String anonymizedName(Applicant applicant) {
-                return "Candidate #" + applicant.getId();
+                return "Candidate";
         }
 
 }

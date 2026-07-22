@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ApiError } from "@/lib/api";
+import { ApiError, resolveApiAssetUrl } from "@/lib/api";
 import { fetchRecruiter, fetchRecruiterJobs, getJobId, getJobTitle, type Job, type Recruiter } from "@/lib/jobsApi";
 
 export default function RecruiterDetail() {
@@ -61,15 +61,24 @@ export default function RecruiterDetail() {
         <ArrowLeft className="w-4 h-4" /> Back
       </Button>
 
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-xl p-6">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
-            <Building2 className="w-7 h-7 text-primary" />
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="relative h-44 bg-[linear-gradient(135deg,hsl(var(--primary)),hsl(var(--trust)),hsl(var(--accent)))] sm:h-56">
+          {recruiter.coverImageUrl ? (
+            <img src={resolveApiAssetUrl(recruiter.coverImageUrl)} alt={`${recruiter.companyName || "Company"} cover`} className="h-full w-full object-cover" />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/25 to-transparent" />
+        </div>
+        <div className="relative flex flex-col gap-5 px-6 pb-6 sm:flex-row sm:items-end">
+          <div className="-mt-14 flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-card bg-white p-1 shadow-md">
+            {recruiter.logoUrl ? (
+              <img src={resolveApiAssetUrl(recruiter.logoUrl)} alt={`${recruiter.companyName || "Company"} logo`} className="h-full w-full object-contain" />
+            ) : (
+              <Building2 className="w-9 h-9 text-primary" />
+            )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1 pb-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h2 className="font-display text-xl font-bold text-foreground">{recruiter.companyName ?? recruiter.userName ?? "Recruiter"}</h2>
-              <Badge className="bg-primary/10 text-primary text-[10px]">ID: {recruiter.id}</Badge>
             </div>
             {recruiter.industry && <p className="text-sm text-muted-foreground mb-2">{recruiter.industry}</p>}
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">

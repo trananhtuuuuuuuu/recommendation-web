@@ -7,6 +7,11 @@ export const API_BASE_URL =
 export const TOKEN_STORAGE_KEY = "auth_token";
 export const USER_STORAGE_KEY = "auth_user";
 
+export function resolveApiAssetUrl(value: string): string {
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+  return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
 export type Role = "APPLICANT" | "RECRUITER" | "ADMIN";
 
 export interface ApiResponse<T = unknown> {

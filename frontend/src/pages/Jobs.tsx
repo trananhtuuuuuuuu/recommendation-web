@@ -69,7 +69,7 @@ export default function Jobs() {
   const [allResults, setAllResults] = useState<Record<string, Analysis>>({});
   const [singleLoading, setSingleLoading] = useState<string | null>(null);
   const [singleResults, setSingleResults] = useState<Record<string, Analysis>>({});
-  const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null);
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(() => new Set());
   const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
@@ -145,7 +145,7 @@ export default function Jobs() {
     const applicantId = user.id;
     setComparingAll(true);
     setSingleResults({});
-    setExpandedSuggestion(null);
+    setExpandedSuggestions(new Set());
     try {
       const entries = await Promise.all(
         filtered.map(async (j) => {
@@ -170,14 +170,21 @@ export default function Jobs() {
 
   const handleSingleSuggestion = async (job: Job) => {
     const id = getJobId(job);
-    if (singleResults[id]) { setExpandedSuggestion(expandedSuggestion === id ? null : id); return; }
+    if (singleResults[id] || allResults[id]) {
+      setExpandedSuggestions((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      return;
+    }
     if (!user?.id) { toast.error("Missing applicant ID in session."); return; }
     setSingleLoading(id);
     try {
       // Single job -> richer Ollama (qwen2.5:3b) suggestions; "Compare All" stays fast (llm:false).
       const analysis = toAnalysis(await matchCvToJob(user.id, id, AI_MATCH_OPTIONS));
       setSingleResults((prev) => ({ ...prev, [id]: analysis }));
-      setExpandedSuggestion(id);
+      setExpandedSuggestions((current) => new Set(current).add(id));
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to analyze match. Upload a CV first?");
     } finally {
@@ -186,7 +193,12 @@ export default function Jobs() {
   };
 
   const getResult = (id: string) => compareAll ? allResults[id] : singleResults[id];
-  const clearAll = () => { setCompareAll(false); setAllResults({}); setSingleResults({}); setExpandedSuggestion(null); };
+  const clearAll = () => {
+    setCompareAll(false);
+    setAllResults({});
+    setSingleResults({});
+    setExpandedSuggestions(new Set());
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -318,7 +330,7 @@ export default function Jobs() {
         {filtered.map((job, i) => {
           const id = getJobId(job);
           const result = getResult(id);
-          const isExpanded = expandedSuggestion === id;
+          const isExpanded = expandedSuggestions.has(id);
           const isSaved = savedJobs.has(id);
           const isApplied = appliedJobs.has(id);
 

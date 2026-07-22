@@ -12,12 +12,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import DATN.backend.request.recruiter.RecruiterJobRequest;
+import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.response.ApiResponse;
+import DATN.backend.exception.ForbiddenException;
+import DATN.backend.security.InforInsideToken;
 import DATN.backend.service.InterfaceService.InterfaceJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/recruiters/jobs")
@@ -53,8 +57,39 @@ public class RecruiterJobController {
 
     @Operation(summary = "Get applied applicants for a recruiter job")
     @GetMapping("/{recruiterId}/{jobId}/applicants")
-    public ResponseEntity<ApiResponse> getAppliedApplicants(@PathVariable Long recruiterId, @PathVariable Long jobId) {
+    public ResponseEntity<ApiResponse> getAppliedApplicants(@PathVariable Long recruiterId, @PathVariable Long jobId,
+            Authentication authentication) {
+        verifyRecruiterAccess(recruiterId, authentication);
         return ResponseEntity.ok(ApiResponse.success("Job applicants found", HttpStatus.OK,
                 jobDescriptionService.getJobApplicants(jobId, recruiterId)));
+    }
+
+    /**
+     * Ranks applicants for a job owned by the authenticated recruiter.
+     *
+     * @param recruiterId posting recruiter identifier
+     * @param jobId job identifier
+     * @param request optional AI matching options
+     * @param authentication current JWT authentication
+     * @return descending AI match ranking in the standard API envelope
+     */
+    @Operation(summary = "AI-rank applicants for a recruiter job")
+    @PostMapping("/{recruiterId}/{jobId}/ai-match")
+    public ResponseEntity<ApiResponse> matchAppliedApplicants(@PathVariable Long recruiterId,
+            @PathVariable Long jobId, @RequestBody(required = false) CvJobMatchRequest request,
+            Authentication authentication) {
+        verifyRecruiterAccess(recruiterId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("Job applicants matched and ranked", HttpStatus.OK,
+                jobDescriptionService.matchJobApplicants(jobId, recruiterId,
+                        request == null ? new CvJobMatchRequest() : request)));
+    }
+
+    private void verifyRecruiterAccess(Long recruiterId, Authentication authentication) {
+        if (authentication == null
+                || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)
+                || !("RECRUITER".equalsIgnoreCase(tokenInformation.getRoleName())
+                        && recruiterId.equals(tokenInformation.getUserId()))) {
+            throw new ForbiddenException("Only the posting recruiter can access applicants for this job");
+        }
     }
 }

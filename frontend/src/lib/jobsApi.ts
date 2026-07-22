@@ -198,11 +198,19 @@ export interface AnonymousCandidatePreviews {
 
 export interface JobApplicant {
   applicationId?: string | number;
+  applicationOrder?: number;
   jobDescriptionId?: string | number;
   applicant?: Applicant;
   coverLetter?: string;
   portfolioUrl?: string;
   applicationAnswers?: string;
+}
+
+export interface RecruiterApplicantMatch {
+  applicationId: string | number;
+  applicationOrder: number;
+  applicant: Applicant;
+  match: CvJobMatch;
 }
 
 export interface ApplicationField {
@@ -321,6 +329,15 @@ export const fetchJobApplicants = (jobId: string | number, recruiterId?: string 
   recruiterId
     ? apiRequest<JobApplicant[]>(`/api/v1/recruiters/jobs/${recruiterId}/${jobId}/applicants`)
     : apiRequest<JobApplicant[]>(`/api/v1/browse-jobs/applicants/${jobId}/list`);
+
+export const matchRecruiterApplicants = (
+  recruiterId: string | number,
+  jobId: string | number,
+  options: { llm?: boolean; method?: string } = {},
+) => apiRequest<RecruiterApplicantMatch[]>(
+  `/api/v1/recruiters/jobs/${recruiterId}/${jobId}/ai-match`,
+  { method: "POST", body: options },
+);
 
 export const fetchSavedJobs = (applicantId: string | number, page = 0, size = 5, sort = "id,desc") =>
   apiRequest<PageResponse<SavedJob>>(

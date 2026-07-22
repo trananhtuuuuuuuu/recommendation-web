@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Random;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,10 +33,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ImplCvMatchService implements InterfaceCvMatchService {
 
-    private static final double MATCH_SCORE_EPSILON = 2.0;
-    private static final double MATCH_SCORE_SENSITIVITY = 0.05;
-    private static final String PRIVACY_MECHANISM = "Laplace mechanism";
-
     private final ApplicantRepository applicantRepository;
     private final JobRepository jobDescriptionRepository;
     private final InterfaceCvAiService cvAiService;
@@ -64,32 +58,23 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         List<String> hardReasons = (ai.getHardFilter() == null || ai.getHardFilter().getReasons() == null)
                 ? List.of()
                 : ai.getHardFilter().getReasons();
-        double privateMatchScore = addLaplaceNoise(ai.getMatchScore(), applicantId, jobId, ai.getScoringMethod());
+        double matchScore = clamp(ai.getMatchScore(), 0.0, 1.0);
         return new CvJobMatchResponse(
                 applicantId,
                 jobId,
                 ai.isPassedFilter(),
-                privateMatchScore,
-                (int) Math.round(privateMatchScore * 100),
+                matchScore,
+                (int) Math.round(matchScore * 100),
                 ai.getReason(),
                 ai.getSuggestions() == null ? List.of() : ai.getSuggestions(),
                 ai.getPerFieldScores() == null ? Map.of() : ai.getPerFieldScores(),
                 hardReasons,
                 ai.getScoringMethod(),
                 ai.getModelUsed(),
-                true,
-                MATCH_SCORE_EPSILON,
-                MATCH_SCORE_SENSITIVITY,
-                PRIVACY_MECHANISM);
-    }
-
-    private double addLaplaceNoise(double rawScore, Long applicantId, Long jobId, String method) {
-        long seed = Objects.hash(applicantId, jobId, method, "match-score-differential-privacy");
-        Random random = new Random(seed);
-        double u = random.nextDouble() - 0.5;
-        double scale = MATCH_SCORE_SENSITIVITY / MATCH_SCORE_EPSILON;
-        double noise = -scale * Math.signum(u) * Math.log(1 - (2 * Math.abs(u)));
-        return clamp(rawScore + noise, 0.0, 1.0);
+                false,
+                null,
+                null,
+                null);
     }
 
     private double clamp(double value, double min, double max) {

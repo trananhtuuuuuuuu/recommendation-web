@@ -170,8 +170,11 @@ public class ImplApplicantService implements InterfaceApplicantService {
                     throw new AlreadyExistException("Applicant already applied for this job");
                 });
 
-        ApplicantJob relation = applicantJobRepository
-                .save(new ApplicantJob(applicant, job, APPLIED_ACTION));
+        ApplicantJob pendingApplication = new ApplicantJob(applicant, job, APPLIED_ACTION);
+        pendingApplication.setCoverLetter(request.getCoverLetter());
+        pendingApplication.setPortfolioUrl(request.getPortfolioUrl());
+        pendingApplication.setApplicationAnswers(request.getApplicationAnswers());
+        ApplicantJob relation = applicantJobRepository.save(pendingApplication);
 
         return new SavedJobResponse(
                 relation.getId(),

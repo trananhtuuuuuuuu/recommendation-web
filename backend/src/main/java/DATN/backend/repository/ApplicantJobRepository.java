@@ -25,6 +25,15 @@ public interface ApplicantJobRepository extends JpaRepository<ApplicantJob, Long
 
     List<ApplicantJob> findByJob_IdAndActionType(Long jobDescriptionId, String actionType);
 
+    /**
+     * Finds applications in their stable submission order.
+     *
+     * @param jobDescriptionId job identifier
+     * @param actionType relation action type
+     * @return application relations ordered from earliest to latest
+     */
+    List<ApplicantJob> findByJob_IdAndActionTypeOrderByIdAsc(Long jobDescriptionId, String actionType);
+
     long countByJob_IdAndActionType(Long jobDescriptionId, String actionType);
 
     @Query("""

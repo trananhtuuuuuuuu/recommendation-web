@@ -226,7 +226,7 @@ class BackendEndpointsIntegrationTests {
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.email").doesNotExist())
-        .andExpect(jsonPath("$.data.fullName").value("Candidate #" + applicant.getId()));
+        .andExpect(jsonPath("$.data.fullName").value("Candidate"));
 
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
@@ -278,8 +278,9 @@ class BackendEndpointsIntegrationTests {
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
-        .andExpect(jsonPath("$.data.email").doesNotExist())
-        .andExpect(jsonPath("$.data.phone").doesNotExist());
+        .andExpect(jsonPath("$.data.email").value("updated-applicant@example.com"))
+        .andExpect(jsonPath("$.data.phone").value("0787549324"))
+        .andExpect(jsonPath("$.data.showContactInfo").value(true));
 
     mockMvc.perform(post("/api/v1/applicants/save/job")
         .contentType(MediaType.APPLICATION_JSON)
@@ -556,16 +557,28 @@ class BackendEndpointsIntegrationTests {
                   "companyName": "Updated Corp",
                   "taxCode": "TAX-UPDATED",
                   "establishedDate": "2020-01-01",
-                                                                                                "companyDescription": "General Java and React requirements",
-                                                                                                "coverImageUrl": "https://example.com/recruiters/cover.png"
+                  "companyDescription": "General Java and React requirements",
+                  "website": "https://updated.example.com",
+                  "logoUrl": "https://example.com/recruiters/logo.png",
+                  "coverImageUrl": "https://example.com/recruiters/cover.png",
+                  "contactEmail": "hiring@example.com",
+                  "contactPhone": "+84901234567",
+                  "businessLicense": "https://example.com/license.pdf",
+                  "companyType": "Private"
                 }
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.companyName").value("Updated Corp"))
         .andExpect(jsonPath("$.data.companyDescription")
             .value("General Java and React requirements"))
+        .andExpect(jsonPath("$.data.logoUrl")
+            .value("https://example.com/recruiters/logo.png"))
         .andExpect(jsonPath("$.data.coverImageUrl")
-            .value("https://example.com/recruiters/cover.png"));
+            .value("https://example.com/recruiters/cover.png"))
+        .andExpect(jsonPath("$.data.website").value("https://updated.example.com"))
+        .andExpect(jsonPath("$.data.taxCode").value("TAX-UPDATED"))
+        .andExpect(jsonPath("$.data.contactEmail").value("hiring@example.com"))
+        .andExpect(jsonPath("$.data.companyType").value("Private"));
 
     mockMvc.perform(get("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId()))
         .andExpect(status().isOk())
@@ -658,6 +671,9 @@ class BackendEndpointsIntegrationTests {
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
     Job jobDescription = seedJob(recruiter, "Backend Engineer");
     ApplicantJob application = new ApplicantJob(applicant, jobDescription);
+    application.setCoverLetter("I build reliable APIs");
+    application.setPortfolioUrl("https://portfolio.example.com");
+    application.setApplicationAnswers("{\"years_in_role\":\"3\"}");
     applicantJobRepository.save(application);
 
     mockMvc.perform(get("/api/v1/browse-jobs"))
@@ -679,8 +695,12 @@ class BackendEndpointsIntegrationTests {
 
     mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data[0].applicationOrder").value(1))
         .andExpect(jsonPath("$.data[0].applicant.fullName").value("Applicant One"))
-        .andExpect(jsonPath("$.data[0].applicant.email").value("applicant@example.com"));
+        .andExpect(jsonPath("$.data[0].applicant.email").value("applicant@example.com"))
+        .andExpect(jsonPath("$.data[0].coverLetter").value("I build reliable APIs"))
+        .andExpect(jsonPath("$.data[0].portfolioUrl").value("https://portfolio.example.com"))
+        .andExpect(jsonPath("$.data[0].applicationAnswers").value("{\"years_in_role\":\"3\"}"));
   }
 
   @Test
@@ -815,10 +835,10 @@ class BackendEndpointsIntegrationTests {
         java.util.List.of(),
         "tfidf",
         "svm",
-        true,
-        2.0,
-        0.05,
-        "Laplace mechanism");
+        false,
+        null,
+        null,
+        null);
     when(cvMatchService.matchApplicantToJob(any(), any(), any())).thenReturn(mockResult);
 
     // Happy path: owner token → 200 with match data
@@ -833,8 +853,8 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.passedFilter").value(true))
         .andExpect(jsonPath("$.data.scoringMethod").value("tfidf"))
         .andExpect(jsonPath("$.data.modelUsed").value("svm"))
-        .andExpect(jsonPath("$.data.differentialPrivacyApplied").value(true))
-        .andExpect(jsonPath("$.data.privacyEpsilon").value(2.0))
+        .andExpect(jsonPath("$.data.differentialPrivacyApplied").value(false))
+        .andExpect(jsonPath("$.data.privacyEpsilon").doesNotExist())
         .andExpect(jsonPath("$.data.suggestions[0]").value("Add an AWS certification if it is relevant to your target role."));
 
     // Body omitted (default options) → still 200
@@ -855,6 +875,59 @@ class BackendEndpointsIntegrationTests {
             .value("You can only manage jobs in your own applicant account"));
   }
 
+  @Test
+  void postingRecruiterShouldAiRankApplicantsByRawMatchScore() throws Exception {
+    Recruiter recruiter = seedRecruiter("ranking-recruiter", "ranking@example.com");
+    Recruiter otherRecruiter = seedRecruiter("other-recruiter", "other-recruiter@example.com");
+    Job job = seedJob(recruiter, "Platform Engineer");
+    Applicant firstApplicant = seedApplicant("first-candidate", "first@example.com");
+    Applicant secondApplicant = seedApplicant("second-candidate", "second@example.com");
+    firstApplicant.setCv(seedCv("Java, SQL", "2 years"));
+    secondApplicant.setCv(seedCv("Java, Spring Boot, PostgreSQL", "5 years"));
+    applicantRepository.save(firstApplicant);
+    applicantRepository.save(secondApplicant);
+    applicantJobRepository.save(new ApplicantJob(firstApplicant, job, "APPLIED"));
+    applicantJobRepository.save(new ApplicantJob(secondApplicant, job, "APPLIED"));
+
+    when(cvMatchService.matchApplicantToJob(any(), any(), any())).thenAnswer(invocation -> {
+      Long applicantId = invocation.getArgument(0);
+      int percent = applicantId.equals(secondApplicant.getId()) ? 91 : 64;
+      return new CvJobMatchResponse(
+          applicantId, job.getId(), true, percent / 100.0, percent,
+          "AI score for candidate", java.util.List.of(), java.util.Map.of("SKILL", percent / 100.0),
+          java.util.List.of(), "tfidf", "svm", false, null, null, null);
+    });
+
+    mockMvc.perform(get("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants",
+        recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data[0].applicationOrder").value(1))
+        .andExpect(jsonPath("$.data[1].applicationOrder").value(2));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/ai-match",
+        recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"llm\":false,\"method\":\"tfidf\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("Job applicants matched and ranked"))
+        .andExpect(jsonPath("$.data[0].applicationOrder").value(2))
+        .andExpect(jsonPath("$.data[0].match.matchPercent").value(91))
+        .andExpect(jsonPath("$.data[0].match.differentialPrivacyApplied").value(false))
+        .andExpect(jsonPath("$.data[1].applicationOrder").value(1))
+        .andExpect(jsonPath("$.data[1].match.matchPercent").value(64));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/ai-match",
+        recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherRecruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errors[0]")
+            .value("Only the posting recruiter can access applicants for this job"));
+  }
+
   private Applicant seedApplicant(String userName, String email) {
     Role role = roleRepository.findByRoleName("APPLICANT")
         .orElseGet(() -> roleRepository.save(new Role("APPLICANT", "Applicant")));
@@ -867,6 +940,7 @@ class BackendEndpointsIntegrationTests {
     applicant.setFullName("Applicant One");
     applicant.setGender(GenderEnum.Male);
     applicant.setStatus(ApplicantStatusEnum.OpenToWork);
+    applicant.setProfileVisibleToRecruiters(false);
     applicant.setRole(role);
     return applicantRepository.save(applicant);
   }
@@ -924,6 +998,15 @@ class BackendEndpointsIntegrationTests {
         applicant.getUserName(),
         applicant.getEmail(),
         "APPLICANT"));
+    return "Bearer " + token;
+  }
+
+  private String authorizationHeader(Recruiter recruiter) {
+    String token = jwtService.generateToken(new InforInsideToken(
+        recruiter.getId(),
+        recruiter.getUserName(),
+        recruiter.getEmail(),
+        "RECRUITER"));
     return "Bearer " + token;
   }
 }

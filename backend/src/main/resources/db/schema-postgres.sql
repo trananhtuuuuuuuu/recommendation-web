@@ -89,7 +89,25 @@ ALTER TABLE IF EXISTS applicant_jobs
     ADD COLUMN IF NOT EXISTS created_at DATE,
     ADD COLUMN IF NOT EXISTS updated_at DATE,
     ADD COLUMN IF NOT EXISTS deleted_at DATE,
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN;
+    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN,
+    ADD COLUMN IF NOT EXISTS cover_letter TEXT,
+    ADD COLUMN IF NOT EXISTS portfolio_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS application_answers TEXT;
+
+ALTER TABLE IF EXISTS recruiters
+    ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS logo_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS website VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS tax_code VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS business_license VARCHAR(2048),
+    ADD COLUMN IF NOT EXISTS company_type VARCHAR(255);
+
+UPDATE recruiters
+SET logo_url = avatar_url
+WHERE logo_url IS NULL AND avatar_url IS NOT NULL;
 
 ALTER TABLE IF EXISTS application_forms
     ADD COLUMN IF NOT EXISTS created_at DATE,

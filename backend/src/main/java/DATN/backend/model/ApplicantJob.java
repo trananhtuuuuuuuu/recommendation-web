@@ -40,6 +40,15 @@ public class ApplicantJob extends BaseEntity {
     @JoinColumn(name = "application_form_id")
     private ApplicationForm applicationForm;
 
+    @Column(name = "cover_letter", columnDefinition = "TEXT")
+    private String coverLetter;
+
+    @Column(name = "portfolio_url", length = 2048)
+    private String portfolioUrl;
+
+    @Column(name = "application_answers", columnDefinition = "TEXT")
+    private String applicationAnswers;
+
     public ApplicantJob(Applicant applicant, Job job) {
         super();
         this.applicant = applicant;

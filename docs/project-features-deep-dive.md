@@ -6,522 +6,13 @@ Tài liệu này mô tả các feature chính của project recommendation websi
 >
 > - Project hiện gọi cơ chế đăng nhập là JWT, nhưng `JwtService` đang tạo token HMAC tự xây dựng dạng `base64url(payload).signature`, không phải JWT chuẩn RFC 7519 dạng `header.payload.signature`. Frontend đã hỗ trợ decode biến thể này.
 > - `SecurityConfig` hiện để `anyRequest().permitAll()`. Vì vậy filter vẫn đọc token và đưa thông tin vào `SecurityContext`, nhưng Spring Security chưa chặn mặc định toàn bộ protected endpoint. Một số endpoint tự kiểm tra quyền trong controller/service. Khi đưa lên production nên siết lại bằng `authenticated()` và rule theo role.
-> - `ImplCvMatchService` hiện có thêm nhiễu Laplace vào match score. Về mặt privacy là một hướng bảo vệ, nhưng về nghiệp vụ recommendation có thể làm sai thứ tự ứng viên/công việc. Nếu ưu tiên ranking chính xác, nên dùng PII masking cho matching và dùng Differential Privacy chủ yếu cho applicant count.
+> - `ImplCvMatchService` trả score gốc đã clamp trong khoảng `[0, 1]`, không còn thêm Laplace noise. PII masking là lớp privacy của matching; Differential Privacy chỉ tiếp tục dùng cho applicant count tổng hợp.
 
 ## Tổng quan kiến trúc
 
-Project gồm 3 khối chính:
 
-| Khối | Công nghệ | Vai trò |
-|---|---|---|
-| Frontend | React, TypeScript, Vite, TailwindCSS, shadcn/ui | Hiển thị UI, route guard, gọi API, lưu token phía client |
-| Backend | Spring Boot, Spring Security, Spring Data JPA, PostgreSQL | REST API, business logic, validation, authorization, persistence, gọi AI service |
-| AI service | FastAPI, Python, LayoutLMv3, OCR, TF-IDF/Embedding/SVM | Trích xuất CV, chuẩn hóa CV, matching CV-JD, masking PII, hard filter, suggestion |
 
-Luồng chuẩn của đa số feature:
 
-```text
-User thao tác UI
--> Frontend page/component
--> frontend/src/lib/api.ts hoặc jobsApi.ts
--> Backend controller
--> Service
--> Mapper/Repository/AI client nếu cần
--> Database hoặc AI service
--> Response ApiResponse
--> Frontend render/toast/navigation
-```
-
-## Feature 1: Đăng ký tài khoản ứng viên và nhà tuyển dụng
-
-### Business logic
-
-Stakeholder cần:
-
-- Ứng viên có thể tạo tài khoản để quản lý hồ sơ, upload CV, lưu job, ứng tuyển và xem điểm phù hợp.
-- Nhà tuyển dụng có thể tạo tài khoản để quản lý thông tin công ty, đăng job và xem ứng viên.
-- Hệ thống phải phân biệt role ngay từ khi đăng ký: `APPLICANT` hoặc `RECRUITER`.
-- Username và email phải duy nhất để tránh trùng định danh đăng nhập.
-- Mật khẩu không được lưu plain text.
-
-Technical team cần:
-
-- Tạo request DTO riêng cho applicant/recruiter registration.
-- Validate input.
-- Kiểm tra trùng username/email.
-- Hash password bằng `PasswordEncoder`.
-- Tạo hoặc lấy role tương ứng.
-- Lưu entity con `Applicant` hoặc `Recruiter`, kế thừa thông tin từ `User`.
-- Trả response theo envelope chung `ApiResponse`.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `ApplicantRegistrationController`
-- `RecruiterRegistrationController`
-- `ImplApplicantService.registerApplicant`
-- `ImplRecruiterService.registerRecruiter`
-- `ApplicantMapper`
-- `RecruiterMapper`
-- `UserRepository`, `RoleRepository`, `ApplicantRepository`, `RecruiterRepository`
-
-Backend nhận request:
-
-```text
-POST /api/v1/registrations/applicant
-POST /api/v1/registrations/recruiters
-```
-
-Các bước backend:
-
-1. Controller nhận JSON body và validate bằng `@Valid`.
-2. Service kiểm tra username đã tồn tại chưa qua `userRepository.findByUserName`.
-3. Service kiểm tra email đã tồn tại chưa qua `userRepository.findByEmail`.
-4. Service lấy role từ request, nếu không có thì mặc định:
-   - Applicant: `APPLICANT`
-   - Recruiter: `RECRUITER`
-5. Nếu role chưa tồn tại, tạo role mới bằng `roleRepository.save`.
-6. Mapper chuyển request sang entity.
-7. Password được hash bằng `BCryptPasswordEncoder`.
-8. Entity được lưu xuống database.
-9. Mapper chuyển entity sang response DTO.
-10. Controller bọc response bằng `ApiResponse.success`.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `ApplicantRegistration.tsx`
-- `RecruiterRegistration.tsx`
-- `jobsApi.ts`: `registerApplicant`, `registerRecruiter`
-- `api.ts`: `apiRequest`
-
-Frontend:
-
-1. User nhập form đăng ký.
-2. Form gom data thành object JSON.
-3. Gọi `registerApplicant` hoặc `registerRecruiter`.
-4. `apiRequest` gửi request không cần token vì đây là public endpoint.
-5. Nếu thành công, UI có thể toast và điều hướng sang login.
-6. Nếu lỗi duplicate username/email, UI hiển thị message từ `ApiResponse.errors`.
-
-### AI làm gì
-
-Không có AI trong feature đăng ký.
-
-### Flow data
-
-```text
-Registration form
--> jobsApi.registerApplicant/registerRecruiter
--> apiRequest
--> RegistrationController
--> ImplApplicantService/ImplRecruiterService
--> UserRepository kiểm tra trùng
--> RoleRepository lấy/tạo role
--> PasswordEncoder hash password
--> ApplicantRepository/RecruiterRepository save
--> ApiResponse
--> Frontend toast/navigation
-```
-
-### Cách tiếp cận và lý do
-
-Có 2 cách phổ biến:
-
-- Một bảng `users` duy nhất chứa mọi field của mọi role.
-- Một bảng user base và bảng role-specific như `applicants`, `recruiters`.
-
-Project đang dùng hướng thứ hai: `Applicant` và `Recruiter` là các loại user có dữ liệu riêng. Cách này hợp lý vì applicant có CV, status, privacy visibility; recruiter có company profile, company name, tax code, website.
-
-Step-by-step implementation:
-
-1. Định nghĩa request class cho từng role.
-2. Tạo controller endpoint public.
-3. Trong service, kiểm tra unique username/email.
-4. Dùng `PasswordEncoder` để hash password.
-5. Gắn role tương ứng.
-6. Lưu entity.
-7. Trả registration response, không trả password.
-8. Viết test duplicate username/email và đăng ký thành công.
-
-## Feature 2: Đăng nhập, token, refresh platform và authorization
-
-### Business logic
-
-Stakeholder cần:
-
-- User đăng nhập một lần, sau đó refresh website vẫn giữ trạng thái đăng nhập trong thời gian token còn hạn.
-- Hệ thống biết user hiện tại là ai.
-- Hệ thống biết user có role gì để cho phép hoặc chặn route/action.
-- Frontend có thể redirect user chưa đăng nhập về trang auth.
-- Backend có thể kiểm tra request nào thuộc applicant/recruiter/admin nào.
-
-Technical team cần:
-
-- Login bằng username/password.
-- Verify password hash.
-- Sinh token có thông tin tối thiểu: user id, username, email, role, issued time, expiry time.
-- Frontend lưu token.
-- Mỗi request cần auth phải gửi `Authorization: Bearer <token>`.
-- Backend filter đọc token, verify signature và expiry, sau đó đưa principal vào `SecurityContext`.
-
-### JWT chuẩn là gì
-
-JWT chuẩn thường có 3 phần:
-
-```text
-header.payload.signature
-```
-
-#### Header
-
-Header mô tả loại token và thuật toán ký:
-
-```json
-{
-  "typ": "JWT",
-  "alg": "HS256"
-}
-```
-
-Header được JSON stringify rồi Base64URL encode.
-
-#### Payload
-
-Payload chứa claims. Claims là dữ liệu muốn gắn vào token, ví dụ:
-
-```json
-{
-  "sub": "nguyenvana",
-  "userId": 12,
-  "email": "a@example.com",
-  "role": "APPLICANT",
-  "iat": 1730000000,
-  "exp": 1730003600
-}
-```
-
-Payload cũng được JSON stringify rồi Base64URL encode. Payload không được mã hóa, chỉ được encode. Ai có token đều có thể decode payload để đọc dữ liệu, vì vậy không nên đặt dữ liệu nhạy cảm vào token.
-
-#### Signature
-
-Signature dùng để chống sửa token:
-
-```text
-HMACSHA256(
-  base64UrlEncode(header) + "." + base64UrlEncode(payload),
-  secretKey
-)
-```
-
-Nếu client tự sửa `role` từ `APPLICANT` thành `ADMIN`, chữ ký sẽ không còn khớp. Server verify lại signature bằng secret key. Nếu signature sai thì token bị từ chối.
-
-Điểm cần nhớ: JWT thường là ký, không phải mã hóa. Ký giúp phát hiện token bị sửa. Mã hóa mới giúp che nội dung.
-
-### Hiện trạng token trong project
-
-Code liên quan:
-
-- `JwtService`
-- `JwtAuthenticationFilter`
-- `SecurityConfig`
-- `ImplAuthService`
-- `InforInsideToken`
-- `AuthContext.tsx`
-- `api.ts`
-
-Project hiện tạo token như sau:
-
-```text
-payload = userId|userName|email|roleName|issuedAt|expiresAt
-encodedPayload = Base64URL(payload)
-signature = HMACSHA256(encodedPayload, secret)
-token = encodedPayload + "." + signature
-```
-
-Token này có ý tưởng giống JWT ở phần payload + signature, nhưng thiếu header chuẩn. Vì vậy nên gọi chính xác là "custom HMAC bearer token" hoặc nâng cấp sang JWT chuẩn nếu viết báo cáo nghiêm ngặt.
-
-### Backend làm gì
-
-Endpoint:
-
-```text
-POST /api/v1/auth
-```
-
-Flow backend:
-
-1. `AuthController.login` nhận `LoginRequest`.
-2. `ImplAuthService.login` tìm user bằng username.
-3. Dùng `passwordEncoder.matches(rawPassword, hashedPassword)` để kiểm tra password.
-4. Lấy role từ `user.getRole()`.
-5. Tạo `InforInsideToken`.
-6. `JwtService.generateToken` tạo token.
-7. Controller trả token trong body và header `Authorization: Bearer <token>`.
-
-Khi request sau đó gửi lên:
-
-1. `JwtAuthenticationFilter` chạy một lần trên mỗi request.
-2. Filter đọc header `Authorization`.
-3. Nếu header bắt đầu bằng `Bearer `, lấy token phía sau.
-4. `JwtService.parseToken` decode payload, verify signature, kiểm tra expiry.
-5. Nếu hợp lệ, tạo `UsernamePasswordAuthenticationToken`.
-6. Gắn principal là `InforInsideToken`.
-7. Gắn authority là `ROLE_<roleName>`.
-8. Đưa authentication vào `SecurityContextHolder`.
-9. Controller có thể đọc `Authentication authentication`.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `Auth.tsx`
-- `ApplicantAuth.tsx`
-- `RecruiterAuth.tsx`
-- `AuthContext.tsx`
-- `RouteGuard.tsx`
-- `api.ts`
-
-Frontend:
-
-1. User nhập username/password.
-2. `AuthContext.login` gọi `POST /api/v1/auth`.
-3. Nếu response có token, `setToken` lưu token vào `localStorage` và `sessionStorage`.
-4. `decodeJwt` decode token để lấy role/userId/expiry. Function này đã hỗ trợ cả token chuẩn 3 phần và token custom 2 phần của project.
-5. `AuthContext` lưu `user`, `role`, `isAuthenticated`.
-6. `apiRequest` tự gắn `Authorization: Bearer <token>` vào request nếu `auth !== false`.
-7. Khi refresh page, `AuthProvider` đọc lại token từ storage.
-8. Nếu token hết hạn theo `exp`, frontend clear token và user.
-9. Nếu API trả `401`, `apiRequest` clear token và dispatch event `auth:expired`.
-10. `RouteGuard` kiểm tra role để cho hoặc chặn route.
-
-### AI làm gì
-
-Không có AI trong feature auth.
-
-### Flow data
-
-```text
-Login form
--> AuthContext.login
--> apiRequest POST /api/v1/auth
--> AuthController
--> ImplAuthService
--> UserRepository
--> PasswordEncoder.matches
--> JwtService.generateToken
--> LoginResponse + Authorization header
--> Frontend lưu token
--> Request tiếp theo gắn Authorization Bearer
--> JwtAuthenticationFilter
--> JwtService.parseToken
--> SecurityContext
--> Controller/service đọc Authentication khi cần
-```
-
-### Cách tiếp cận và lý do
-
-Có 2 mô hình chính:
-
-| Mô hình | Cách hoạt động | Ưu điểm | Nhược điểm |
-|---|---|---|---|
-| Stateful session | Server lưu session, client giữ session id trong cookie | Dễ revoke session, phù hợp app truyền thống | Server phải lưu trạng thái, khó scale nếu không có shared session store |
-| Stateless token | Server không lưu session, client gửi token mỗi request | Dễ scale, phù hợp REST API/mobile/SPA | Revoke token khó hơn, cần expiry/refresh strategy |
-
-Project chọn hướng stateless token vì frontend là SPA và backend REST API. Server không cần nhớ session, chỉ cần verify token.
-
-Step-by-step implementation đúng chuẩn nên làm:
-
-1. Thêm dependency Spring Security.
-2. Tạo `PasswordEncoder` bean, ưu tiên BCrypt.
-3. Tạo login endpoint public.
-4. Hash password khi register.
-5. Verify password khi login.
-6. Tạo JWT chuẩn `header.payload.signature` bằng thư viện như `jjwt` hoặc `java-jwt`.
-7. Cấu hình secret key và expiration trong `application.yaml` hoặc env var.
-8. Tạo filter đọc `Authorization: Bearer`.
-9. Verify signature và expiry.
-10. Tạo Authentication object với principal và authorities.
-11. Cấu hình `SecurityFilterChain` stateless.
-12. Permit public endpoints: home, auth, registration, browse jobs.
-13. Protect private endpoints bằng `authenticated()` và role rules.
-14. Frontend lưu token, gắn token vào request, kiểm tra expiry khi refresh.
-15. Viết test login thành công, sai password, token expired, endpoint forbidden.
-
-Nâng cấp đề xuất cho project:
-
-1. Đổi `JwtService` sang JWT chuẩn 3 phần.
-2. Thêm `app.jwt.secret` và `app.jwt.expiration-minutes` từ env var, không dùng default secret trong production.
-3. Sửa `SecurityConfig.anyRequest().permitAll()` thành `anyRequest().authenticated()`.
-4. Dùng `requestMatchers` hoặc `@PreAuthorize` để phân quyền.
-5. Không đặt email/PII không cần thiết vào token nếu không cần.
-
-## Feature 3: Trang chủ và thống kê tổng quan
-
-### Business logic
-
-Stakeholder cần:
-
-- Người dùng mới nhìn thấy website đang có bao nhiêu việc làm, nhà tuyển dụng, ứng viên.
-- Trang chủ là public, không cần đăng nhập.
-- Số liệu giúp tăng độ tin cậy và làm dashboard đơn giản.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `HomePagecontroller`
-- `JobRepository`
-- `ApplicantRepository`
-- `RecruiterRepository`
-
-Endpoint:
-
-```text
-GET /api/v1/home
-```
-
-Backend đếm:
-
-- `jobDescriptionRepository.count()`
-- `applicantRepository.count()`
-- `recruiterRepository.count()`
-
-Sau đó trả về:
-
-```json
-{
-  "welcome": "Welcome to recommendation website backend",
-  "jobsPosted": 100,
-  "activeApplicants": 200,
-  "recruiters": 20
-}
-```
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `Index.tsx`
-- `jobsApi.fetchHome`
-
-Frontend gọi endpoint public, render các metric card hoặc section tổng quan.
-
-### AI làm gì
-
-Không có AI.
-
-### Flow data
-
-```text
-Home page
--> fetchHome()
--> GET /api/v1/home
--> HomePagecontroller
--> repositories count()
--> ApiResponse
--> frontend render metrics
-```
-
-### Cách tiếp cận
-
-Cách đơn giản nhất là count trực tiếp từ repository. Với dữ liệu nhỏ/trung bình thì đủ. Khi dữ liệu rất lớn, có thể dùng materialized view, cache hoặc bảng thống kê riêng.
-
-Step-by-step:
-
-1. Tạo public endpoint `/api/v1/home`.
-2. Inject repository cần count.
-3. Trả DTO/map số liệu.
-4. Frontend gọi API khi page load.
-5. Nếu cần performance, cache count trong vài phút.
-
-## Feature 4: Duyệt, phân trang và xem chi tiết việc làm
-
-### Business logic
-
-Stakeholder cần:
-
-- Applicant hoặc visitor có thể xem danh sách job đang tuyển.
-- Có thể mở chi tiết một job để đọc mô tả, yêu cầu, quyền lợi, deadline.
-- Danh sách phải phân trang để không tải quá nhiều dữ liệu.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `BrowseJobController`
-- `ImplJobService`
-- `JobRepository`
-- `JobMapper`
-- `PageResponse`
-
-Endpoints:
-
-```text
-GET /api/v1/browse-jobs?page=0&size=10&sort=id,desc
-GET /api/v1/browse-jobs/{jobId}
-```
-
-Backend:
-
-1. Controller nhận `page`, `size`, `sort`.
-2. Chuẩn hóa page >= 0, size trong khoảng 1..20.
-3. Chỉ cho sort theo field đã whitelist: `jobTitle`, `location`, `jobType`, `postedDate`, default `id`.
-4. Tạo `Pageable`.
-5. Service gọi `jobDescriptionRepository.findAll(pageable)`.
-6. Mapper chuyển `Job` sang `JobResponse`.
-7. `PageResponse.from` bọc content và metadata.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `Jobs.tsx`
-- `JobDetail.tsx`
-- `jobsApi.fetchJobsPage`
-- `jobsApi.fetchJob`
-
-Frontend:
-
-1. Page jobs gọi `fetchJobsPage`.
-2. Render danh sách job.
-3. User click job.
-4. Router mở `/jobs/:id`.
-5. `JobDetail` gọi `fetchJob(id)`.
-6. Render detail và các action như save/apply/match nếu user là applicant.
-
-### AI làm gì
-
-Không có AI trong việc duyệt job cơ bản. AI chỉ tham gia khi user yêu cầu match CV với job.
-
-### Flow data
-
-```text
-Jobs page
--> fetchJobsPage
--> BrowseJobController.getAllJobs
--> ImplJobService.getAllJobs(Pageable)
--> JobRepository.findAll(pageable)
--> JobMapper.toResponse
--> PageResponse
--> Frontend render list
-```
-
-### Cách tiếp cận
-
-Project dùng server-side pagination. Đây là lựa chọn đúng vì danh sách job có thể tăng lớn. Frontend không nên tải toàn bộ rồi tự phân trang nếu dữ liệu lớn.
-
-Step-by-step:
-
-1. Thiết kế endpoint list có `page`, `size`, `sort`.
-2. Whitelist sort fields để tránh query field không mong muốn.
-3. Repository trả `Page<Job>`.
-4. Mapper sang DTO.
-5. Frontend giữ page state.
-6. Khi filter/search nâng cấp, thêm query params như `keyword`, `location`, `jobType`, `minSalary`.
-7. Backend thêm query method hoặc Specification/Criteria.
 
 ## Feature 5: Quản lý hồ sơ ứng viên
 
@@ -1050,107 +541,6 @@ Step-by-step implementation:
 12. Frontend render suggested fields.
 13. User review rồi persist bằng upload CV.
 
-## Feature 9: Lưu việc làm, ứng tuyển và quản lý job đã lưu/đã ứng tuyển
-
-### Business logic
-
-Stakeholder cần:
-
-- Ứng viên lưu job để xem sau.
-- Ứng viên ứng tuyển job.
-- Ứng viên xem danh sách job đã lưu và đã ứng tuyển.
-- Ứng viên có thể bỏ lưu hoặc rút đơn ứng tuyển.
-- Một applicant không nên lưu/ứng tuyển trùng cùng một job.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `ApplicantController.saveJob`
-- `ApplicantController.applyJob`
-- `ApplicantController.getSavedJobs`
-- `ApplicantController.getAppliedJobs`
-- `ApplicantController.removeSavedJob`
-- `ApplicantController.withdrawApplication`
-- `ImplApplicantService`
-- `ApplicantJobRepository`
-- `ApplicantJob`
-
-Endpoints:
-
-```text
-POST /api/v1/applicants/save/job
-POST /api/v1/applicants/apply/job
-GET /api/v1/applicants/saved-jobs?applicantId=...
-GET /api/v1/applicants/applied-jobs?applicantId=...
-DELETE /api/v1/applicants/{applicantId}/saved-jobs/{applicantJobId}
-DELETE /api/v1/applicants/{applicantId}/applied-jobs/{applicantJobId}
-```
-
-Backend:
-
-1. Request chứa `applicantId` và `jobId` hoặc `jobDescriptionId`.
-2. Service tìm applicant và job.
-3. Với save, kiểm tra relation đã tồn tại với `actionType = "SAVED"`.
-4. Với apply, kiểm tra relation đã tồn tại với `actionType = "APPLIED"`.
-5. Tạo `ApplicantJob(applicant, job, actionType)`.
-6. Lưu xuống DB.
-7. List saved/applied dùng pageable.
-8. Delete/withdraw kiểm tra applicant sở hữu relation rồi xóa.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `JobDetail.tsx`
-- `SavedJobs.tsx`
-- `jobsApi.saveJob`
-- `jobsApi.applyJob`
-- `jobsApi.fetchSavedJobs`
-- `jobsApi.fetchAppliedJobs`
-- `jobsApi.removeSavedJob`
-- `jobsApi.withdrawApplication`
-
-Frontend:
-
-1. Applicant click Save hoặc Apply trên job detail.
-2. Frontend lấy applicantId từ auth user.
-3. Gọi API tương ứng.
-4. UI toast success/error.
-5. Saved jobs page load paginated saved jobs.
-6. Applicant click remove/withdraw thì gọi DELETE.
-
-### AI làm gì
-
-Không có AI trong save/apply. AI có thể dùng dữ liệu applied jobs cho privacy applicant count hoặc recruiter applicant list.
-
-### Flow data
-
-```text
-Applicant clicks Apply
--> applyJob(applicantId, jobId)
--> ApplicantController.applyJob
--> ImplApplicantService.applyJob
--> ApplicantRepository.findById
--> JobRepository.findById
--> ApplicantJobRepository check duplicate
--> ApplicantJobRepository.save(actionType=APPLIED)
--> SavedJobResponse
--> Frontend toast/update UI
-```
-
-### Cách tiếp cận
-
-Project dùng một bảng relation `applicant_jobs` với `actionType` để lưu cả saved và applied. Cách này đơn giản và tái sử dụng bảng. Nhược điểm là nếu nghiệp vụ application phức tạp hơn, ví dụ status review/interview/rejected, cover letter, answers, thì nên tách `saved_jobs` và `applications` hoặc mở rộng `ApplicantJob`.
-
-Step-by-step:
-
-1. Tạo join entity giữa applicant và job.
-2. Thêm `actionType`.
-3. Save/apply kiểm tra duplicate theo applicant + job + actionType.
-4. List theo applicant + actionType.
-5. Delete theo relation id + applicant id để tránh xóa của người khác.
-6. Frontend gom API vào `jobsApi`.
 
 ## Feature 10: Nhà tuyển dụng đăng, sửa và quản lý tin tuyển dụng
 
@@ -1276,15 +666,18 @@ Endpoints:
 ```text
 GET /api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants
 GET /api/v1/browse-jobs/applicants/{jobId}/list
+POST /api/v1/recruiters/jobs/{recruiterId}/{jobId}/ai-match
 ```
 
 Backend:
 
 1. Service tìm job.
 2. Nếu có `recruiterId`, kiểm tra job thuộc recruiter đó.
-3. Query `ApplicantJob` theo `jobId` và `actionType = APPLIED`.
-4. Mỗi relation được map thành `JobApplicantResponse`.
+3. Query `ApplicantJob` theo `jobId`, `actionType = APPLIED` và `id ASC` để có thứ tự nộp ổn định.
+4. Mỗi relation được map thành `JobApplicantResponse`, có `applicationOrder`, cover letter, portfolio và application answers thật.
 5. Applicant trong response dùng recruiter-visible mapper, tức là field bị ẩn sẽ null.
+6. Endpoint `ai-match` xác minh JWT đúng recruiter sở hữu JD, gọi CV-JD matcher cho từng application, rồi sort `matchPercent DESC` và dùng `applicationOrder ASC` để tie-break.
+7. Candidate chưa upload CV nhận score `0%` với lý do rõ ràng, không làm hỏng toàn bộ batch.
 
 ### Frontend làm gì
 
@@ -1297,12 +690,13 @@ Frontend:
 
 1. Recruiter mở `/jobs/:jobId/applicants`.
 2. Gọi API với recruiter id.
-3. Render danh sách applicant.
-4. Nếu field bị privacy ẩn thì UI hiển thị trạng thái ẩn/thông báo.
+3. Trước khi chạy AI, render theo thứ tự nộp: `Candidate 1st`, `Candidate 2nd`, `Candidate 3rd` thay vì lộ database ID.
+4. Click `AI Match` để gọi batch endpoint; kết quả được render lại theo score giảm dần, có rank, final percentage, reason, per-field score và suggestions.
+5. Nếu field bị privacy ẩn thì UI hiển thị trạng thái ẩn/thông báo.
 
 ### AI làm gì
 
-Không bắt buộc trong list applied applicants. Nếu muốn recruiter xem ranking ứng viên phù hợp nhất, có thể gọi AI match cho từng applicant/job hoặc thiết kế batch matching.
+AI dùng cùng canonical CV, JD builder, PII masking, hard filter và scoring pipeline của feature CV-JD matching. Frontend không còn sinh score demo/hardcode. Batch orchestration đặt ở backend để đảm bảo ownership, cùng một scoring rule và thứ tự ranking ổn định.
 
 ### Flow data
 
@@ -1315,6 +709,14 @@ Recruiter opens applicants page
 -> ApplicantJobRepository.findByJob_IdAndActionType
 -> ApplicantMapper.toRecruiterVisibleApplicantResponse
 -> Frontend render privacy-safe applicant list
+
+Recruiter clicks AI Match
+-> POST /api/v1/recruiters/jobs/{recruiterId}/{jobId}/ai-match
+-> verifyRecruiterAccess(authentication)
+-> ImplJobService.matchJobApplicants
+-> ImplCvMatchService.matchApplicantToJob for each submitted application
+-> sort matchPercent DESC, applicationOrder ASC
+-> Frontend render ranked candidate cards
 ```
 
 ### Cách tiếp cận
@@ -1328,8 +730,9 @@ Step-by-step:
 3. Service xác minh job thuộc recruiter.
 4. Query applications.
 5. Map applicant bằng privacy-filtered mapper.
-6. Trả list.
-7. Thêm test recruiter A không xem được applicants job của recruiter B.
+6. Trả list kèm thứ tự application, không dùng applicant id làm nhãn hiển thị.
+7. Với AI Match, score toàn bộ candidate và sort ở backend.
+8. Test recruiter A không chạy AI ranking cho job của recruiter B.
 
 ## Feature 12: AI matching CV với Job Description
 
@@ -1387,8 +790,8 @@ Backend:
    - industry
 7. Gọi AI service `/match` bằng JSON.
 8. Nhận match score, per-field scores, hard filter, reason, suggestions.
-9. Hiện tại backend thêm Laplace noise vào score bằng `addLaplaceNoise`.
-10. Trả `CvJobMatchResponse`.
+9. Clamp score gốc vào `[0, 1]` để chống dữ liệu ngoài biên nhưng không cộng noise.
+10. Trả `CvJobMatchResponse` với `differentialPrivacyApplied=false` và các metadata epsilon/sensitivity/mechanism bằng `null`.
 
 ### Frontend làm gì
 
@@ -1497,10 +900,9 @@ Step-by-step:
 
 Ghi chú về Differential Privacy trên match score:
 
-- Code hiện có `differentialPrivacyApplied=true`.
-- Tuy nhiên với matching/ranking, thêm nhiễu có thể làm sai thứ tự.
-- Nếu báo cáo nhấn mạnh recommendation quality, nên nói rằng PII masking là privacy chính trong AI matching, còn DP phù hợp hơn với aggregate count.
-- Nếu vẫn giữ DP score, cần giải thích đây là trade-off privacy-utility và nên dùng epsilon đủ lớn để nhiễu nhỏ.
+- Code hiện trả `differentialPrivacyApplied=false`.
+- Không thêm noise vì matching/ranking cần score chính xác và thứ tự ổn định.
+- PII masking là privacy chính trong AI matching; Differential Privacy vẫn phù hợp với aggregate applicant count ở Feature 14.
 
 ## Feature 13: PII masking trong AI matching
 
@@ -1660,519 +1062,9 @@ Step-by-step:
 7. Không log raw count/noise/secret.
 8. Frontend hiển thị "approximately".
 
-## Feature 15: Anonymous candidate previews
 
-### Business logic
 
-Stakeholder cần:
 
-- Applicant đã apply một job có thể xem vài profile ẩn danh của những candidate khác để hiểu mức cạnh tranh.
-- Không được lộ danh tính candidate khác.
-- Chỉ hiển thị khi có đủ số lượng candidate để giảm rủi ro nhận diện.
-- Cần rate limit để tránh scraping.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `JobPrivacyController.getAnonymousCandidatePreviews`
-- `ImplApplicantPrivacyService.getAnonymousCandidatePreviews`
-- `AnonymousCandidatePreviewsResponse`
-- `AnonymousCandidatePreviewProfileResponse`
-
-Endpoint:
-
-```text
-GET /api/v1/jobs/{jobId}/anonymous-candidate-previews
-```
-
-Backend:
-
-1. Kiểm tra requester là applicant.
-2. Kiểm tra job tồn tại.
-3. Kiểm tra applicant đã apply job này.
-4. Đọc config:
-   - enabled
-   - minimum eligible candidates
-   - maximum previews
-   - rotation window
-   - rate limit per window
-5. Enforce rate limit theo applicant + job + window.
-6. Query eligible candidate applications, loại chính viewer.
-7. Nếu số eligible < minimum, trả unavailable.
-8. Sort candidates bằng HMAC để sample deterministic trong window.
-9. Trả tối đa `maximumPreviews`.
-10. Mỗi preview chỉ gồm:
-    - anonymousProfileId
-    - experience bucket
-    - skill categories
-    - education level
-    - general region
-    - current role category
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `JobDetail.tsx`
-- `jobsApi.fetchAnonymousCandidatePreviews`
-
-Frontend:
-
-1. Applicant xem job đã apply.
-2. Gọi preview endpoint.
-3. Nếu `available=false`, hiển thị message.
-4. Nếu available, render anonymous profiles.
-5. Không render tên/email/phone/CV link vì backend không trả.
-
-### AI làm gì
-
-Không có model AI. Backend dùng rule-based bucketing và categorization từ CV fields.
-
-### Flow data
-
-```text
-Applicant requests anonymous previews
--> JobPrivacyController
--> requireApplicant
--> ImplApplicantPrivacyService
--> requireExistingJob
--> requireAppliedViewer
--> enforceRateLimit
--> findEligibleAnonymousPreviewApplications
--> HMAC deterministic sampling
--> toAnonymousProfile
--> AnonymousCandidatePreviewsResponse
--> Frontend render limited profiles
-```
-
-### Cách tiếp cận
-
-Không nên hiển thị "top candidate" thật hoặc raw CV vì dễ nhận diện. Dùng buckets làm mất chi tiết định danh:
-
-- "4+ years" thay vì timeline cụ thể.
-- "Backend" thay vì full skills list quá độc đáo.
-- "Southern Vietnam" thay vì địa chỉ.
-
-Step-by-step:
-
-1. Chỉ cho applicant đã apply xem.
-2. Đặt minimum group size.
-3. Chỉ trả fields tổng quát.
-4. Dùng HMAC token cho anonymous id.
-5. Rotate theo window.
-6. Rate limit request.
-7. Test unavailable khi candidate quá ít.
-
-## Feature 16: Quản lý hồ sơ nhà tuyển dụng
-
-### Business logic
-
-Stakeholder cần:
-
-- Recruiter xem/cập nhật thông tin công ty.
-- Applicant/admin có thể xem thông tin recruiter/company.
-- Admin xem danh sách recruiter.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `RecruiterController`
-- `ImplRecruiterService`
-- `RecruiterMapper`
-
-Endpoints:
-
-```text
-GET /api/v1/recruiters
-GET /api/v1/recruiters/{recruiterId}
-PUT /api/v1/recruiters/{recruiterId}
-```
-
-Backend:
-
-1. List recruiters từ repository.
-2. Get recruiter by id.
-3. Update recruiter bằng mapper.
-4. Trả DTO, không trả password.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `Recruiters.tsx`
-- `RecruiterDetail.tsx`
-- `RecruiterJobs.tsx`
-- `jobsApi.fetchRecruiters`
-- `jobsApi.fetchRecruiter`
-- `jobsApi.updateRecruiter`
-
-Frontend:
-
-1. Admin xem danh sách recruiter.
-2. Applicant/recruiter/admin xem detail company.
-3. Recruiter update profile công ty.
-
-### AI làm gì
-
-Không có AI.
-
-### Flow data
-
-```text
-Recruiter profile page
--> fetchRecruiter/updateRecruiter
--> RecruiterController
--> ImplRecruiterService
--> RecruiterRepository
--> RecruiterMapper
--> ApiResponse
--> Frontend render
-```
-
-### Cách tiếp cận
-
-Recruiter profile nên tách khỏi job vì cùng một công ty có nhiều job. Khi job cần company info, có thể lấy từ recruiter hoặc copy snapshot tùy yêu cầu. Project đang gắn `Job.recruiter`.
-
-Step-by-step:
-
-1. Tạo recruiter entity.
-2. Tạo mapper response.
-3. Tạo list/detail/update endpoints.
-4. Frontend route guard theo role.
-5. Test không trả password.
-
-## Feature 17: Admin quản lý applicant và recruiter
-
-### Business logic
-
-Stakeholder cần:
-
-- Admin xem danh sách applicant.
-- Admin xem danh sách recruiter.
-- Admin xem detail user để hỗ trợ vận hành.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `ApplicantController.getAllApplicants`
-- `RecruiterController.getAllRecruiters`
-- `ApplicantMapper.toApplicantResponse(fullAccess)`
-- `RecruiterMapper`
-
-Backend:
-
-1. Applicant list đọc `Authentication`.
-2. Nếu admin, `fullAccess=true`.
-3. Nếu không admin, trả privacy-filtered applicants.
-4. Recruiter list hiện trả toàn bộ recruiter response.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `Applicants.tsx`
-- `ApplicantDetail.tsx`
-- `Recruiters.tsx`
-- `RecruiterDetail.tsx`
-- `RouteGuard`
-
-Frontend:
-
-1. Admin routes:
-   - `/admin/applicants`
-   - `/admin/recruiters`
-2. `RouteGuard roles={["ADMIN"]}` chặn user không phải admin.
-3. Gọi API và render table/detail.
-
-### AI làm gì
-
-Không có AI.
-
-### Flow data
-
-```text
-Admin opens /admin/applicants
--> RouteGuard checks role ADMIN
--> fetchApplicants
--> ApplicantController.getAllApplicants
--> isAdmin(authentication)
--> ImplApplicantService.getAllApplicants(fullAccess)
--> ApplicantMapper
--> Frontend render table
-```
-
-### Cách tiếp cận
-
-Frontend route guard giúp UX, backend authorization mới là security boundary. Project hiện cần siết thêm backend security cho admin endpoints nếu production.
-
-Step-by-step:
-
-1. Tạo admin-only frontend routes.
-2. Backend kiểm tra role admin.
-3. Trả full data cho admin.
-4. Trả filtered hoặc forbidden cho non-admin tùy yêu cầu.
-5. Test applicant/recruiter không gọi được admin endpoints.
-
-## Feature 18: API envelope, validation và exception handling
-
-### Business logic
-
-Stakeholder cần:
-
-- Frontend nhận response nhất quán.
-- Lỗi validation, not found, forbidden, conflict, AI unavailable phải dễ hiển thị.
-- Technical team debug dễ hơn.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `ApiResponse`
-- `GlobalException`
-- Custom exceptions:
-  - `AlreadyExistException`
-  - `ResourcesNotFoundException`
-  - `ForbiddenException`
-  - `AiServiceUnavailableException`
-
-Backend:
-
-1. Controller trả `ApiResponse.success`.
-2. Exception được bắt ở `GlobalException`.
-3. Lỗi được bọc vào `ApiResponse.failure`.
-4. Validation errors đưa vào `errors`.
-5. HTTP status đúng nghĩa:
-   - 400 validation/illegal argument
-   - 403 forbidden
-   - 404 not found
-   - 409 conflict
-   - 503 AI unavailable
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `api.ts`
-- `ApiError`
-
-Frontend:
-
-1. `apiRequest` parse response.
-2. Nếu `res.ok=false`, ném `ApiError`.
-3. `ApiError` giữ `status`, `errors`, `payload`.
-4. UI có thể toast message hoặc hiển thị field errors.
-5. Nếu `401`, clear token và dispatch `auth:expired`.
-
-### AI làm gì
-
-AI service tự trả HTTP status. Backend map AI errors sang API envelope chung.
-
-### Flow data
-
-```text
-Invalid request
--> Controller validation fails
--> GlobalException.handleMethodArgumentNotValidException
--> ApiResponse.failure(errors)
--> apiRequest throws ApiError
--> UI toast/form error
-```
-
-### Cách tiếp cận
-
-Envelope giúp frontend không phải xử lý mỗi endpoint một kiểu. Nhược điểm là cần thống nhất nghiêm: mọi endpoint phải theo cùng format.
-
-Step-by-step:
-
-1. Tạo `ApiResponse`.
-2. Controller luôn dùng success/failure.
-3. Tạo global exception handler.
-4. Frontend tạo API client tập trung.
-5. Không gọi `fetch` trực tiếp từ page.
-6. Test response shape.
-
-## Feature 19: Swagger/OpenAPI documentation
-
-### Business logic
-
-Stakeholder cần:
-
-- Developer/tester xem endpoint và thử API dễ hơn.
-- Báo cáo đồ án có thể chụp Swagger làm minh chứng.
-
-### Backend làm gì
-
-Code liên quan:
-
-- `OpenApiConfig`
-- `@Tag`
-- `@Operation`
-- Swagger endpoints trong `SecurityConfig` permit:
-  - `/swagger-ui/**`
-  - `/v3/api-docs/**`
-  - `/swagger-ui.html`
-
-Backend:
-
-1. Mỗi controller có `@Tag`.
-2. Mỗi endpoint có `@Operation`.
-3. Swagger UI tự render docs.
-
-### Frontend làm gì
-
-Không có.
-
-### AI làm gì
-
-FastAPI cũng có docs mặc định cho AI service, ví dụ `/docs`, nếu được expose.
-
-### Flow data
-
-```text
-Developer opens Swagger UI
--> Springdoc scans controllers
--> OpenAPI JSON
--> Swagger UI render endpoints
-```
-
-### Cách tiếp cận
-
-Swagger giúp API contract rõ. Với project nhiều endpoint, đây là feature hỗ trợ maintain rất đáng giá.
-
-Step-by-step:
-
-1. Thêm springdoc dependency.
-2. Tạo `OpenApiConfig`.
-3. Annotate controller.
-4. Permit swagger endpoints.
-5. Cập nhật docs khi thêm API.
-
-## Feature 20: Frontend routing, role guard và lazy loading
-
-### Business logic
-
-Stakeholder cần:
-
-- User chưa đăng nhập không vào được trang private.
-- Applicant/recruiter/admin chỉ thấy đúng chức năng.
-- App tải nhanh, không load toàn bộ pages ngay lần đầu.
-
-### Frontend làm gì
-
-Code liên quan:
-
-- `App.tsx`
-- `RouteGuard.tsx`
-- `AuthContext.tsx`
-
-Frontend:
-
-1. `BrowserRouter` định nghĩa routes.
-2. Public routes: home, jobs, job detail, auth, registration.
-3. Authenticated routes: profile, notifications.
-4. Applicant-only: saved jobs.
-5. Recruiter-only: recruiter jobs, create/edit job.
-6. Admin-only: applicants, recruiters.
-7. Pages được `lazy()` để code splitting.
-8. `Suspense` hiển thị loading.
-
-### Backend làm gì
-
-Backend vẫn phải enforce security. Frontend guard không đủ an toàn vì user có thể gọi API trực tiếp.
-
-### AI làm gì
-
-Không có.
-
-### Flow data
-
-```text
-User opens route
--> React Router
--> RouteGuard reads AuthContext
--> if no token: navigate /auth
--> if wrong role: navigate /forbidden
--> if allowed: render lazy page
-```
-
-### Cách tiếp cận
-
-SPA cần route guard để UX tốt. Lazy loading giúp performance. Nhưng phải nhớ route guard là client-side convenience, không thay thế backend authorization.
-
-Step-by-step:
-
-1. Tạo `AuthProvider`.
-2. Decode token lấy role.
-3. Tạo `RouteGuard`.
-4. Bọc route theo role.
-5. Backend bảo vệ API tương ứng.
-6. Test refresh vẫn giữ login nếu token chưa hết hạn.
-
-## Feature 21: AI service health và deployment configuration
-
-### Business logic
-
-Stakeholder cần:
-
-- Biết AI service có chạy không.
-- Biết model LayoutLMv3 có được mount không.
-- Khi không có model, hệ thống vẫn fallback.
-
-### Backend/AI làm gì
-
-AI endpoint:
-
-```text
-GET /health
-```
-
-Trả:
-
-- `status`
-- `modelLoaded`
-- `fallbackAvailable`
-- `imageOcrAvailable`
-- `recommenderModelLoaded`
-- `word2vecLoaded`
-- `ollamaModel`
-
-Backend config:
-
-```yaml
-app:
-  ai:
-    enabled: ${AI_CV_ENABLED:true}
-    base-url: ${AI_CV_BASE_URL:http://localhost:8001}
-```
-
-### Frontend làm gì
-
-Hiện frontend không nhất thiết gọi health. Có thể thêm admin/dev status page nếu cần.
-
-### Flow data
-
-```text
-Developer/health check
--> GET AI /health
--> parser/model availability checks
--> JSON readiness info
-```
-
-### Cách tiếp cận
-
-Health endpoint giúp Docker/Kubernetes/dev biết service có sẵn. Với AI, cần phân biệt service sống và model loaded. Service sống nhưng model chưa loaded vẫn có fallback.
-
-Step-by-step:
-
-1. Tạo `/health`.
-2. Check model file tồn tại.
-3. Check OCR binary.
-4. Check recommender model.
-5. Docker compose expose service.
-6. Backend dùng base-url từ env.
 
 ## Feature 22: Recruiter/applicant public detail và company/job relationship
 
@@ -2304,42 +1196,179 @@ Step-by-step:
 6. Frontend thêm tab "Best matches".
 7. Test ranking.
 
-## Bảng tóm tắt feature
 
-| Mã | Feature | Backend | Frontend | AI |
-|---|---|---|---|---|
-| F-01 | Applicant/Recruiter registration | Có | Có | Không |
-| F-02 | Login/token/authorization | Có | Có | Không |
-| F-03 | Home summary | Có | Có | Không |
-| F-04 | Browse job/detail | Có | Có | Không |
-| F-05 | Applicant profile | Có | Có | Không trực tiếp |
-| F-06 | Consent visibility | Có | Có | Không |
-| F-07 | Upload CV persist | Có | Có | Không bắt buộc |
-| F-08 | AI CV analysis/autofill | Có | Có | Có |
-| F-09 | Save/apply/withdraw jobs | Có | Có | Không |
-| F-10 | Recruiter job management | Có | Có | Không |
-| F-11 | Recruiter sees applicants | Có | Có | Không trực tiếp |
-| F-12 | AI CV-JD matching | Có | Có | Có |
-| F-13 | PII masking for matching | Backend gọi AI | Không | Có |
-| F-14 | Differential private applicant count | Có | Có | Không |
-| F-15 | Anonymous candidate previews | Có | Có | Không |
-| F-16 | Recruiter profile | Có | Có | Không |
-| F-17 | Admin management | Có | Có | Không |
-| F-18 | API envelope/errors | Có | Có | Không |
-| F-19 | Swagger/OpenAPI | Có | Không | Không |
-| F-20 | Frontend route guard/lazy loading | Không trực tiếp | Có | Không |
-| F-21 | AI health/config | Backend config | Không trực tiếp | Có |
-| F-22 | Company/job relationship | Có | Có | Có thể dùng trong matching |
-| F-23 | Recommended jobs ranking | Cần mở rộng | Cần mở rộng | Cần mở rộng |
+## Feature 24: Hiển thị đồng thời nhiều AI Suggestion trên danh sách JD
+
+### Business logic
+
+Stakeholder cần:
+
+- Applicant có thể mở AI Suggestion của nhiều JD cùng lúc để so sánh.
+- Mở hoặc đóng một card không được làm thay đổi trạng thái của card khác.
+- Kết quả đã tải không cần gọi AI lại chỉ để mở lại panel.
+
+### Backend làm gì
+
+Không cần endpoint mới. Mỗi JD vẫn gọi endpoint single CV-JD match hiện có. Backend trả score gốc không noise nên các card có thể so sánh trực tiếp.
+
+### Frontend làm gì
+
+Code liên quan:
+
+- `Jobs.tsx`
+- `jobsApi.matchCvToJob`
+
+Frontend thay state scalar `expandedSuggestion: string | null` bằng `expandedSuggestions: Set<string>`. Kết quả vẫn cache theo `singleResults[jobId]`; thao tác toggle chỉ thêm/xóa đúng `jobId` trong Set.
+
+### AI làm gì
+
+AI xử lý độc lập từng JD. Khi result đã có trong state, mở lại panel không gửi request mới.
+
+### Flow data
+
+```text
+Click AI Suggestion on Job A
+-> matchCvToJob(A)
+-> singleResults[A] = result
+-> expandedSuggestions.add(A)
+
+Click AI Suggestion on Job B
+-> matchCvToJob(B)
+-> singleResults[B] = result
+-> expandedSuggestions.add(B)
+-> A and B remain visible
+```
+
+### Cách tiếp cận
+
+Panel visibility là state theo identity của JD, vì vậy dùng `Set<jobId>` phù hợp hơn một id dùng chung. Functional state update tạo Set mới để React nhận biết thay đổi và tránh đóng panel không liên quan.
+
+Step-by-step:
+
+1. Cache result theo job id.
+2. Cache trạng thái expanded theo một Set job id.
+3. Toggle đúng phần tử được click.
+4. `Clear AI` xóa cả result cache và expanded Set.
+5. Test mở Job A rồi Job B và xác nhận cả hai reason vẫn tồn tại.
+
+## Feature 25: Recruiter profile có published content, logo, cover và completeness chính xác
+
+### Business logic
+
+Stakeholder cần:
+
+- Tab `Posts` và `Jobs` hiển thị các JD recruiter đã publish, không hardcode empty state.
+- Company logo và cover image là hai ảnh độc lập.
+- Cover chiếm toàn bộ banner; logo nằm chồng lên mép banner và dùng `object-contain` để không crop logo.
+- Profile completeness cập nhật theo dữ liệu đã lưu và giải thích rõ field còn thiếu.
+
+### Backend làm gì
+
+Code liên quan:
+
+- `Recruiter`
+- `RecruiterMapper`
+- `ImplRecruiterService`
+- `schema-postgres.sql`
+
+Backend lưu riêng `logoUrl`, `coverImageUrl`, `website`, `contactEmail`, `contactPhone`, `taxCode`, `businessLicense`, `companyType`. Trước đây nhiều field chỉ có ở request/response nhưng không có cột entity nên save xong bị mất; logo và cover còn bị map chung từ `avatarUrl`.
+
+Endpoint dùng lại:
+
+```text
+GET /api/v1/recruiters/{recruiterId}
+PUT /api/v1/recruiters/{recruiterId}
+GET /api/v1/recruiters/jobs/{recruiterId}
+```
+
+### Frontend làm gì
+
+`Profile.tsx` tải recruiter profile và published jobs song song bằng `Promise.all`. Tab `Posts` dùng các JD làm company job announcements; tab `Jobs` dùng cùng source of truth nhưng trình bày metadata công việc. `RecruiterDetail.tsx` và `ProfileOverview.tsx` cũng render cover + logo riêng.
+
+Completeness recruiter dựa trên 13 mục đã persist:
+
+```text
+company name, account email, company description, company location,
+company size, industry, website, hiring email, hiring phone,
+logo, cover image, tax code, established date
+```
+
+UI hiển thị cả `%`, số mục hoàn thành/tổng số và tối đa ba mục còn thiếu. Khi rời trang profile, overview được mount lại và refetch data mới nên percentage không dùng response cũ.
+
+### AI làm gì
+
+Không có AI trong profile completeness hoặc render ảnh. Published JD sau đó có thể được dùng làm input cho AI candidate ranking.
+
+### Flow data
+
+```text
+Recruiter opens Profile
+-> Promise.all(fetchRecruiter, fetchRecruiterJobs)
+-> RecruiterView renders cover + logo
+-> Posts/Jobs tabs map published jobs
+-> profileCompletion checks persisted criteria
+-> percent + missing fields rendered
+```
+
+### Cách tiếp cận
+
+Database phải là source of truth cho logo, cover và business fields. Local browser avatar chỉ là override tạm thời, không được dùng thay cho hai trường company image. Completeness không tính fallback label như một field thật và kiểm tra nội dung bên trong array/object thay vì chỉ kiểm tra object có tồn tại.
+
+## Feature 26: Applicant profile visibility và CV file cho recruiter
+
+### Business logic
+
+Stakeholder cần:
+
+- Bật `Recruiters can discover profile` nghĩa là recruiter xem được toàn bộ profile, không cần bật lại từng visibility.
+- Khi discover bị tắt, field visibility nào bật thì recruiter vẫn xem được field tương ứng.
+- View Profile không hiển thị database ID.
+- CV upload phải là file có thể mở/tải, không render đường dẫn hoặc nội dung file như text.
+
+### Backend làm gì
+
+`ApplicantMapper.toRecruiterVisibleApplicantResponse` dùng rule:
+
+```text
+effectiveVisibility(section) = profileVisibleToRecruiters OR sectionVisibility
+```
+
+Field không được phép xem được trả `null` ngay từ API. Recruiter-visible response không trả `cvId`, tên ẩn danh chỉ là `Candidate` và không ghép applicant database id.
+
+### Frontend làm gì
+
+`ApplicantDetail.tsx` không tự chặn contact chỉ dựa trên role nữa; UI render đúng những field backend trả về. Badge ID đã được thay bằng `Shared profile`. Nếu `cvFileUrl` tồn tại, UI tạo URL asset từ `API_BASE_URL` và hiển thị nút `Download CV file` mở file ở tab mới/thực hiện download.
+
+### AI làm gì
+
+AI Match vẫn dùng CV trong backend theo quyền của recruiter sở hữu JD, nhưng PII masking loại name/email/phone/link khỏi scoring. Privacy response quyết định recruiter thấy gì trên UI, không thay đổi score bằng noise.
+
+### Flow data
+
+```text
+Applicant updates privacy
+-> PUT /api/v1/applicants/{id}/privacy
+-> Applicant fields persisted
+
+Recruiter clicks View Profile
+-> GET /api/v1/applicants/{id}
+-> ApplicantMapper applies master OR section consent
+-> hidden fields become null
+-> ApplicantDetail renders only returned fields
+-> shared cvFileUrl becomes Download CV file action
+```
+
+### Cách tiếp cận
+
+Privacy enforcement nằm ở response mapper để dữ liệu bị ẩn không đến browser. Frontend không suy diễn lại quyền theo role vì cách đó từng làm mất cả field backend đã cho phép. Internal applicant id vẫn dùng trong route/API lookup nhưng không được render thành nội dung profile.
 
 ## Checklist nâng cấp quan trọng
 
-1. Chuẩn hóa token thành JWT 3 phần hoặc đổi cách gọi trong báo cáo thành custom HMAC token.
-2. Siết `SecurityConfig.anyRequest().permitAll()` thành authenticated/role-based rules.
-3. Chuyển authorization ownership checks từ controller rải rác sang method security hoặc service guard nhất quán.
-4. Cân nhắc bỏ noise trên match score nếu cần ranking chính xác.
+
+
+4. Match score đã bỏ noise; tiếp tục regression test để bảo đảm raw AI score không bị thay đổi.
 5. Giữ Differential Privacy cho applicant count vì đây là aggregate query phù hợp.
-6. Thêm batch matching endpoint để support ranked jobs/recommended candidates.
+6. Candidate batch matching đã có; nếu cần recommended jobs thì bổ sung batch theo chiều applicant -> nhiều jobs.
 7. Viết integration tests cho auth, upload CV, privacy visibility, DP count, matching.
 8. Không log raw CV, raw PII, DP raw count/noise/secret.
 
