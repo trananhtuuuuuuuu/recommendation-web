@@ -40,6 +40,7 @@ import {
   updateApplicantPrivacy,
   updateRecruiter,
   uploadCv,
+  uploadRecruiterImage,
   type Applicant,
   type ApplicantPrivacySettings,
   type CvAnalysis,
@@ -186,6 +187,7 @@ export default function Profile() {
   const [recruiterJobsError, setRecruiterJobsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [recruiterImageUploading, setRecruiterImageUploading] = useState<"logo" | "cover" | null>(null);
   const [deletingCvFile, setDeletingCvFile] = useState(false);
   const [editing, setEditing] = useState(false);
   const [applicantForm, setApplicantForm] = useState(createEmptyApplicantForm);
@@ -304,6 +306,25 @@ export default function Profile() {
     removeProfileAvatar(role, authUser.id);
     setAvatarUrl("");
     toast.success("Profile image removed.");
+  };
+
+  const handleRecruiterImageUpload = async (imageType: "logo" | "cover", file: File) => {
+    if (!authUser?.id || role !== "RECRUITER") return;
+    setRecruiterImageUploading(imageType);
+    try {
+      const updated = await uploadRecruiterImage(authUser.id, imageType, file);
+      setRecruiter(updated);
+      setRecruiterForm((current) => ({
+        ...current,
+        logoUrl: updated.logoUrl || current.logoUrl,
+        coverImageUrl: updated.coverImageUrl || current.coverImageUrl,
+      }));
+      toast.success(imageType === "logo" ? "Company logo uploaded." : "Cover image uploaded.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Unable to upload company image.");
+    } finally {
+      setRecruiterImageUploading(null);
+    }
   };
 
   const applicantHighlights = useMemo(() => {
@@ -501,9 +522,8 @@ export default function Profile() {
               recruiter={recruiter}
               jobs={recruiterJobs}
               jobsError={recruiterJobsError}
-              avatarUrl={avatarUrl}
-              onAvatarUpload={handleAvatarUpload}
-              onAvatarRemove={handleAvatarRemove}
+              imageUploading={recruiterImageUploading}
+              onImageUpload={handleRecruiterImageUpload}
               onEdit={() => setEditing(true)}
               onOpenJob={(jobId) => window.location.assign(`/jobs/${jobId}`)}
             />
@@ -742,6 +762,58 @@ function AvatarActions({
       ) : null}
       <p className="w-full text-[11px] leading-4 text-muted-foreground">
         PNG, JPG, WebP, or GIF up to 1.5 MB. Stored only in this browser.
+      </p>
+    </div>
+  );
+}
+
+function RecruiterImageActions({
+  hasLogo,
+  hasCover,
+  uploading,
+  onUpload,
+}: {
+  hasLogo: boolean;
+  hasCover: boolean;
+  uploading: "logo" | "cover" | null;
+  onUpload: (imageType: "logo" | "cover", file: File) => void;
+}) {
+  const uploadControl = (imageType: "logo" | "cover", hasImage: boolean) => {
+    const inputId = `recruiter-${imageType}-upload`;
+    const isUploading = uploading === imageType;
+    const imageLabel = imageType === "logo" ? "Logo" : "Cover image";
+    return (
+      <div>
+        <Input
+          id={inputId}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="sr-only"
+          disabled={uploading !== null}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onUpload(imageType, file);
+            event.target.value = "";
+          }}
+        />
+        <Button asChild size="sm" variant="outline" className="gap-2" disabled={uploading !== null}>
+          <label htmlFor={inputId} className="cursor-pointer">
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            {isUploading ? `Uploading ${imageLabel}...` : `${hasImage ? "Replace" : "Upload"} ${imageLabel}`}
+          </label>
+        </Button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border bg-secondary/20 p-3">
+      <div className="flex flex-wrap gap-2">
+        {uploadControl("logo", hasLogo)}
+        {uploadControl("cover", hasCover)}
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+        PNG, JPG, WebP, or GIF up to 5 MB. Images are saved to the recruiter profile and displayed publicly.
       </p>
     </div>
   );
@@ -993,18 +1065,16 @@ function RecruiterView({
   recruiter,
   jobs,
   jobsError,
-  avatarUrl,
-  onAvatarUpload,
-  onAvatarRemove,
+  imageUploading,
+  onImageUpload,
   onEdit,
   onOpenJob,
 }: {
   recruiter: Recruiter | null;
   jobs: Job[];
   jobsError: string | null;
-  avatarUrl: string;
-  onAvatarUpload: (file: File) => void;
-  onAvatarRemove: () => void;
+  imageUploading: "logo" | "cover" | null;
+  onImageUpload: (imageType: "logo" | "cover", file: File) => void;
   onEdit: () => void;
   onOpenJob: (jobId: string) => void;
 }) {
@@ -1027,8 +1097,8 @@ function RecruiterView({
         <div className="px-5 pb-5">
           <div className="relative -mt-16 flex items-start justify-between gap-4">
             <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-card bg-white p-1 shadow-md sm:h-32 sm:w-32">
-              {avatarUrl || recruiter?.logoUrl ? (
-                <img src={avatarUrl || toAssetUrl(recruiter?.logoUrl || "")} alt={`${companyName} logo`} className="h-full w-full object-contain" />
+              {recruiter?.logoUrl ? (
+                <img src={toAssetUrl(recruiter.logoUrl)} alt={`${companyName} logo`} className="h-full w-full object-contain" />
               ) : (
                 <Building2 className="w-11 h-11 text-primary" />
               )}
@@ -1047,11 +1117,11 @@ function RecruiterView({
             </p>
           </div>
 
-          <AvatarActions
-            id="recruiter-avatar"
-            hasAvatar={Boolean(avatarUrl)}
-            onUpload={onAvatarUpload}
-            onRemove={onAvatarRemove}
+          <RecruiterImageActions
+            hasLogo={Boolean(recruiter?.logoUrl)}
+            hasCover={Boolean(recruiter?.coverImageUrl)}
+            uploading={imageUploading}
+            onUpload={onImageUpload}
           />
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -1069,7 +1139,7 @@ function RecruiterView({
 
         <Tabs defaultValue="home" className="border-t">
           <TabsList className="h-auto w-full justify-start rounded-none bg-transparent p-0 px-5">
-            {["home", "about", "posts", "jobs"].map((tab) => (
+            {["home", "about", "posts"].map((tab) => (
               <TabsTrigger
                 key={tab}
                 value={tab}
@@ -1088,9 +1158,6 @@ function RecruiterView({
             </TabsContent>
             <TabsContent value="posts" className="mt-0">
               <RecruiterPublishedJobs jobs={jobs} error={jobsError} variant="posts" onOpenJob={onOpenJob} />
-            </TabsContent>
-            <TabsContent value="jobs" className="mt-0">
-              <RecruiterPublishedJobs jobs={jobs} error={jobsError} variant="jobs" onOpenJob={onOpenJob} />
             </TabsContent>
           </div>
         </Tabs>
@@ -1392,8 +1459,6 @@ function RecruiterEditForm({
           <Field label="Company Type" value={form.companyType} onChange={(value) => setField("companyType", value)} />
           <Field label="Company Location" value={form.companyLocation} onChange={(value) => setField("companyLocation", value)} />
           <Field label="Website" value={form.website} onChange={(value) => setField("website", value)} />
-          <Field label="Logo URL" value={form.logoUrl} onChange={(value) => setField("logoUrl", value)} />
-          <Field label="Cover Image URL" value={form.coverImageUrl} onChange={(value) => setField("coverImageUrl", value)} />
         </div>
         <div className="mt-4 space-y-2">
           <Label>General Hiring Requirements</Label>

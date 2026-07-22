@@ -84,6 +84,28 @@ public class RecruiterJobController {
                         request == null ? new CvJobMatchRequest() : request)));
     }
 
+    /**
+     * Runs the richer single-candidate AI suggestion flow for an applicant who
+     * submitted to a recruiter-owned job.
+     *
+     * @param recruiterId posting recruiter identifier
+     * @param jobId job identifier
+     * @param applicantId submitted applicant identifier
+     * @param request optional AI matching options
+     * @param authentication current JWT authentication
+     * @return single applicant match in the standard API envelope
+     */
+    @Operation(summary = "AI-match one applicant for a recruiter job")
+    @PostMapping("/{recruiterId}/{jobId}/applicants/{applicantId}/ai-match")
+    public ResponseEntity<ApiResponse> matchAppliedApplicant(@PathVariable Long recruiterId,
+            @PathVariable Long jobId, @PathVariable Long applicantId,
+            @RequestBody(required = false) CvJobMatchRequest request, Authentication authentication) {
+        verifyRecruiterAccess(recruiterId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("Applicant AI suggestion generated", HttpStatus.OK,
+                jobDescriptionService.matchJobApplicant(jobId, recruiterId, applicantId,
+                        request == null ? new CvJobMatchRequest() : request)));
+    }
+
     private void verifyRecruiterAccess(Long recruiterId, Authentication authentication) {
         if (authentication == null
                 || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)

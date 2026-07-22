@@ -36,6 +36,18 @@ public interface InterfaceJobService {
     List<RecruiterApplicantMatchResponse> matchJobApplicants(Long jobId, Long recruiterId,
             CvJobMatchRequest request);
 
+    /**
+     * Scores one submitted applicant for a recruiter-owned job.
+     *
+     * @param jobId job identifier
+     * @param recruiterId posting recruiter identifier
+     * @param applicantId submitted applicant identifier
+     * @param request AI matching options
+     * @return match result with the stable application order
+     */
+    RecruiterApplicantMatchResponse matchJobApplicant(Long jobId, Long recruiterId, Long applicantId,
+            CvJobMatchRequest request);
+
     List<JobResponse> getJobsByRecruiter(Long recruiterId);
 
     JobResponse createJob(Long recruiterId, RecruiterJobRequest request);

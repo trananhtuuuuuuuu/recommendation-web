@@ -38,6 +38,18 @@ export default function ApplicantDetail() {
     );
   }
 
+  const workingField = getWorkingField(applicant);
+  const visibleFullName = applicant.fullName && applicant.fullName !== "Candidate"
+    ? applicant.fullName
+    : applicant.cv?.fullName;
+  const sharedProfileFields = [
+    visibleFullName ? { label: "Full name", value: visibleFullName } : null,
+    applicant.email ? { label: "Email", value: applicant.email } : null,
+    applicant.phone || applicant.cv?.phone ? { label: "Phone number", value: applicant.phone || applicant.cv?.phone || "" } : null,
+    applicant.address || applicant.cv?.address ? { label: "Address", value: applicant.address || applicant.cv?.address || "" } : null,
+    workingField ? { label: "Working field", value: workingField } : null,
+  ].filter((field): field is { label: string; value: string } => Boolean(field));
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1">
@@ -74,10 +86,10 @@ export default function ApplicantDetail() {
         <div className="glass-card rounded-xl p-6">
           <h3 className="font-display font-semibold text-foreground mb-3">Profile</h3>
           <div className="space-y-2 text-sm text-muted-foreground">
-            {applicant.userName ? <p>Username: <span className="text-foreground">{applicant.userName}</span></p> : null}
-            {applicant.gender ? <p>Gender: <span className="text-foreground">{applicant.gender}</span></p> : null}
-            {applicant.status ? <p>Status: <span className="text-foreground">{applicant.status}</span></p> : null}
-            {!applicant.userName && !applicant.gender && !applicant.status ? <p>No additional profile fields shared.</p> : null}
+            {sharedProfileFields.map((field) => (
+              <p key={field.label}>{field.label}: <span className="text-foreground">{field.value}</span></p>
+            ))}
+            {sharedProfileFields.length === 0 ? <p>No additional profile fields shared.</p> : null}
           </div>
         </div>
 
@@ -111,6 +123,24 @@ export default function ApplicantDetail() {
       </div>
     </div>
   );
+}
+
+function getWorkingField(applicant: Applicant) {
+  const experience = applicant.cv?.experience;
+  if (!experience) return null;
+  if (typeof experience === "object") {
+    const field = experience.field;
+    return typeof field === "string" && field.trim() ? field : null;
+  }
+  try {
+    const parsed = JSON.parse(experience) as Record<string, unknown> | Array<Record<string, unknown>>;
+    const firstExperience = Array.isArray(parsed) ? parsed[0] : parsed;
+    return typeof firstExperience?.field === "string" && firstExperience.field.trim()
+      ? firstExperience.field
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatExperience(value?: string | Record<string, unknown> | null) {

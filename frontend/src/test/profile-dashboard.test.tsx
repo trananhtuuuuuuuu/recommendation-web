@@ -7,12 +7,14 @@ import type { Applicant, PageResponse, SavedJob } from "@/lib/jobsApi";
 
 const authState = vi.hoisted(() => ({
   user: { id: "1", userName: "candidate", email: "candidate@example.com" },
-  role: "APPLICANT" as const,
+  role: "APPLICANT" as "APPLICANT" | "RECRUITER",
 }));
 
 const apiMocks = vi.hoisted(() => ({
   fetchApplicant: vi.fn(),
   fetchRecruiter: vi.fn(),
+  fetchRecruiterJobs: vi.fn(),
+  uploadRecruiterImage: vi.fn(),
   fetchAppliedJobs: vi.fn(),
   fetchSavedJobs: vi.fn(),
   removeSavedJob: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock("@/lib/jobsApi", async () => {
     ...actual,
     fetchApplicant: apiMocks.fetchApplicant,
     fetchRecruiter: apiMocks.fetchRecruiter,
+    fetchRecruiterJobs: apiMocks.fetchRecruiterJobs,
+    uploadRecruiterImage: apiMocks.uploadRecruiterImage,
     fetchAppliedJobs: apiMocks.fetchAppliedJobs,
     fetchSavedJobs: apiMocks.fetchSavedJobs,
     removeSavedJob: apiMocks.removeSavedJob,
@@ -76,6 +80,8 @@ const selectTab = (name: string) => {
 describe("profile dashboard sections", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.role = "APPLICANT";
+    authState.user = { id: "1", userName: "candidate", email: "candidate@example.com" };
   });
 
   it("expands and collapses compact skill chips", async () => {
@@ -106,11 +112,39 @@ describe("profile dashboard sections", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
     expect(screen.queryByText("Kubernetes")).not.toBeInTheDocument();
   });
+
+  it("keeps only the Posts content tab and uploads logo and cover separately", async () => {
+    authState.role = "RECRUITER";
+    authState.user = { id: "9", userName: "recruiter", email: "recruiter@example.com" };
+    apiMocks.fetchRecruiter.mockResolvedValue({ id: 9, companyName: "Example Corp" });
+    apiMocks.fetchRecruiterJobs.mockResolvedValue([{ id: 50, jobTitle: "Backend Engineer" }]);
+    apiMocks.uploadRecruiterImage.mockResolvedValue({
+      id: 9,
+      companyName: "Example Corp",
+      logoUrl: "/uploads/recruiters/9/logo.png",
+    });
+
+    render(<Profile />);
+
+    expect(await screen.findByRole("tab", { name: "posts" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "jobs" })).not.toBeInTheDocument();
+    expect(screen.getByText("Upload Logo")).toBeInTheDocument();
+    expect(screen.getByText("Upload Cover image")).toBeInTheDocument();
+
+    const logoInput = document.getElementById("recruiter-logo-upload") as HTMLInputElement;
+    const logo = new File(["logo"], "logo.png", { type: "image/png" });
+    fireEvent.change(logoInput, { target: { files: [logo] } });
+
+    await waitFor(() => expect(apiMocks.uploadRecruiterImage).toHaveBeenCalledWith("9", "logo", logo));
+    expect(await screen.findByText("Replace Logo")).toBeInTheDocument();
+  });
 });
 
 describe("saved and applied jobs dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.role = "APPLICANT";
+    authState.user = { id: "1", userName: "candidate", email: "candidate@example.com" };
     apiMocks.fetchAppliedJobs.mockResolvedValue(pageOf([], 0, 0));
     apiMocks.fetchSavedJobs.mockResolvedValue(pageOf([], 0, 0));
   });

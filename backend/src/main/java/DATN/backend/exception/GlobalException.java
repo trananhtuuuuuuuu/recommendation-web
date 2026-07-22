@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -66,6 +67,25 @@ public class GlobalException {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
+        List<String> errors = exception.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .toList();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(
+                "Validation failed",
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                errors));
+    }
+
+    /**
+     * Converts multipart/model-attribute validation failures into the common API
+     * response format.
+     *
+     * @param exception request binding failure
+     * @return bad-request response with validation messages in {@code errors}
+     */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ApiResponse> handleBindException(BindException exception) {
         List<String> errors = exception.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .toList();

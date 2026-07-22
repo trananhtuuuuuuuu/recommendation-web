@@ -339,6 +339,16 @@ export const matchRecruiterApplicants = (
   { method: "POST", body: options },
 );
 
+export const matchRecruiterApplicant = (
+  recruiterId: string | number,
+  jobId: string | number,
+  applicantId: string | number,
+  options: { llm?: boolean; method?: string } = {},
+) => apiRequest<RecruiterApplicantMatch>(
+  `/api/v1/recruiters/jobs/${recruiterId}/${jobId}/applicants/${applicantId}/ai-match`,
+  { method: "POST", body: options },
+);
+
 export const fetchSavedJobs = (applicantId: string | number, page = 0, size = 5, sort = "id,desc") =>
   apiRequest<PageResponse<SavedJob>>(
     `/api/v1/applicants/saved-jobs?applicantId=${applicantId}&${toPageParams(page, size, sort)}`,
@@ -373,6 +383,20 @@ export const withdrawApplication = (applicantId: string | number, applicantJobId
 
 export const fetchRecruiterJobs = (recruiterId: string | number) =>
   apiRequest<Job[]>(`/api/v1/recruiters/jobs/${recruiterId}`).then(normalizeJobs);
+
+export const uploadRecruiterImage = (
+  recruiterId: string | number,
+  imageType: "logo" | "cover",
+  image: File,
+) => {
+  const formData = new FormData();
+  formData.append("image", image);
+  return apiRequest<Recruiter>(`/api/v1/recruiters/${recruiterId}/images/${imageType}`, {
+    method: "POST",
+    body: formData,
+    isForm: true,
+  });
+};
 
 export const createRecruiterJob = (recruiterId: string | number, body: Job) =>
   apiRequest<Job>(`/api/v1/recruiters/jobs/${recruiterId}`, {

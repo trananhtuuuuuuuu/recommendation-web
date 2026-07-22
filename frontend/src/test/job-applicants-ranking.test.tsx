@@ -7,6 +7,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchJob: vi.fn(),
   fetchJobApplicantCount: vi.fn(),
   fetchJobApplicants: vi.fn(),
+  matchRecruiterApplicant: vi.fn(),
   matchRecruiterApplicants: vi.fn(),
 }));
 
@@ -36,7 +37,13 @@ describe("recruiter applicant ranking", () => {
         applicationId: 102,
         applicationOrder: 2,
         applicant: { id: 2, fullName: "Candidate" },
-        match: { matchPercent: 91, matchScore: 0.91, reason: "Strong Spring match", perFieldScores: { SKILL: 0.95 } },
+        match: {
+          matchPercent: 91,
+          matchScore: 0.91,
+          reason: "Strong Spring match",
+          perFieldScores: { SKILL: 0.95 },
+          suggestions: ["Batch advice must remain hidden"],
+        },
       },
       {
         applicationId: 101,
@@ -45,6 +52,17 @@ describe("recruiter applicant ranking", () => {
         match: { matchPercent: 64, matchScore: 0.64, reason: "Partial skills match", perFieldScores: { SKILL: 0.66 } },
       },
     ]);
+    apiMocks.matchRecruiterApplicant.mockResolvedValue({
+      applicationId: 101,
+      applicationOrder: 1,
+      applicant: { id: 1, fullName: "Candidate" },
+      match: {
+        matchPercent: 72,
+        matchScore: 0.72,
+        reason: "Detailed single-candidate suggestion",
+        suggestions: ["Strengthen the Spring portfolio evidence"],
+      },
+    });
   });
 
   it("uses application ordinals and sorts descending after the real AI match request", async () => {
@@ -65,9 +83,30 @@ describe("recruiter applicant ranking", () => {
     ));
     expect(await screen.findByText("Rank 1 · 91% match")).toBeInTheDocument();
     expect(screen.getByText("Strong Spring match")).toBeInTheDocument();
+    expect(screen.getAllByText("Click AI Suggestion to view advice")).toHaveLength(2);
+    expect(screen.queryByText("Batch advice must remain hidden")).not.toBeInTheDocument();
 
     const secondApplicant = screen.getByText("Candidate 2nd").closest("div.glass-card");
     const firstApplicant = screen.getByText("Candidate 1st").closest("div.glass-card");
     expect(secondApplicant?.compareDocumentPosition(firstApplicant as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("uses the richer single-candidate AI suggestion request from each candidate card", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/50/applicants"]}>
+        <Routes><Route path="/jobs/:jobId/applicants" element={<JobApplicants />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Candidate 1st");
+    fireEvent.click(screen.getAllByRole("button", { name: "AI Suggestion" })[0]);
+
+    await waitFor(() => expect(apiMocks.matchRecruiterApplicant).toHaveBeenCalledWith(
+      "9", "50", 1, { llm: true, method: "tfidf" },
+    ));
+    expect(await screen.findByText("Detailed single-candidate suggestion")).toBeInTheDocument();
+    expect(screen.getByText(/Strengthen the Spring portfolio evidence/)).toBeInTheDocument();
+    expect(screen.queryByText("Click AI Suggestion to view advice")).not.toBeInTheDocument();
+    expect(apiMocks.matchRecruiterApplicants).not.toHaveBeenCalled();
   });
 });

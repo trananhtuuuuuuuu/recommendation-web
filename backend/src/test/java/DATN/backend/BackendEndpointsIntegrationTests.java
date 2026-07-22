@@ -13,6 +13,8 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 
 import java.sql.Date;
 import java.time.LocalDate;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -580,6 +582,34 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.contactEmail").value("hiring@example.com"))
         .andExpect(jsonPath("$.data.companyType").value("Private"));
 
+    MockMultipartFile recruiterLogo = new MockMultipartFile(
+        "image",
+        "company-logo.png",
+        MediaType.IMAGE_PNG_VALUE,
+        new byte[] { (byte) 0x89, 0x50, 0x4E, 0x47 });
+    try {
+      mockMvc.perform(multipart("/api/v1/recruiters/{recruiterId}/images/logo", recruiter.getId())
+          .file(recruiterLogo)
+          .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.message").value("Recruiter image uploaded successfully"))
+          .andExpect(jsonPath("$.data.logoUrl")
+              .value(org.hamcrest.Matchers.startsWith("/uploads/recruiters/" + recruiter.getId() + "/logo-")));
+    } finally {
+      Recruiter recruiterWithLogo = recruiterRepository.findById(recruiter.getId()).orElseThrow();
+      String logoUrl = recruiterWithLogo.getLogoUrl();
+      if (logoUrl != null && logoUrl.startsWith("/uploads/recruiters/")) {
+        Path logoPath = Path.of(logoUrl.substring(1));
+        Files.deleteIfExists(logoPath);
+        Files.deleteIfExists(logoPath.getParent());
+      }
+    }
+
+    mockMvc.perform(multipart("/api/v1/recruiters/{recruiterId}/images/logo", recruiter.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0]").value("Image file is required"));
+
     mockMvc.perform(get("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
@@ -917,6 +947,16 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data[0].match.differentialPrivacyApplied").value(false))
         .andExpect(jsonPath("$.data[1].applicationOrder").value(1))
         .andExpect(jsonPath("$.data[1].match.matchPercent").value(64));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants/{applicantId}/ai-match",
+        recruiter.getId(), job.getId(), firstApplicant.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"llm\":true,\"method\":\"tfidf\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("Applicant AI suggestion generated"))
+        .andExpect(jsonPath("$.data.applicationOrder").value(1))
+        .andExpect(jsonPath("$.data.match.matchPercent").value(64));
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/ai-match",
         recruiter.getId(), job.getId())

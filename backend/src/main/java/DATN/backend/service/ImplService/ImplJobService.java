@@ -120,6 +120,26 @@ public class ImplJobService implements InterfaceJobService {
                                 .toList();
         }
 
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        @Transactional(readOnly = true)
+        public RecruiterApplicantMatchResponse matchJobApplicant(Long jobId, Long recruiterId, Long applicantId,
+                        CvJobMatchRequest request) {
+                verifyPostingRecruiter(jobId, recruiterId);
+                List<ApplicantJob> applications = applicantJobRepository
+                                .findByJob_IdAndActionTypeOrderByIdAsc(jobId, APPLIED_ACTION);
+                for (int index = 0; index < applications.size(); index++) {
+                        ApplicantJob application = applications.get(index);
+                        if (application.getApplicant().getId().equals(applicantId)) {
+                                CvJobMatchRequest options = request == null ? new CvJobMatchRequest() : request;
+                                return toRecruiterMatch(application, jobId, index + 1, options);
+                        }
+                }
+                throw new ResourcesNotFoundException("Applicant has not applied to this job");
+        }
+
         private RecruiterApplicantMatchResponse toRecruiterMatch(ApplicantJob relation, Long jobId,
                         int applicationOrder, CvJobMatchRequest request) {
                 CvJobMatchResponse match;
