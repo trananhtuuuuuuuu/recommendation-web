@@ -117,15 +117,20 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
                 .getReleasedValue();
     }
 
-    private long sampleDiscreteLaplace(double epsilon, byte[] randomBytes) {
-        double q = Math.exp(-epsilon);
-        double magnitudeUniform = unsignedLongUnit(randomBytes, 0);
-        long magnitude = (long) Math.floor(Math.log(1.0 - magnitudeUniform) / Math.log(q));
-        boolean negative = (randomBytes[8] & 1) == 1;
-        return negative ? -magnitude : magnitude;
+    static long sampleDiscreteLaplace(double epsilon, byte[] randomBytes) {
+        // If G1 and G2 are independent Geometric(1 - exp(-epsilon)) samples,
+        // G1 - G2 has the exact two-sided geometric (discrete Laplace) distribution.
+        long positiveComponent = sampleGeometric(epsilon, unsignedLongUnit(randomBytes, 0));
+        long negativeComponent = sampleGeometric(epsilon, unsignedLongUnit(randomBytes, Long.BYTES));
+        return positiveComponent - negativeComponent;
     }
 
-    private double unsignedLongUnit(byte[] bytes, int offset) {
+    static long sampleGeometric(double epsilon, double uniform) {
+        // q = exp(-epsilon), so log(q) = -epsilon. log1p is stable when uniform is near zero.
+        return (long) Math.floor(-Math.log1p(-uniform) / epsilon);
+    }
+
+    private static double unsignedLongUnit(byte[] bytes, int offset) {
         long value = ByteBuffer.wrap(bytes, offset, Long.BYTES).getLong() >>> 1;
         return Math.min(value / (double) Long.MAX_VALUE, Math.nextDown(1.0));
     }
