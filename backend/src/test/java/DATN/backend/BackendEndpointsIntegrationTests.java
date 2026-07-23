@@ -215,6 +215,41 @@ class BackendEndpointsIntegrationTests {
   }
 
   @Test
+  void applicantUpdateShouldAcceptCommonPhoneNumberFormats() throws Exception {
+    Applicant applicant = seedApplicant("phone-formats", "phone-formats@example.com");
+    String[] acceptedPhoneNumbers = {
+        "0901234567",
+        "090-123-4567",
+        "+84 90 123 4567",
+        "(+84) 90.123.4567",
+        "(028) 3822-1234"
+    };
+
+    for (String phoneNumber : acceptedPhoneNumbers) {
+      mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
+          .contentType(MediaType.APPLICATION_JSON)
+          .content("""
+              {
+                "phone": "%s"
+              }
+              """.formatted(phoneNumber)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.phone").value(phoneNumber));
+    }
+
+    mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "phone": "not-a-phone"
+            }
+            """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Validation failed"))
+        .andExpect(jsonPath("$.errors[0]").value("Invalid phone number"));
+  }
+
+  @Test
   void applicantEndpointsShouldReadUpdateSaveJobAndUploadCv() throws Exception {
     Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");

@@ -65,7 +65,8 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
         validateEpsilon(config.getEpsilon());
         String window = currentWindow(config.getReleaseWindow());
         String releaseKey = COUNT_METRIC + "|jobId=" + jobId + "|audience=" + APPLICANT_AUDIENCE + "|window=" + window;
-        // Reuse the same release inside the window so refreshes cannot be averaged back toward the raw count.
+        // Reuse the same release inside the window so refreshes cannot be averaged back
+        // toward the raw count.
         Long releasedCount = privacyReleaseRepository.findByReleaseKey(releaseKey)
                 .map(PrivacyRelease::getReleasedValue)
                 .orElseGet(() -> createApplicantCountRelease(jobId, config, window, releaseKey));
@@ -106,8 +107,10 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
 
     private Long createApplicantCountRelease(Long jobId, PrivacyProperties.ApplicantCount config, String window,
             String releaseKey) {
-        // Sensitivity is 1 because one applicant can change COUNT(DISTINCT applicant_id) by at most one.
-        // The raw count and generated noise stay inside this method and must never be serialized or logged.
+        // Sensitivity is 1 because one applicant can change COUNT(DISTINCT
+        // applicant_id) by at most one.
+        // The raw count and generated noise stay inside this method and must never be
+        // serialized or logged.
         long rawCount = applicantJobRepository.countDistinctApplicantsByJobAndActionType(jobId, APPLIED_ACTION);
         long noise = sampleDiscreteLaplace(config.getEpsilon(),
                 hmacBytes(config.getReleaseSecret(), releaseKey + "|noise"));
@@ -126,7 +129,8 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
     }
 
     static long sampleGeometric(double epsilon, double uniform) {
-        // q = exp(-epsilon), so log(q) = -epsilon. log1p is stable when uniform is near zero.
+        // q = exp(-epsilon), so log(q) = -epsilon. log1p is stable when uniform is near
+        // zero.
         return (long) Math.floor(-Math.log1p(-uniform) / epsilon);
     }
 
@@ -220,7 +224,8 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
     }
 
     private String toGeneralRegion(String applicantAddress, String cvAddress) {
-        String address = ((applicantAddress == null ? "" : applicantAddress) + " " + (cvAddress == null ? "" : cvAddress))
+        String address = ((applicantAddress == null ? "" : applicantAddress) + " "
+                + (cvAddress == null ? "" : cvAddress))
                 .toLowerCase(Locale.ROOT);
         if (address.matches(".*(ho chi minh|hcm|can tho|dong nai|binh duong|southern).*")) {
             return "Southern Vietnam";
@@ -235,8 +240,9 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
     }
 
     private String toRoleCategory(Experience experience) {
-        String text = experience == null ? "" : (experience.getJobTitle() + " " + experience.getField())
-                .toLowerCase(Locale.ROOT);
+        String text = experience == null ? ""
+                : (experience.getJobTitle() + " " + experience.getField())
+                        .toLowerCase(Locale.ROOT);
         if (text.matches(".*(frontend|react|ui).*")) {
             return "Frontend";
         }
@@ -289,7 +295,8 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
 
     private byte[] hmacBytes(String secret, String input) {
         try {
-            // The secret makes the output deterministic for this release key but unpredictable to clients.
+            // The secret makes the output deterministic for this release key but
+            // unpredictable to clients.
             // Do not log the secret, HMAC input, digest, seed, raw count, or noise.
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));

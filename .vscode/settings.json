@@ -1,0 +1,7 @@
+{
+    "github.copilot.inlineSuggest.enable": {
+        "*": true,
+        "markdown": false,
+        "plaintext": false
+    },
+}

@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "docker-compose: debug up",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.debug.yaml up --build -d",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "docker-compose: debug down",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.yaml -f docker-compose.debug.yaml down",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
