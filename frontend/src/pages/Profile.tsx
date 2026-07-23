@@ -44,7 +44,6 @@ import {
   type Applicant,
   type ApplicantPrivacySettings,
   type CvAnalysis,
-  type CvExperienceSuggestion,
   type Recruiter,
   type Job,
   getJobId,
@@ -178,6 +177,10 @@ type ApplicantInlineEditor = keyof typeof emptyApplicantForm | TextListField | "
 
 const PROFILE_PREVIEW_LIMIT = 3;
 const SKILL_PREVIEW_LIMIT = 10;
+const PHONE_ALLOWED_CHARACTERS = /^(?:[A-Za-z]{2,3}\s+)?[+()\d][+()\d\s.-]*$/;
+const PHONE_DIGIT_MIN = 7;
+const PHONE_DIGIT_MAX = 15;
+const PHONE_VALUE_MAX = 50;
 
 export default function Profile() {
   const { user: authUser, role } = useAuth();
@@ -225,8 +228,8 @@ export default function Profile() {
           setRecruiter(next);
           setRecruiterJobs(jobs);
           setRecruiterForm({
-            userName: next.userName || authUser.userName || "",
-            email: next.email || authUser.email || "",
+            userName: next.userName ?? "",
+            email: next.email ?? "",
             phone: next.phone || "",
             address: next.address || "",
             companyName: next.companyName || "",
@@ -248,8 +251,8 @@ export default function Profile() {
           const next = data as Applicant;
           setApplicant(next);
           setApplicantForm({
-            userName: next.userName || authUser.userName || "",
-            email: next.email || "",
+            userName: next.userName ?? "",
+            email: next.email ?? "",
             phone: next.phone || "",
             address: next.address || "",
             fullName: next.fullName || "",
@@ -340,8 +343,8 @@ export default function Profile() {
   const resetApplicantDraft = () => {
     if (!applicant) return;
     setApplicantForm({
-      userName: applicant.userName || authUser?.userName || "",
-      email: applicant.email || authUser?.email || "",
+      userName: applicant.userName ?? "",
+      email: applicant.email ?? "",
       phone: applicant.phone || "",
       address: applicant.address || "",
       fullName: applicant.fullName || "",
@@ -400,8 +403,8 @@ export default function Profile() {
         fullName: analysis.fullName || current.fullName,
         phone: analysis.phone || current.phone,
         address: analysis.address || current.address,
-        objective: analysis.objective || "",
-        skills: analysis.skills && analysis.skills.length > 0 ? analysis.skills : [""],
+        objective: analysis.objective || current.objective,
+        skills: analysis.skills && analysis.skills.length > 0 ? analysis.skills : current.skills,
         experience: analysis.experience && analysis.experience.length > 0
           ? analysis.experience.map((e) => ({
               companyName: e.companyName || "",
@@ -411,15 +414,19 @@ export default function Profile() {
               skills: e.skills || "",
               certificates: e.certificates || "",
             }))
-          : [createEmptyExperience()],
-        education: analysis.education && analysis.education.length > 0 ? analysis.education : [""],
-        certifications: analysis.certifications && analysis.certifications.length > 0 ? analysis.certifications : [""],
+          : current.experience,
+        education: analysis.education && analysis.education.length > 0 ? analysis.education : current.education,
+        certifications: analysis.certifications && analysis.certifications.length > 0
+          ? analysis.certifications
+          : current.certifications,
         cvFileUrl: current.cvFileUrl,
       }));
+      setActiveApplicantEditor(null);
+      setEditing(true);
       toast.success(
         analysis.extractionMode === "layoutlmv3"
-          ? "CV analyzed with LayoutLMv3. Review the suggested profile fields."
-          : "CV text analyzed. Review the suggested profile fields.",
+          ? "CV analyzed with LayoutLMv3. Review and edit the preview before saving."
+          : "CV text analyzed. Review and edit the preview before saving.",
       );
     } catch (error) {
       toast.error(
@@ -434,6 +441,18 @@ export default function Profile() {
 
   const handleSave = async (force?: boolean) => {
     if (!authUser?.id || analyzingCv) return;
+
+    if (role === "APPLICANT") {
+      const phoneErrors = [
+        validatePhoneNumber(applicantForm.phone),
+        validatePhoneNumber(cvForm.phone),
+      ].filter((error): error is string => Boolean(error));
+
+      if (phoneErrors.length > 0) {
+        toast.error([...new Set(phoneErrors)].join(" "));
+        return;
+      }
+    }
 
     if (role === "APPLICANT" && selectedCvFile && applicant?.cv?.cvFileUrl && force !== true) {
       setShowOverwriteWarning(true);
@@ -471,7 +490,11 @@ export default function Profile() {
       setActiveApplicantEditor(null);
       toast.success("Profile updated.");
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Unable to save profile");
+      toast.error(
+        error instanceof ApiError
+          ? getApiErrorMessage(error)
+          : "Unable to save profile",
+      );
     } finally {
       setSaving(false);
     }
@@ -548,7 +571,11 @@ export default function Profile() {
           resetApplicantDraft();
           setEditing(true);
         }}
-        onCancel={() => setEditing(false)}
+        onCancel={() => {
+          resetApplicantDraft();
+          setEditing(false);
+          setActiveApplicantEditor(null);
+        }}
         onSave={handleSave}
         onClear={() => setShowClearProfileWarning(true)}
       >
@@ -1289,6 +1316,9 @@ function ApplicantEditForm({
   privacyForm: PrivacyForm;
   setPrivacyForm: React.Dispatch<React.SetStateAction<PrivacyForm>>;
 }) {
+  const applicantPhoneError = validatePhoneNumber(applicantForm.phone);
+  const cvPhoneError = validatePhoneNumber(cvForm.phone);
+
   const setApplicantField = (field: keyof typeof emptyApplicantForm, value: string) => {
     setApplicantForm((current) => ({ ...current, [field]: value }));
   };
@@ -1307,12 +1337,19 @@ function ApplicantEditForm({
 
   return (
     <div className="space-y-5">
+      {cvAnalysis ? <CvPreviewBanner /> : null}
+
       <Panel title="Personal Profile">
         <div className="grid md:grid-cols-2 gap-4">
           <Field label="User Name" value={applicantForm.userName} onChange={(value) => setApplicantField("userName", value)} />
           <Field label="Full Name" value={applicantForm.fullName} onChange={(value) => setApplicantField("fullName", value)} />
           <Field label="Email" value={applicantForm.email} onChange={(value) => setApplicantField("email", value)} />
-          <Field label="Phone" value={applicantForm.phone} onChange={(value) => setApplicantField("phone", value)} />
+          <Field
+            label="Phone"
+            value={applicantForm.phone}
+            onChange={(value) => setApplicantField("phone", value)}
+            error={applicantPhoneError}
+          />
           <Field label="Address" value={applicantForm.address} onChange={(value) => setApplicantField("address", value)} />
           <GenderToggle value={applicantForm.gender} onChange={(value) => setApplicantField("gender", value)} showLabel />
           <SelectField label="Open To Work Status" value={applicantForm.status} onChange={(value) => setApplicantField("status", value)} options={["OpenToWork", "Normal"]} />
@@ -1377,7 +1414,12 @@ function ApplicantEditForm({
       <Panel title="Career Profile">
         <div className="grid md:grid-cols-3 gap-4">
           <Field label="CV Name" value={cvForm.fullName} onChange={(value) => setCvField("fullName", value)} />
-          <Field label="CV Phone" value={cvForm.phone} onChange={(value) => setCvField("phone", value)} />
+          <Field
+            label="CV Phone"
+            value={cvForm.phone}
+            onChange={(value) => setCvField("phone", value)}
+            error={cvPhoneError}
+          />
           <Field label="CV Address" value={cvForm.address} onChange={(value) => setCvField("address", value)} />
         </div>
         <div className="mt-4 space-y-2">
@@ -1911,12 +1953,35 @@ function PrivacySwitch({
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
+function Field({
+  label,
+  value,
+  onChange,
+  error,
+}: {
+  label: string;
+  value?: string;
+  onChange: (value: string) => void;
+  error?: string | null;
+}) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
+  const errorId = `${id}-error`;
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} value={value || ""} onChange={(event) => onChange(event.target.value)} />
+      <Input
+        id={id}
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className={error ? "border-destructive focus-visible:ring-destructive" : undefined}
+      />
+      {error ? (
+        <p id={errorId} role="alert" className="text-xs font-medium text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1933,27 +1998,38 @@ function GenderToggle({
   return (
     <div className="space-y-2">
       {showLabel ? <Label>Gender</Label> : null}
-      <ToggleGroup
-        type="single"
-        value={value || ""}
-        onValueChange={(nextValue) => {
-          if (nextValue) onChange(nextValue);
-        }}
-        variant="outline"
-        className="grid w-full grid-cols-3 rounded-lg bg-secondary/40 p-1"
-        aria-label="Choose gender"
-      >
-        {["Male", "Female", "Other"].map((option) => (
-          <ToggleGroupItem
-            key={option}
-            value={option}
-            aria-label={option}
-            className="w-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+      <div className="flex gap-2">
+        <ToggleGroup
+          type="single"
+          value={value || ""}
+          onValueChange={onChange}
+          variant="outline"
+          className="grid min-w-0 flex-1 grid-cols-3 rounded-lg bg-secondary/40 p-1"
+          aria-label="Choose gender"
+        >
+          {["Male", "Female", "Other"].map((option) => (
+            <ToggleGroupItem
+              key={option}
+              value={option}
+              aria-label={option}
+              className="w-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              {option}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {value ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Clear gender"
+            onClick={() => onChange("")}
           >
-            {option}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+            <X className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -2152,19 +2228,16 @@ function CvAnalysisNotice({
   }
 
   const modeLabel = analysis.extractionMode === "layoutlmv3" ? "LayoutLMv3" : "Text extraction";
-  const confidenceLabel =
-    typeof analysis.confidence === "number"
-      ? `${Math.round(analysis.confidence * 100)}% confidence`
-      : null;
-
   return (
     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
-        <span className="font-medium text-foreground">CV suggestions applied to empty fields</span>
+        <span className="font-medium text-foreground">CV analysis preview ready</span>
         <Badge variant="secondary">{modeLabel}</Badge>
-        {confidenceLabel && <span className="text-muted-foreground">{confidenceLabel}</span>}
       </div>
+      <p className="mt-2 text-muted-foreground">
+        Review and edit the populated profile fields. Nothing is saved until you select Save.
+      </p>
       {analysis.warnings && analysis.warnings.length > 0 && (
         <p className="mt-2 text-muted-foreground">{analysis.warnings.join(" ")}</p>
       )}
@@ -2172,65 +2245,55 @@ function CvAnalysisNotice({
   );
 }
 
-function preferExisting(current: string, detected?: string | null) {
-  return current.trim() ? current : detected?.trim() ?? "";
+function CvPreviewBanner() {
+  return (
+    <div
+      role="status"
+      className="flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Sparkles className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-foreground">CV analysis preview</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Check every extracted field below and correct anything needed before saving your profile.
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Badge variant="outline">Not saved</Badge>
+      </div>
+    </div>
+  );
 }
 
-function mergeDetectedList(existing: string[], detected?: string[] | null) {
-  const result = existing.map((value) => value.trim()).filter(Boolean);
-  const knownValues = new Set(result.map((value) => value.toLowerCase()));
+function getApiErrorMessage(error: ApiError) {
+  const details = Array.isArray(error.errors)
+    ? error.errors.filter(Boolean)
+    : error.errors
+      ? Object.values(error.errors).filter(Boolean)
+      : [];
 
-  for (const value of detected ?? []) {
-    const cleanedValue = value.trim();
-    const normalizedValue = cleanedValue.toLowerCase();
-    if (cleanedValue && !knownValues.has(normalizedValue)) {
-      result.push(cleanedValue);
-      knownValues.add(normalizedValue);
-    }
+  return details.length > 0 ? details.join(" ") : error.message;
+}
+
+function validatePhoneNumber(value?: string) {
+  const phone = value?.trim() ?? "";
+  if (!phone) return null;
+  if (phone.length > PHONE_VALUE_MAX) {
+    return `Phone number must not exceed ${PHONE_VALUE_MAX} characters.`;
+  }
+  if (!PHONE_ALLOWED_CHARACTERS.test(phone)) {
+    return "Phone number contains invalid characters.";
   }
 
-  return result.length ? result : [""];
-}
-
-function mergeDetectedExperience(
-  existing: ExperienceEntry[],
-  detected?: CvExperienceSuggestion[] | null,
-) {
-  const result = existing
-    .map((entry) => ({
-      companyName: entry.companyName.trim(),
-      position: entry.position.trim(),
-      time: entry.time.trim(),
-      description: entry.description.trim(),
-      skills: entry.skills.trim(),
-      certificates: entry.certificates.trim(),
-    }))
-    .filter(hasExperienceValue);
-  const knownValues = new Set(result.map(experienceKey));
-
-  for (const entry of detected ?? []) {
-    const suggestion: ExperienceEntry = {
-      companyName: entry.companyName?.trim() ?? "",
-      position: entry.position?.trim() ?? "",
-      time: entry.time?.trim() ?? "",
-      description: entry.description?.trim() ?? "",
-      skills: entry.skills?.trim() ?? "",
-      certificates: entry.certificates?.trim() ?? "",
-    };
-    const key = experienceKey(suggestion);
-    if (hasExperienceValue(suggestion) && !knownValues.has(key)) {
-      result.push(suggestion);
-      knownValues.add(key);
-    }
+  const digitCount = phone.replace(/\D/g, "").length;
+  if (digitCount < PHONE_DIGIT_MIN || digitCount > PHONE_DIGIT_MAX) {
+    return `Phone number must contain ${PHONE_DIGIT_MIN} to ${PHONE_DIGIT_MAX} digits.`;
   }
-
-  return result.length ? result : [createEmptyExperience()];
-}
-
-function experienceKey(entry: ExperienceEntry) {
-  return Object.values(entry)
-    .map((value) => value.trim().toLowerCase())
-    .join("|");
+  return null;
 }
 
 function toList(value?: string | string[] | object | null) {

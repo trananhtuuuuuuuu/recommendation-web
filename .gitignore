@@ -42,7 +42,7 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-.vscode/
+.vscode/mcp.json
 .agents/
 .serena/
 skills-lock.json

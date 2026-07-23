@@ -19,6 +19,15 @@ const apiMocks = vi.hoisted(() => ({
   fetchSavedJobs: vi.fn(),
   removeSavedJob: vi.fn(),
   withdrawApplication: vi.fn(),
+  analyzeCv: vi.fn(),
+  updateApplicant: vi.fn(),
+  updateApplicantPrivacy: vi.fn(),
+  uploadCv: vi.fn(),
+}));
+
+const toastMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -37,14 +46,15 @@ vi.mock("@/lib/jobsApi", async () => {
     fetchSavedJobs: apiMocks.fetchSavedJobs,
     removeSavedJob: apiMocks.removeSavedJob,
     withdrawApplication: apiMocks.withdrawApplication,
+    analyzeCv: apiMocks.analyzeCv,
+    updateApplicant: apiMocks.updateApplicant,
+    updateApplicantPrivacy: apiMocks.updateApplicantPrivacy,
+    uploadCv: apiMocks.uploadCv,
   };
 });
 
 vi.mock("sonner", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
+  toast: toastMocks,
 }));
 
 const pageOf = (content: SavedJob[], page: number, totalElements = content.length): PageResponse<SavedJob> => ({
@@ -111,6 +121,91 @@ describe("profile dashboard sections", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
     expect(screen.queryByText("Kubernetes")).not.toBeInTheDocument();
+  });
+
+  it("validates extracted phone numbers in the editable CV preview before save", async () => {
+    apiMocks.fetchApplicant.mockResolvedValue({
+      ...applicantWithSkills([]),
+      phone: "",
+      address: "",
+      gender: "Male",
+      cv: null,
+    });
+    apiMocks.analyzeCv.mockResolvedValue({
+      fullName: "Extracted Candidate",
+      detectedEmail: "extracted@example.com",
+      phone: "0916044262Thu",
+      address: "Ho Chi Minh City",
+      objective: "Become a Java developer",
+      skills: ["Java", "Spring Boot"],
+      experience: [{
+        companyName: "Example Company",
+        position: "Java Intern",
+        time: "2025",
+        description: "Built REST APIs",
+        skills: "Java",
+        certificates: "",
+      }],
+      education: ["HCMUS"],
+      certifications: ["AWS Cloud Practitioner"],
+      extractionMode: "layoutlmv3",
+      confidence: 0.89,
+      warnings: [],
+    });
+    apiMocks.updateApplicant.mockResolvedValue(applicantWithSkills(["Java", "Spring Boot"]));
+    apiMocks.updateApplicantPrivacy.mockResolvedValue({});
+    apiMocks.uploadCv.mockResolvedValue({});
+
+    render(<Profile />);
+
+    expect(await screen.findByText("Candidate One")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Upload CV file" })[0]);
+
+    const cvInput = document.querySelector(
+      'input[type="file"][accept*="application/pdf"]',
+    ) as HTMLInputElement;
+    const cvFile = new File(["cv"], "candidate.pdf", { type: "application/pdf" });
+    fireEvent.change(cvInput, { target: { files: [cvFile] } });
+
+    expect(await screen.findByText("CV analysis preview")).toBeInTheDocument();
+    expect(screen.getByText("Not saved")).toBeInTheDocument();
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("Extracted Candidate")).toHaveLength(2);
+    expect(screen.getAllByDisplayValue("0916044262Thu")).toHaveLength(2);
+    expect(screen.getAllByDisplayValue("Java")).toHaveLength(2);
+    expect(screen.getByDisplayValue("Spring Boot")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Example Company")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("HCMUS")).toBeInTheDocument();
+    expect(screen.getAllByText("Phone number contains invalid characters.")).toHaveLength(2);
+    expect(screen.getByLabelText("Phone")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("CV Phone")).toHaveAttribute("aria-invalid", "true");
+    expect(apiMocks.updateApplicant).not.toHaveBeenCalled();
+    expect(apiMocks.uploadCv).not.toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(apiMocks.updateApplicant).not.toHaveBeenCalled();
+    expect(apiMocks.uploadCv).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledWith("Phone number contains invalid characters.");
+    expect(screen.getByText("CV analysis preview")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "+84 916-044-262" } });
+    fireEvent.change(screen.getByLabelText("CV Phone"), { target: { value: "VN (+84) 916-044-262" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear gender" }));
+
+    expect(screen.queryByText("Phone number contains invalid characters.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Phone")).toHaveAttribute("aria-invalid", "false");
+    expect(screen.getByLabelText("CV Phone")).toHaveAttribute("aria-invalid", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMocks.updateApplicant).toHaveBeenCalledWith(
+      "1",
+      expect.objectContaining({ email: "", gender: "" }),
+    ));
+    expect(apiMocks.uploadCv).toHaveBeenCalled();
   });
 
   it("keeps only the Posts content tab and uploads logo and cover separately", async () => {

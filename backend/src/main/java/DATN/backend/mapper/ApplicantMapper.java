@@ -141,15 +141,19 @@ public class ApplicantMapper {
         }
 
         public static Applicant updateApplicant(Applicant applicant, UpdateApplicantRequest request) {
-                applicant.setAddress(request.getAddress());
-                if (request.getEmail() != null && !request.getEmail().isBlank()) {
+                if (request.getAddress() != null) {
+                        applicant.setAddress(request.getAddress());
+                }
+                if (request.getEmail() != null) {
                         applicant.setEmail(request.getEmail());
                 }
-                applicant.setPhone(request.getPhone());
-                if (request.getUserName() != null && !request.getUserName().isBlank()) {
+                if (request.getPhone() != null) {
+                        applicant.setPhone(request.getPhone());
+                }
+                if (request.getUserName() != null) {
                         applicant.setUserName(request.getUserName());
                 }
-                if (request.getFullName() != null && !request.getFullName().isBlank()) {
+                if (request.getFullName() != null) {
                         applicant.setFullName(request.getFullName());
                 }
                 if (request.getGender() != null) {

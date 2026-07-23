@@ -14,6 +14,8 @@ import DATN.backend.model.Certificate;
 import DATN.backend.model.Education;
 import DATN.backend.model.Experience;
 import DATN.backend.utils.StringListConverter;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
@@ -26,6 +28,11 @@ public class UploadCvRequest {
     private String fullName;
 
     private String address;
+
+    @Size(max = 50, message = "Phone number must not exceed 50 characters")
+    @Pattern(
+        regexp = "^$|^(?=(?:\\D*\\d){7,15}\\D*$)(?:[A-Za-z]{2,3}\\s+)?[+()\\d][+()\\d\\s.-]*$",
+        message = "Invalid phone number")
     private String phone;
     private String objective;
     private Object skills;

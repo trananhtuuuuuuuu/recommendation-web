@@ -222,7 +222,8 @@ class BackendEndpointsIntegrationTests {
         "090-123-4567",
         "+84 90 123 4567",
         "(+84) 90.123.4567",
-        "(028) 3822-1234"
+        "(028) 3822-1234",
+        "VN (+84) 90-123-4567"
     };
 
     for (String phoneNumber : acceptedPhoneNumbers) {
@@ -241,12 +242,158 @@ class BackendEndpointsIntegrationTests {
         .contentType(MediaType.APPLICATION_JSON)
         .content("""
             {
-              "phone": "not-a-phone"
+              "phone": "0916044262Thu"
             }
             """))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("Validation failed"))
-        .andExpect(jsonPath("$.errors[0]").value("Invalid phone number"));
+        .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.hasItem("Invalid phone number")));
+
+    String overlongPhoneNumber = "1".repeat(51);
+    mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(
+            """
+            {
+              "phone": "%s"
+            }
+            """.formatted(overlongPhoneNumber)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Validation failed"))
+        .andExpect(jsonPath("$.errors")
+            .value(org.hamcrest.Matchers.hasItem("Phone number must not exceed 50 characters")));
+
+    MockMultipartFile cvFile = new MockMultipartFile(
+        "cvFile",
+        "formatted-phone-cv.pdf",
+        MediaType.APPLICATION_PDF_VALUE,
+        "sample cv".getBytes());
+
+    mockMvc.perform(multipart("/api/v1/applicants/upload-cv/{applicantId}", applicant.getId())
+        .file(cvFile)
+        .param("phone", "0916044262Thu"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Validation failed"))
+        .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.hasItem("Invalid phone number")));
+
+    mockMvc.perform(multipart("/api/v1/applicants/upload-cv/{applicantId}", applicant.getId())
+        .file(cvFile)
+        .param("fullName", "Applicant One")
+        .param("address", "Ho Chi Minh City")
+        .param("phone", "VN (+84) 90-123-4567")
+        .param("objective", "")
+        .param("skills", "")
+        .param("experience", "")
+        .param("education", "")
+        .param("certifications", "")
+        .param("cvFileUrl", ""))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.phone").value("VN (+84) 90-123-4567"))
+        .andExpect(jsonPath("$.data.cvFileUrl").isNotEmpty());
+
+    mockMvc.perform(delete("/api/v1/applicants/{applicantId}/cv-file", applicant.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void profileUpdatesShouldPersistExplicitlyEmptyFields() throws Exception {
+    Applicant applicant = seedApplicant("clearable-applicant", "clearable-applicant@example.com");
+    Cv cv = seedCv("Java, Spring Boot", "2024-2025");
+    cv.setFullName("Applicant CV");
+    cv.setPhone("+84901234567");
+    cv.setObjective("Backend developer");
+    applicant.setCv(cv);
+    applicantRepository.save(applicant);
+
+    mockMvc.perform(put("/api/v1/applicants/{applicantId}", applicant.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "address": "",
+              "email": "",
+              "phone": "",
+              "userName": "",
+              "fullName": "",
+              "gender": "",
+              "status": ""
+            }
+            """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.address").value(""))
+        .andExpect(jsonPath("$.data.email").value(""))
+        .andExpect(jsonPath("$.data.phone").value(""))
+        .andExpect(jsonPath("$.data.userName").value(""))
+        .andExpect(jsonPath("$.data.fullName").value(""))
+        .andExpect(jsonPath("$.data.gender").doesNotExist())
+        .andExpect(jsonPath("$.data.status").doesNotExist());
+
+    Applicant clearedApplicant = applicantRepository.findById(applicant.getId()).orElseThrow();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getEmail()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getUserName()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getFullName()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getGender()).isNull();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getStatus()).isNull();
+
+    mockMvc.perform(multipart("/api/v1/applicants/upload-cv/{applicantId}", applicant.getId())
+        .param("fullName", "")
+        .param("address", "")
+        .param("phone", "")
+        .param("objective", "")
+        .param("skills", "")
+        .param("experience", "")
+        .param("education", "")
+        .param("certifications", "")
+        .param("cvFileUrl", ""))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.fullName").value(""))
+        .andExpect(jsonPath("$.data.address").value(""))
+        .andExpect(jsonPath("$.data.phone").value(""))
+        .andExpect(jsonPath("$.data.objective").value(""))
+        .andExpect(jsonPath("$.data.experience").doesNotExist())
+        .andExpect(jsonPath("$.data.education").doesNotExist())
+        .andExpect(jsonPath("$.data.certifications").doesNotExist());
+
+    Cv clearedCv = applicantRepository.findById(applicant.getId()).orElseThrow().getCv();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getFullName()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getAddress()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getPhone()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getObjective()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getSkills()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getExperienceObj()).isNull();
+    org.assertj.core.api.Assertions.assertThat(clearedCv.getEducationObj()).isNull();
+
+    Recruiter recruiter = seedRecruiter("clearable-recruiter", "clearable-recruiter@example.com");
+    mockMvc.perform(put("/api/v1/recruiters/{recruiterId}", recruiter.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "address": "",
+              "email": "",
+              "phone": "",
+              "userName": "",
+              "companyName": "",
+              "companyDescription": "",
+              "companyLocation": "",
+              "companySize": "",
+              "industry": "",
+              "website": "",
+              "contactEmail": "",
+              "contactPhone": "",
+              "taxCode": "",
+              "businessLicense": "",
+              "establishedDate": "",
+              "companyType": ""
+            }
+            """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.email").value(""))
+        .andExpect(jsonPath("$.data.userName").value(""))
+        .andExpect(jsonPath("$.data.companyName").value(""))
+        .andExpect(jsonPath("$.data.companyDescription").value(""))
+        .andExpect(jsonPath("$.data.companyLocation").value(""))
+        .andExpect(jsonPath("$.data.contactEmail").value(""))
+        .andExpect(jsonPath("$.data.contactPhone").value(""));
   }
 
   @Test
@@ -286,7 +433,7 @@ class BackendEndpointsIntegrationTests {
             """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.userName").value("updatedapplicant"))
-        .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
+        .andExpect(jsonPath("$.data.fullName").value(""))
         .andExpect(jsonPath("$.data.phone").value("0787549324"))
         .andExpect(jsonPath("$.data.address").value("Da Nang"))
         .andExpect(jsonPath("$.data.status").value("Normal"));
@@ -314,7 +461,7 @@ class BackendEndpointsIntegrationTests {
 
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.fullName").value("Applicant One"))
+        .andExpect(jsonPath("$.data.fullName").value(""))
         .andExpect(jsonPath("$.data.email").value("updated-applicant@example.com"))
         .andExpect(jsonPath("$.data.phone").value("0787549324"))
         .andExpect(jsonPath("$.data.showContactInfo").value(true));
