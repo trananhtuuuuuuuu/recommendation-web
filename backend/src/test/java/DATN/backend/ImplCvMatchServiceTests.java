@@ -12,9 +12,13 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import DATN.backend.Enum.DegreeEnum;
 import DATN.backend.model.Applicant;
+import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
+import DATN.backend.model.Education;
 import DATN.backend.model.Job;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.JobRepository;
@@ -38,6 +42,16 @@ class ImplCvMatchServiceTests {
 
         Cv cv = new Cv();
         cv.setSkills(List.of("Java", "Spring Boot"));
+        Education education = new Education();
+        education.setDegree(DegreeEnum.BSc);
+        education.setMajor("Computer Science");
+        education.setName("HCMUS");
+        cv.setEducationObj(education);
+        Certificate certificate = new Certificate();
+        certificate.setScore("900");
+        certificate.setProvider("TOEIC");
+        certificate.setName("English Certificate");
+        cv.setCertificate(certificate);
         Applicant applicant = new Applicant();
         applicant.setId(10L);
         applicant.setCv(cv);
@@ -66,5 +80,15 @@ class ImplCvMatchServiceTests {
         assertThat(result.getPrivacyEpsilon()).isNull();
         assertThat(result.getScoreSensitivity()).isNull();
         assertThat(result.getPrivacyMechanism()).isNull();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> cvCaptor = ArgumentCaptor.forClass(Map.class);
+        org.mockito.Mockito.verify(aiService).matchCvToJob(
+                cvCaptor.capture(), any(), anyBoolean(), anyString());
+        Map<String, Object> entities = (Map<String, Object>) cvCaptor.getValue().get("entitiesByLabel");
+        assertThat(entities.get("EDUCATION"))
+                .isEqualTo(List.of("BSc", "Computer Science", "HCMUS"));
+        assertThat(entities.get("CERTIFICATION"))
+                .isEqualTo(List.of("900", "TOEIC", "English Certificate"));
     }
 }

@@ -12,10 +12,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RegistrationApplicantRequest {
-    @NotBlank(message = "Address is required")
     private String address;
 
-    @NotBlank(message = "Email is required")
     private String email;
 
     @NotBlank(message = "Password is required")
@@ -28,7 +26,6 @@ public class RegistrationApplicantRequest {
     @NotBlank(message = "User name is required")
     private String userName;
 
-    @NotBlank(message = "Full name is required")
     private String fullName;
 
     private String gender = null;

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -24,8 +25,11 @@ class MatchRequest(BaseModel):
 
 MAX_UPLOAD_BYTES = int(os.getenv("AI_MAX_UPLOAD_BYTES", str(15 * 1024 * 1024)))
 LOGGER = logging.getLogger(__name__)
+DEFAULT_LAYOUTLM_MODEL_DIR = (
+    Path(__file__).resolve().parents[1] / "model" / "layoutlmv3"
+)
 parser = CvParser(
-    model_dir=os.getenv("AI_MODEL_DIR", "/models/layoutlmv3"),
+    model_dir=os.getenv("AI_MODEL_DIR", str(DEFAULT_LAYOUTLM_MODEL_DIR)),
     max_pages=int(os.getenv("AI_MAX_PAGES", "3")),
     enable_model=os.getenv("AI_WITH_MODEL", "false").lower() == "true",
     ocr_languages=os.getenv("AI_OCR_LANGUAGES", "eng+vie"),

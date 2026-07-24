@@ -19,8 +19,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # LayoutLMv3 CV extraction service. Put the exported notebook model in
-  # ai/model, or set AI_MODEL_HOST_PATH to another local model directory.
+  # AI model root: LayoutLMv3 files live in ai/model/layoutlmv3, while the
+  # recommender_svm*.joblib files live directly in ai/model.
   ai:
     build:
       context: .
@@ -35,9 +35,8 @@ services:
       - rw-network
     environment:
       AI_WITH_MODEL: ${AI_WITH_MODEL:-true}
-      # ai/model is mounted at /app/model so BOTH the LayoutLMv3 dir and the
-      # recommender_svm*.joblib files (config.MODEL_DIR=/app/model) are found.
-      AI_MODEL_DIR: /app/model
+      # The model root is mounted at /app/model so both model families resolve.
+      AI_MODEL_DIR: /app/model/layoutlmv3
       AI_MAX_PAGES: ${AI_MAX_PAGES:-3}
       AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
       AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}

@@ -3,15 +3,27 @@
 This service runs inference for the LayoutLMv3 model produced by
 `train_layoutlmv3_cv.ipynb`.
 
-Place the exported Hugging Face model directory on the host and set:
+Place the exported Hugging Face checkpoint under `model/layoutlmv3`:
 
-```bash
-AI_MODEL_HOST_PATH=/absolute/path/to/layoutlmv3_out/model
-AI_WITH_MODEL=true
+```text
+ai/model/
+├── layoutlmv3/
+│   ├── config.json
+│   ├── model.safetensors
+│   └── processor/tokenizer files
+└── recommender_svm*.joblib
 ```
 
-The directory must contain files such as `config.json`, model weights, and the
-saved processor files. Docker Compose mounts it at `/models/layoutlmv3`.
+Docker Compose mounts the model root at `/app/model`; the parser reads
+`/app/model/layoutlmv3`, while the recommender reads the `.joblib` files from
+`/app/model`.
+
+To mount a different model root with the same structure, set:
+
+```bash
+AI_MODEL_HOST_PATH=/absolute/path/to/model-root
+AI_WITH_MODEL=true
+```
 
 When the model is not mounted, PDF, DOC, DOCX, PNG, JPG, WebP, BMP, and TIFF
 CVs use a conservative fallback. Tesseract OCR reads image and scanned PDF
@@ -32,7 +44,7 @@ To install CPU PyTorch and Transformers for the exported model:
 
 ```bash
 AI_WITH_MODEL=true \
-AI_MODEL_HOST_PATH=/absolute/path/to/layoutlmv3_out/model \
+AI_MODEL_HOST_PATH=/absolute/path/to/model-root \
 docker compose up --build -d
 ```
 

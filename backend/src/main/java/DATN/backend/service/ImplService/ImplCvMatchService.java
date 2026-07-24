@@ -156,9 +156,9 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
             return List.of();
         }
         List<String> values = new ArrayList<>();
-        addIfPresent(values, certificate.getName());
-        addIfPresent(values, certificate.getProvider());
         addIfPresent(values, certificate.getScore());
+        addIfPresent(values, certificate.getProvider());
+        addIfPresent(values, certificate.getName());
         return values;
     }
 
@@ -167,11 +167,11 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
             return List.of();
         }
         List<String> values = new ArrayList<>();
-        addIfPresent(values, education.getName());
-        addIfPresent(values, education.getMajor());
         if (education.getDegree() != null) {
             values.add(education.getDegree().name());
         }
+        addIfPresent(values, education.getMajor());
+        addIfPresent(values, education.getName());
         return values;
     }
 

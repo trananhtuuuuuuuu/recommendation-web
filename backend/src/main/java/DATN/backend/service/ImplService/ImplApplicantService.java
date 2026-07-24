@@ -68,7 +68,8 @@ public class ImplApplicantService implements InterfaceApplicantService {
         if (userRepository.findByUserName(request.getUserName()).isPresent()) {
             throw new AlreadyExistException("User name already exists");
         }
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+        if (StringUtils.hasText(request.getEmail())
+                && userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new AlreadyExistException("Email already exists");
         }
 

@@ -2,6 +2,8 @@ package DATN.backend.model;
 
 import java.sql.Date;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import DATN.backend.Enum.DegreeEnum;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,19 +24,20 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonPropertyOrder({ "degree", "major", "name" })
 public class Education extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, name = "name")
+    @Column(nullable = false, name = "name", columnDefinition = "TEXT")
     private String name;
 
-    @Column(nullable = true, name = "major")
+    @Column(nullable = true, name = "major", columnDefinition = "TEXT")
     private String major;
 
-    @Column(nullable = true, name = "degree")
+    @Column(nullable = true, name = "degree", columnDefinition = "TEXT")
     @Enumerated(EnumType.STRING)
     private DegreeEnum degree;
 
@@ -44,7 +47,7 @@ public class Education extends BaseEntity {
     @Column(nullable = true, name = "end_date")
     private Date endDate;
 
-    @Column(nullable = true, name = "period")
+    @Column(nullable = true, name = "period", columnDefinition = "TEXT")
     private String time;
 
     @Column(nullable = false, name = "isPresent")

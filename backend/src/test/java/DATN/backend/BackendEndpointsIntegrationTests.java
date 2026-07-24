@@ -153,6 +153,23 @@ class BackendEndpointsIntegrationTests {
   }
 
   @Test
+  void applicantRegistrationShouldOnlyRequireUserNameAndPassword() throws Exception {
+    mockMvc.perform(post("/api/v1/registrations/applicant")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "userName": "minimalapplicant",
+              "password": "secret123"
+            }
+            """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.userName").value("minimalapplicant"))
+        .andExpect(jsonPath("$.data.email").doesNotExist())
+        .andExpect(jsonPath("$.data.fullName").doesNotExist())
+        .andExpect(jsonPath("$.data.roleName").value("APPLICANT"));
+  }
+
+  @Test
   void applicantRegistrationValidationShouldReturnErrorsArray() throws Exception {
     mockMvc.perform(post("/api/v1/registrations/applicant")
         .contentType(MediaType.APPLICATION_JSON)

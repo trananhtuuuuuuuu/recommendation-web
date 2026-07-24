@@ -110,16 +110,16 @@ export default function ApplicantRegistration() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input id="fullName" name="fullName" placeholder="John Doe" value={form.fullName} onChange={handleChange} required />
+              <Label htmlFor="fullName">Full Name (optional)</Label>
+              <Input id="fullName" name="fullName" placeholder="John Doe" value={form.fullName} onChange={handleChange} />
               {fieldErrors.fullName && <p className="text-xs text-destructive">{fieldErrors.fullName}</p>}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email (optional)</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input id="email" name="email" type="email" placeholder="you@example.com" className="pl-9" value={form.email} onChange={handleChange} required />
+                <Input id="email" name="email" type="email" placeholder="you@example.com" className="pl-9" value={form.email} onChange={handleChange} />
               </div>
               {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
             </div>

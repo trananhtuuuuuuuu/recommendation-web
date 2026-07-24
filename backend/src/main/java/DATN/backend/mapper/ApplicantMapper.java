@@ -89,12 +89,12 @@ public class ApplicantMapper {
 
         public static Applicant toNewApplicant(RegistrationApplicantRequest request) {
                 Applicant applicant = new Applicant();
-                applicant.setAddress(request.getAddress());
-                applicant.setEmail(request.getEmail());
+                applicant.setAddress(toNullableText(request.getAddress()));
+                applicant.setEmail(toNullableText(request.getEmail()));
                 applicant.setPassword(request.getPassword());
-                applicant.setPhone(request.getPhone());
+                applicant.setPhone(toNullableText(request.getPhone()));
                 applicant.setUserName(request.getUserName());
-                applicant.setFullName(request.getFullName());
+                applicant.setFullName(toNullableText(request.getFullName()));
                 applicant.setGender(request.getGender() == null || request.getGender().isBlank() ? null
                                 : GenderEnum.valueOf(request.getGender()));
                 applicant
@@ -102,6 +102,10 @@ public class ApplicantMapper {
                                                 ? ApplicantStatusEnum.OpenToWork
                                                 : toApplicantStatus(request.getStatus()));
                 return applicant;
+        }
+
+        private static String toNullableText(String value) {
+                return value == null || value.isBlank() ? null : value.trim();
         }
 
         public static Applicant updateApplicant(Applicant applicant, UpdateApplicantRequest request) {
