@@ -8,6 +8,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
@@ -299,6 +303,7 @@ class BackendEndpointsIntegrationTests {
   @Test
   void profileUpdatesShouldPersistExplicitlyEmptyFields() throws Exception {
     Applicant applicant = seedApplicant("clearable-applicant", "clearable-applicant@example.com");
+    String applicantPassword = applicant.getPassword();
     Cv cv = seedCv("Java, Spring Boot", "2024-2025");
     cv.setFullName("Applicant CV");
     cv.setPhone("+84901234567");
@@ -323,14 +328,15 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.address").value(""))
         .andExpect(jsonPath("$.data.email").value(""))
         .andExpect(jsonPath("$.data.phone").value(""))
-        .andExpect(jsonPath("$.data.userName").value(""))
+        .andExpect(jsonPath("$.data.userName").value("clearable-applicant"))
         .andExpect(jsonPath("$.data.fullName").value(""))
         .andExpect(jsonPath("$.data.gender").doesNotExist())
         .andExpect(jsonPath("$.data.status").doesNotExist());
 
     Applicant clearedApplicant = applicantRepository.findById(applicant.getId()).orElseThrow();
     org.assertj.core.api.Assertions.assertThat(clearedApplicant.getEmail()).isEmpty();
-    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getUserName()).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getUserName()).isEqualTo("clearable-applicant");
+    org.assertj.core.api.Assertions.assertThat(clearedApplicant.getPassword()).isEqualTo(applicantPassword);
     org.assertj.core.api.Assertions.assertThat(clearedApplicant.getFullName()).isEmpty();
     org.assertj.core.api.Assertions.assertThat(clearedApplicant.getGender()).isNull();
     org.assertj.core.api.Assertions.assertThat(clearedApplicant.getStatus()).isNull();
@@ -364,6 +370,7 @@ class BackendEndpointsIntegrationTests {
     org.assertj.core.api.Assertions.assertThat(clearedCv.getEducationObj()).isNull();
 
     Recruiter recruiter = seedRecruiter("clearable-recruiter", "clearable-recruiter@example.com");
+    String recruiterPassword = recruiter.getPassword();
     mockMvc.perform(put("/api/v1/recruiters/{recruiterId}", recruiter.getId())
         .contentType(MediaType.APPLICATION_JSON)
         .content("""
@@ -388,12 +395,16 @@ class BackendEndpointsIntegrationTests {
             """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.email").value(""))
-        .andExpect(jsonPath("$.data.userName").value(""))
+        .andExpect(jsonPath("$.data.userName").value("clearable-recruiter"))
         .andExpect(jsonPath("$.data.companyName").value(""))
         .andExpect(jsonPath("$.data.companyDescription").value(""))
         .andExpect(jsonPath("$.data.companyLocation").value(""))
         .andExpect(jsonPath("$.data.contactEmail").value(""))
         .andExpect(jsonPath("$.data.contactPhone").value(""));
+
+    Recruiter clearedRecruiter = recruiterRepository.findById(recruiter.getId()).orElseThrow();
+    org.assertj.core.api.Assertions.assertThat(clearedRecruiter.getUserName()).isEqualTo("clearable-recruiter");
+    org.assertj.core.api.Assertions.assertThat(clearedRecruiter.getPassword()).isEqualTo(recruiterPassword);
   }
 
   @Test
@@ -405,7 +416,7 @@ class BackendEndpointsIntegrationTests {
     mockMvc.perform(get("/api/v1/applicants"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].userName").doesNotExist())
-        .andExpect(jsonPath("$.data[0].privacyApplied").value(true));
+        .andExpect(jsonPath("$.data[0].privacyApplied").doesNotExist());
 
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
         .andExpect(status().isOk())
@@ -432,39 +443,27 @@ class BackendEndpointsIntegrationTests {
             }
             """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.userName").value("updatedapplicant"))
+        .andExpect(jsonPath("$.data.userName").value("applicant01"))
         .andExpect(jsonPath("$.data.fullName").value(""))
         .andExpect(jsonPath("$.data.phone").value("0787549324"))
         .andExpect(jsonPath("$.data.address").value("Da Nang"))
         .andExpect(jsonPath("$.data.status").value("Normal"));
 
-    mockMvc.perform(put("/api/v1/applicants/{applicantId}/privacy", applicant.getId())
-        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(applicant))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""
-            {
-              "profileVisibleToRecruiters": true,
-              "showFullName": true,
-              "showContactInfo": false,
-              "showAddress": false,
-              "showCvFile": false,
-              "showObjective": true,
-              "showSkills": true,
-              "showExperience": true,
-              "showEducation": true,
-              "showCertifications": true
-            }
-            """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.showFullName").value(true))
-        .andExpect(jsonPath("$.data.showContactInfo").value(false));
-
     mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId()))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.fullName").value("Candidate"))
+        .andExpect(jsonPath("$.data.email").doesNotExist())
+        .andExpect(jsonPath("$.data.phone").doesNotExist());
+
+    mockMvc.perform(get("/api/v1/applicants/{applicantId}", applicant.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.userName").doesNotExist())
+        .andExpect(jsonPath("$.data.password").doesNotExist())
         .andExpect(jsonPath("$.data.fullName").value(""))
         .andExpect(jsonPath("$.data.email").value("updated-applicant@example.com"))
         .andExpect(jsonPath("$.data.phone").value("0787549324"))
-        .andExpect(jsonPath("$.data.showContactInfo").value(true));
+        .andExpect(jsonPath("$.data.address").value("Da Nang"));
 
     mockMvc.perform(post("/api/v1/applicants/save/job")
         .contentType(MediaType.APPLICATION_JSON)
@@ -1121,14 +1120,22 @@ class BackendEndpointsIntegrationTests {
         recruiter.getId(), job.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
         .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"llm\":false,\"method\":\"tfidf\"}"))
+        .content("{\"llm\":true,\"method\":\"tfidf\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.message").value("Job applicants matched and ranked"))
         .andExpect(jsonPath("$.data[0].applicationOrder").value(2))
         .andExpect(jsonPath("$.data[0].match.matchPercent").value(91))
+        .andExpect(jsonPath("$.data[0].match.reason").doesNotExist())
+        .andExpect(jsonPath("$.data[0].match.suggestions").isEmpty())
+        .andExpect(jsonPath("$.data[0].match.perFieldScores").isEmpty())
         .andExpect(jsonPath("$.data[0].match.differentialPrivacyApplied").value(false))
         .andExpect(jsonPath("$.data[1].applicationOrder").value(1))
         .andExpect(jsonPath("$.data[1].match.matchPercent").value(64));
+
+    verify(cvMatchService, times(2)).matchApplicantToJob(
+        any(),
+        eq(job.getId()),
+        argThat(options -> Boolean.FALSE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants/{applicantId}/ai-match",
         recruiter.getId(), job.getId(), firstApplicant.getId())

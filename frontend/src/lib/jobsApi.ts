@@ -86,19 +86,6 @@ export interface Applicant {
   gender?: string;
   status?: string;
   cvId?: string | number | null;
-  profileVisibleToRecruiters?: boolean;
-  showFullName?: boolean;
-  showContactInfo?: boolean;
-  showAddress?: boolean;
-  showCvFile?: boolean;
-  showObjective?: boolean;
-  showSkills?: boolean;
-  showExperience?: boolean;
-  showEducation?: boolean;
-  showCertifications?: boolean;
-  privacyApplied?: boolean;
-  anonymized?: boolean;
-  privacyNotice?: string;
   cv?: {
     id?: string | number;
     fullName?: string;
@@ -420,24 +407,6 @@ export const fetchApplicant = (id: string | number) =>
 export const updateApplicant = (id: string | number, body: Partial<Applicant>) =>
   apiRequest<Applicant>(`/api/v1/applicants/${id}`, { method: "PUT", body });
 
-export type ApplicantPrivacySettings = Pick<
-  Applicant,
-  | "profileVisibleToRecruiters"
-  | "profileVisibleToOtherApplicants"
-  | "showFullName"
-  | "showContactInfo"
-  | "showAddress"
-  | "showCvFile"
-  | "showObjective"
-  | "showSkills"
-  | "showExperience"
-  | "showEducation"
-  | "showCertifications"
->;
-
-export const updateApplicantPrivacy = (id: string | number, body: ApplicantPrivacySettings) =>
-  apiRequest<Applicant>(`/api/v1/applicants/${id}/privacy`, { method: "PUT", body });
-
 export const fetchRecruiters = () => apiRequest<Recruiter[]>("/api/v1/recruiters");
 export const fetchRecruiter = (id: string | number) =>
   apiRequest<Recruiter>(`/api/v1/recruiters/${id}`);
@@ -499,6 +468,7 @@ export interface CvJobMatch {
 }
 
 export const AI_MATCH_OPTIONS = { llm: true, method: "tfidf" } as const;
+export const AI_SCORE_OPTIONS = { llm: false, method: "tfidf" } as const;
 
 export const matchCvToJob = (
   applicantId: string | number,

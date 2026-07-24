@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, Mail, Phone, MapPin, Shield, ArrowLeft, Briefcase, Loader2, AlertCircle, Download, GraduationCap, Award } from "lucide-react";
+import { User, Mail, Phone, MapPin, ArrowLeft, Briefcase, Loader2, AlertCircle, Download, GraduationCap, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ApiError, resolveApiAssetUrl } from "@/lib/api";
@@ -64,20 +64,14 @@ export default function ApplicantDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h2 className="font-display text-xl font-bold text-foreground">{applicant.fullName ?? applicant.userName ?? "Applicant"}</h2>
-              <Badge className="bg-primary/10 text-primary text-[10px]"><Shield className="w-3 h-3 mr-1" />Shared profile</Badge>
               {applicant.status && <Badge className={`${applicant.status === "OpenToWork" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"} text-[10px]`}>{applicant.status}</Badge>}
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               {applicant.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {applicant.email}</span>}
               {applicant.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {applicant.phone}</span>}
               {applicant.address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {applicant.address}</span>}
-              {!applicant.email && !applicant.phone && !applicant.address ? (
-                <span className="text-xs">Contact and location fields are not shared.</span>
-              ) : null}
+              {!applicant.email && !applicant.phone && !applicant.address ? <span className="text-xs">No contact information provided.</span> : null}
             </div>
-            {applicant.privacyNotice && (
-              <p className="mt-2 text-xs text-muted-foreground">{applicant.privacyNotice}</p>
-            )}
           </div>
         </div>
       </motion.div>
@@ -89,7 +83,7 @@ export default function ApplicantDetail() {
             {sharedProfileFields.map((field) => (
               <p key={field.label}>{field.label}: <span className="text-foreground">{field.value}</span></p>
             ))}
-            {sharedProfileFields.length === 0 ? <p>No additional profile fields shared.</p> : null}
+            {sharedProfileFields.length === 0 ? <p>No additional profile fields provided.</p> : null}
           </div>
         </div>
 

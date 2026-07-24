@@ -21,7 +21,6 @@ const apiMocks = vi.hoisted(() => ({
   withdrawApplication: vi.fn(),
   analyzeCv: vi.fn(),
   updateApplicant: vi.fn(),
-  updateApplicantPrivacy: vi.fn(),
   uploadCv: vi.fn(),
 }));
 
@@ -48,7 +47,6 @@ vi.mock("@/lib/jobsApi", async () => {
     withdrawApplication: apiMocks.withdrawApplication,
     analyzeCv: apiMocks.analyzeCv,
     updateApplicant: apiMocks.updateApplicant,
-    updateApplicantPrivacy: apiMocks.updateApplicantPrivacy,
     uploadCv: apiMocks.uploadCv,
   };
 });
@@ -153,7 +151,6 @@ describe("profile dashboard sections", () => {
       warnings: [],
     });
     apiMocks.updateApplicant.mockResolvedValue(applicantWithSkills(["Java", "Spring Boot"]));
-    apiMocks.updateApplicantPrivacy.mockResolvedValue({});
     apiMocks.uploadCv.mockResolvedValue({});
 
     render(<Profile />);
@@ -170,6 +167,9 @@ describe("profile dashboard sections", () => {
     expect(await screen.findByText("CV analysis preview")).toBeInTheDocument();
     expect(screen.getByText("Not saved")).toBeInTheDocument();
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Privacy And Visibility")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("User Name")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("User Name")).toHaveValue("candidate");
     expect(screen.getAllByDisplayValue("Extracted Candidate")).toHaveLength(2);
     expect(screen.getAllByDisplayValue("0916044262Thu")).toHaveLength(2);
     expect(screen.getAllByDisplayValue("Java")).toHaveLength(2);

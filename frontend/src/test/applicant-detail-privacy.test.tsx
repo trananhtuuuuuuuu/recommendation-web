@@ -12,7 +12,7 @@ vi.mock("@/lib/jobsApi", async () => {
   return { ...actual, fetchApplicant: apiMocks.fetchApplicant };
 });
 
-describe("recruiter-visible applicant profile", () => {
+describe("recruiter applicant profile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.fetchApplicant.mockResolvedValue({
@@ -27,7 +27,7 @@ describe("recruiter-visible applicant profile", () => {
     });
   });
 
-  it("renders only the profile fields returned by the privacy-filtered API", async () => {
+  it("renders all non-authentication profile fields returned to the recruiter", async () => {
     render(
       <MemoryRouter initialEntries={["/applicants/12"]}>
         <Routes><Route path="/applicants/:id" element={<ApplicantDetail />} /></Routes>
@@ -39,6 +39,7 @@ describe("recruiter-visible applicant profile", () => {
     expect(screen.getAllByText("+84901234567")).not.toHaveLength(0);
     expect(screen.getAllByText("Ho Chi Minh City")).not.toHaveLength(0);
     expect(screen.getByText("Data Engineering")).toBeInTheDocument();
+    expect(screen.queryByText(/privacy|shared profile/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Candidate #/)).not.toBeInTheDocument();
   });
 });

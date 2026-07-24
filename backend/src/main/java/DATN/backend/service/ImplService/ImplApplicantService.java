@@ -34,7 +34,6 @@ import DATN.backend.repository.UserRepository;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
-import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.response.applicant.ApplicantResponse;
 import DATN.backend.response.applicant.SavedJobResponse;
@@ -95,6 +94,13 @@ public class ImplApplicantService implements InterfaceApplicantService {
     }
 
     @Override
+    public ApplicantResponse getApplicantForRecruiter(Long applicantId) {
+        Applicant applicant = applicantRepository.findById(applicantId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+        return ApplicantMapper.toRecruiterVisibleApplicantResponse(applicant);
+    }
+
+    @Override
     public List<ApplicantResponse> getAllApplicants(boolean fullAccess) {
         return applicantRepository.findAll().stream()
                 .map(applicant -> ApplicantMapper.toApplicantResponse(applicant, fullAccess))
@@ -109,15 +115,6 @@ public class ImplApplicantService implements InterfaceApplicantService {
         ApplicantMapper.updateApplicant(applicant, request);
         Applicant savedApplicant = applicantRepository.save(applicant);
         return ApplicantMapper.toApplicantResponse(savedApplicant);
-    }
-
-    @Override
-    @Transactional
-    public ApplicantResponse updateApplicantPrivacy(Long applicantId, UpdateApplicantPrivacyRequest request) {
-        Applicant applicant = applicantRepository.findById(applicantId)
-                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
-        ApplicantMapper.updateApplicantPrivacy(applicant, request);
-        return ApplicantMapper.toApplicantResponse(applicantRepository.save(applicant));
     }
 
     @Override

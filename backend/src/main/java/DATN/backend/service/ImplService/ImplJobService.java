@@ -108,16 +108,44 @@ public class ImplJobService implements InterfaceJobService {
                 verifyPostingRecruiter(jobId, recruiterId);
                 List<ApplicantJob> applications = applicantJobRepository
                                 .findByJob_IdAndActionTypeOrderByIdAsc(jobId, APPLIED_ACTION);
-                CvJobMatchRequest options = request == null ? new CvJobMatchRequest() : request;
+                CvJobMatchRequest options = new CvJobMatchRequest(
+                                false,
+                                request == null ? null : request.getMethod());
 
                 return java.util.stream.IntStream.range(0, applications.size())
                                 .mapToObj(index -> toRecruiterMatch(applications.get(index), jobId, index + 1, options))
+                                .map(this::toScoreOnlyMatch)
                                 .sorted(java.util.Comparator
                                                 .comparingInt((RecruiterApplicantMatchResponse item) -> item.getMatch()
                                                                 .getMatchPercent())
                                                 .reversed()
                                                 .thenComparingInt(RecruiterApplicantMatchResponse::getApplicationOrder))
                                 .toList();
+        }
+
+        private RecruiterApplicantMatchResponse toScoreOnlyMatch(RecruiterApplicantMatchResponse response) {
+                CvJobMatchResponse match = response.getMatch();
+                CvJobMatchResponse scoreOnly = new CvJobMatchResponse(
+                                match.getApplicantId(),
+                                match.getJobId(),
+                                match.isPassedFilter(),
+                                match.getMatchScore(),
+                                match.getMatchPercent(),
+                                null,
+                                List.of(),
+                                java.util.Map.of(),
+                                List.of(),
+                                match.getScoringMethod(),
+                                match.getModelUsed(),
+                                match.isDifferentialPrivacyApplied(),
+                                match.getPrivacyEpsilon(),
+                                match.getScoreSensitivity(),
+                                match.getPrivacyMechanism());
+                return new RecruiterApplicantMatchResponse(
+                                response.getApplicationId(),
+                                response.getApplicationOrder(),
+                                response.getApplicant(),
+                                scoreOnly);
         }
 
         /**

@@ -26,7 +26,6 @@ import org.springframework.web.multipart.MultipartFile;
 import DATN.backend.request.applicant.CvJobMatchRequest;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
-import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.model.Certificate;
 import DATN.backend.model.Education;
@@ -88,6 +87,10 @@ public class ApplicantController {
         @GetMapping("/{applicantId}")
         public ResponseEntity<ApiResponse> getApplicantById(@PathVariable Long applicantId,
                         Authentication authentication) {
+                if (isRecruiter(authentication)) {
+                        return ResponseEntity.ok(ApiResponse.success("Applicant found", HttpStatus.OK,
+                                        applicantService.getApplicantForRecruiter(applicantId)));
+                }
                 return ResponseEntity.ok(ApiResponse.success("Applicant found", HttpStatus.OK,
                                 applicantService.getApplicantById(applicantId,
                                                 hasFullApplicantAccess(applicantId, authentication))));
@@ -99,17 +102,6 @@ public class ApplicantController {
                         @Valid @RequestBody UpdateApplicantRequest request) {
                 return ResponseEntity.ok(ApiResponse.success("Applicant updated successfully", HttpStatus.OK,
                                 applicantService.updateApplicant(applicantId, request)));
-        }
-
-        @Operation(summary = "Update applicant privacy and visibility settings")
-        @PutMapping("/{applicantId}/privacy")
-        public ResponseEntity<ApiResponse> updateApplicantPrivacy(@PathVariable Long applicantId,
-                        @Valid @RequestBody UpdateApplicantPrivacyRequest request,
-                        Authentication authentication) {
-                verifyApplicantAccess(applicantId, authentication);
-                return ResponseEntity.ok(ApiResponse.success("Applicant privacy settings updated successfully",
-                                HttpStatus.OK,
-                                applicantService.updateApplicantPrivacy(applicantId, request)));
         }
 
         @Operation(summary = "Get saved jobs for applicant")
@@ -275,6 +267,12 @@ public class ApplicantController {
                 return authentication != null
                                 && authentication.getPrincipal() instanceof InforInsideToken tokenInformation
                                 && "ADMIN".equalsIgnoreCase(tokenInformation.getRoleName());
+        }
+
+        private boolean isRecruiter(Authentication authentication) {
+                return authentication != null
+                                && authentication.getPrincipal() instanceof InforInsideToken tokenInformation
+                                && "RECRUITER".equalsIgnoreCase(tokenInformation.getRoleName());
         }
 
         private Pageable toPageable(int page, int size, String sort) {

@@ -84,9 +84,6 @@ public class RecruiterMapper {
         if (request.getPhone() != null) {
             recruiter.setPhone(request.getPhone());
         }
-        if (request.getUserName() != null) {
-            recruiter.setUserName(request.getUserName());
-        }
         if (request.getCompanyName() != null) {
             recruiter.setCompanyName(request.getCompanyName());
         }

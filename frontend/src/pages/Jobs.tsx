@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AI_MATCH_OPTIONS, fetchJobsPage, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch, type PageResponse } from "@/lib/jobsApi";
+import { AI_MATCH_OPTIONS, AI_SCORE_OPTIONS, fetchJobsPage, getJobId, getJobTitle, saveJob, matchCvToJob, type Job, type CvJobMatch, type PageResponse } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -150,7 +150,7 @@ export default function Jobs() {
       const entries = await Promise.all(
         filtered.map(async (j) => {
           const jobId = getJobId(j);
-          try { return [jobId, toAnalysis(await matchCvToJob(applicantId, jobId))] as const; }
+          try { return [jobId, toAnalysis(await matchCvToJob(applicantId, jobId, AI_SCORE_OPTIONS))] as const; }
           catch { return [jobId, null] as const; }
         })
       );
@@ -170,7 +170,7 @@ export default function Jobs() {
 
   const handleSingleSuggestion = async (job: Job) => {
     const id = getJobId(job);
-    if (singleResults[id] || allResults[id]) {
+    if (singleResults[id]) {
       setExpandedSuggestions((current) => {
         const next = new Set(current);
         if (next.has(id)) next.delete(id); else next.add(id);
@@ -192,7 +192,6 @@ export default function Jobs() {
     }
   };
 
-  const getResult = (id: string) => compareAll ? allResults[id] : singleResults[id];
   const clearAll = () => {
     setCompareAll(false);
     setAllResults({});
@@ -329,7 +328,8 @@ export default function Jobs() {
       <div className="grid xl:grid-cols-2 gap-4">
         {filtered.map((job, i) => {
           const id = getJobId(job);
-          const result = getResult(id);
+          const scoreResult = singleResults[id] ?? allResults[id];
+          const suggestionResult = singleResults[id];
           const isExpanded = expandedSuggestions.has(id);
           const isSaved = savedJobs.has(id);
           const isApplied = appliedJobs.has(id);
@@ -348,14 +348,14 @@ export default function Jobs() {
                     <h3 className="font-display font-semibold text-foreground group-hover:text-primary transition-colors">
                       {getJobTitle(job)}
                     </h3>
-                    {result && (
-                      result.passedFilter ? (
+                    {scoreResult && (
+                      scoreResult.passedFilter ? (
                         <Badge className={`text-[10px] font-bold ${
-                          result.matchPercent >= 60 ? "bg-success/15 text-success" :
-                          result.matchPercent >= 35 ? "bg-warning/15 text-warning" :
+                          scoreResult.matchPercent >= 60 ? "bg-success/15 text-success" :
+                          scoreResult.matchPercent >= 35 ? "bg-warning/15 text-warning" :
                           "bg-destructive/15 text-destructive"
                         }`}>
-                          <Sparkles className="w-3 h-3 mr-1" /> {result.matchPercent}% Match
+                          <Sparkles className="w-3 h-3 mr-1" /> {scoreResult.matchPercent}% Match
                         </Badge>
                       ) : (
                         <Badge className="text-[10px] font-bold bg-muted text-muted-foreground">
@@ -400,8 +400,8 @@ export default function Jobs() {
                           disabled={singleLoading === id}
                           onClick={() => handleSingleSuggestion(job)}>
                           {singleLoading === id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                          {result ? (isExpanded ? "Hide" : "Show") + " AI" : "AI Suggestion"}
-                          {result && (isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                          {suggestionResult ? (isExpanded ? "Hide" : "Show") + " AI" : "AI Suggestion"}
+                          {suggestionResult && (isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                         </Button>
                       </>
                     )}
@@ -410,26 +410,26 @@ export default function Jobs() {
               </div>
 
               <AnimatePresence>
-                {result && isExpanded && (
+                {suggestionResult && isExpanded && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="mt-4 pt-4 border-t border-border space-y-3">
-                      {result.reason && (
+                      {suggestionResult.reason && (
                         <div className="space-y-1">
                           <h4 className="text-xs font-semibold text-foreground">Reason</h4>
-                          <p className="text-xs text-muted-foreground">{result.reason}</p>
+                          <p className="text-xs text-muted-foreground">{suggestionResult.reason}</p>
                         </div>
                       )}
-                      {!result.passedFilter && result.hardFilterReasons.length > 0 && (
+                      {!suggestionResult.passedFilter && suggestionResult.hardFilterReasons.length > 0 && (
                         <div className="space-y-1">
                           <h4 className="text-xs font-semibold text-destructive">Did not pass required filters</h4>
-                          <ul className="space-y-1">{result.hardFilterReasons.map((c, idx) => <li key={idx} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
+                          <ul className="space-y-1">{suggestionResult.hardFilterReasons.map((c, idx) => <li key={idx} className="text-xs text-muted-foreground">• {c}</li>)}</ul>
                         </div>
                       )}
-                      {result.suggestions.length > 0 && (
+                      {suggestionResult.suggestions.length > 0 && (
                         <div className="space-y-1">
                           <h4 className="text-xs font-semibold text-primary">Improvement suggestions</h4>
-                          <ul className="space-y-1">{result.suggestions.map((s, idx) => <li key={idx} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
+                          <ul className="space-y-1">{suggestionResult.suggestions.map((s, idx) => <li key={idx} className="text-xs text-muted-foreground">• {s}</li>)}</ul>
                         </div>
                       )}
                     </div>

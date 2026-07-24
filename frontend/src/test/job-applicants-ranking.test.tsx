@@ -2,6 +2,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import JobApplicants from "@/pages/JobApplicants";
+import { AI_SCORE_OPTIONS } from "@/lib/jobsApi";
 
 const apiMocks = vi.hoisted(() => ({
   fetchJob: vi.fn(),
@@ -79,11 +80,13 @@ describe("recruiter applicant ranking", () => {
     fireEvent.click(screen.getByRole("button", { name: "AI Match" }));
 
     await waitFor(() => expect(apiMocks.matchRecruiterApplicants).toHaveBeenCalledWith(
-      "9", "50", { llm: false, method: "tfidf" },
+      "9", "50", AI_SCORE_OPTIONS,
     ));
     expect(await screen.findByText("Rank 1 · 91% match")).toBeInTheDocument();
-    expect(screen.getByText("Strong Spring match")).toBeInTheDocument();
-    expect(screen.getAllByText("Click AI Suggestion to view advice")).toHaveLength(2);
+    expect(screen.queryByText("Strong Spring match")).not.toBeInTheDocument();
+    expect(screen.queryByText("Partial skills match")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "AI Suggestion" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Show details" })).not.toBeInTheDocument();
     expect(screen.queryByText("Batch advice must remain hidden")).not.toBeInTheDocument();
 
     const secondApplicant = screen.getByText("Candidate 2nd").closest("div.glass-card");

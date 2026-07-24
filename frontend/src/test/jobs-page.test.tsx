@@ -2,7 +2,7 @@ import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Jobs from "@/pages/Jobs";
-import { AI_MATCH_OPTIONS, type Job, type PageResponse } from "@/lib/jobsApi";
+import { AI_MATCH_OPTIONS, AI_SCORE_OPTIONS, type Job, type PageResponse } from "@/lib/jobsApi";
 
 const authState = vi.hoisted(() => ({
   user: { id: "1", userName: "candidate", email: "candidate@example.com" },
@@ -132,5 +132,40 @@ describe("Jobs page pagination", () => {
     expect(await screen.findByText("Frontend match reason")).toBeInTheDocument();
     expect(screen.getByText("Backend match reason")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Hide AI/i })).toHaveLength(2);
+  });
+
+  it("shows only bulk scores until the user requests a job suggestion", async () => {
+    apiMocks.fetchJobsPage.mockResolvedValue(pageOf([
+      { id: 1, jobTitle: "Backend Engineer" },
+      { id: 2, jobTitle: "Frontend Engineer" },
+    ], 0));
+    apiMocks.matchCvToJob.mockImplementation(
+      (_applicantId: string, jobId: string, options: { llm?: boolean }) => Promise.resolve({
+        matchPercent: jobId === "1" ? 88 : 69,
+        passedFilter: true,
+        reason: options.llm ? "Detailed suggestion for one JD" : "Bulk reason must stay hidden",
+        suggestions: options.llm ? ["Add production evidence"] : ["Bulk suggestion must stay hidden"],
+        hardFilterReasons: [],
+      }),
+    );
+
+    render(<MemoryRouter><Jobs /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "AI Compare All" }));
+
+    await waitFor(() => expect(apiMocks.matchCvToJob).toHaveBeenCalledTimes(2));
+    expect(apiMocks.matchCvToJob).toHaveBeenNthCalledWith(1, "1", "1", AI_SCORE_OPTIONS);
+    expect(apiMocks.matchCvToJob).toHaveBeenNthCalledWith(2, "1", "2", AI_SCORE_OPTIONS);
+    expect(await screen.findByText("88% Match")).toBeInTheDocument();
+    expect(screen.getByText("69% Match")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "AI Suggestion" })).toHaveLength(2);
+    expect(screen.queryByText("Bulk reason must stay hidden")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bulk suggestion must stay hidden")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "AI Suggestion" })[0]);
+
+    await waitFor(() => expect(apiMocks.matchCvToJob).toHaveBeenCalledWith("1", "1", AI_MATCH_OPTIONS));
+    expect(await screen.findByText("Detailed suggestion for one JD")).toBeInTheDocument();
+    expect(screen.getByText(/Add production evidence/)).toBeInTheDocument();
   });
 });

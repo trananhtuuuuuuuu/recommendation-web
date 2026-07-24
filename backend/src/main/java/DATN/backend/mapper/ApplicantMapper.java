@@ -5,7 +5,6 @@ import DATN.backend.Enum.GenderEnum;
 import DATN.backend.model.Applicant;
 import DATN.backend.model.Cv;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
-import DATN.backend.request.applicant.UpdateApplicantPrivacyRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
 import DATN.backend.request.applicant.RegistrationApplicantRequest;
 import DATN.backend.response.applicant.ApplicantResponse;
@@ -35,10 +34,10 @@ public class ApplicantMapper {
         }
 
         public static ApplicantResponse toApplicantResponse(Applicant applicant, boolean fullAccess) {
-                return fullAccess ? toFullApplicantResponse(applicant) : toRecruiterVisibleApplicantResponse(applicant);
+                return fullAccess ? toFullApplicantResponse(applicant) : toPublicApplicantResponse(applicant);
         }
 
-        public static ApplicantResponse toRecruiterVisibleApplicantResponse(Applicant applicant) {
+        public static ApplicantResponse toPublicApplicantResponse(Applicant applicant) {
                 boolean profileVisible = isVisible(applicant.getProfileVisibleToRecruiters(), true);
                 // Discoverability is the master consent. If it is disabled, an
                 // applicant can still share individual sections explicitly.
@@ -51,17 +50,6 @@ public class ApplicantMapper {
                 boolean showExperience = profileVisible || isVisible(applicant.getShowExperience(), true);
                 boolean showEducation = profileVisible || isVisible(applicant.getShowEducation(), true);
                 boolean showCertifications = profileVisible || isVisible(applicant.getShowCertifications(), true);
-                boolean privacyApplied = !profileVisible
-                                || !showFullName
-                                || !showContactInfo
-                                || !showAddress
-                                || !showCvFile
-                                || !showObjective
-                                || !showSkills
-                                || !showExperience
-                                || !showEducation
-                                || !showCertifications;
-
                 return new ApplicantResponse(
                                 applicant.getId(),
                                 null,
@@ -76,23 +64,13 @@ public class ApplicantMapper {
                                                 : toCvResponse(applicant.getCv(), showFullName, showAddress,
                                                                 showContactInfo, showObjective, showSkills,
                                                                 showExperience, showEducation, showCertifications,
-                                                                showCvFile),
-                                profileVisible,
-                                isVisible(applicant.getProfileVisibleToOtherApplicants(), false),
-                                showFullName,
-                                showContactInfo,
-                                showAddress,
-                                showCvFile,
-                                showObjective,
-                                showSkills,
-                                showExperience,
-                                showEducation,
-                                showCertifications,
-                                privacyApplied,
-                                privacyApplied,
-                                privacyApplied
-                                                ? "The candidate shared only selected profile fields."
-                                                : null);
+                                                                showCvFile));
+        }
+
+        public static ApplicantResponse toRecruiterVisibleApplicantResponse(Applicant applicant) {
+                ApplicantResponse response = toFullApplicantResponse(applicant);
+                response.setUserName(null);
+                return response;
         }
 
         private static ApplicantResponse toFullApplicantResponse(Applicant applicant) {
@@ -106,21 +84,7 @@ public class ApplicantMapper {
                                 applicant.getGender() == null ? null : applicant.getGender().name(),
                                 applicant.getStatus() == null ? null : applicant.getStatus().name(),
                                 applicant.getCv() == null ? null : applicant.getCv().getId(),
-                                applicant.getCv() == null ? null : toCvResponse(applicant.getCv()),
-                                isVisible(applicant.getProfileVisibleToRecruiters(), true),
-                                isVisible(applicant.getProfileVisibleToOtherApplicants(), false),
-                                isVisible(applicant.getShowFullName(), false),
-                                isVisible(applicant.getShowContactInfo(), false),
-                                isVisible(applicant.getShowAddress(), false),
-                                isVisible(applicant.getShowCvFile(), false),
-                                isVisible(applicant.getShowObjective(), true),
-                                isVisible(applicant.getShowSkills(), true),
-                                isVisible(applicant.getShowExperience(), true),
-                                isVisible(applicant.getShowEducation(), true),
-                                isVisible(applicant.getShowCertifications(), true),
-                                false,
-                                false,
-                                null);
+                                applicant.getCv() == null ? null : toCvResponse(applicant.getCv()));
         }
 
         public static Applicant toNewApplicant(RegistrationApplicantRequest request) {
@@ -150,9 +114,6 @@ public class ApplicantMapper {
                 if (request.getPhone() != null) {
                         applicant.setPhone(request.getPhone());
                 }
-                if (request.getUserName() != null) {
-                        applicant.setUserName(request.getUserName());
-                }
                 if (request.getFullName() != null) {
                         applicant.setFullName(request.getFullName());
                 }
@@ -163,43 +124,6 @@ public class ApplicantMapper {
                 if (request.getStatus() != null) {
                         applicant.setStatus(
                                         request.getStatus().isBlank() ? null : toApplicantStatus(request.getStatus()));
-                }
-                return applicant;
-        }
-
-        public static Applicant updateApplicantPrivacy(Applicant applicant, UpdateApplicantPrivacyRequest request) {
-                if (request.getProfileVisibleToRecruiters() != null) {
-                        applicant.setProfileVisibleToRecruiters(request.getProfileVisibleToRecruiters());
-                }
-                if (request.getProfileVisibleToOtherApplicants() != null) {
-                        applicant.setProfileVisibleToOtherApplicants(request.getProfileVisibleToOtherApplicants());
-                }
-                if (request.getShowFullName() != null) {
-                        applicant.setShowFullName(request.getShowFullName());
-                }
-                if (request.getShowContactInfo() != null) {
-                        applicant.setShowContactInfo(request.getShowContactInfo());
-                }
-                if (request.getShowAddress() != null) {
-                        applicant.setShowAddress(request.getShowAddress());
-                }
-                if (request.getShowCvFile() != null) {
-                        applicant.setShowCvFile(request.getShowCvFile());
-                }
-                if (request.getShowObjective() != null) {
-                        applicant.setShowObjective(request.getShowObjective());
-                }
-                if (request.getShowSkills() != null) {
-                        applicant.setShowSkills(request.getShowSkills());
-                }
-                if (request.getShowExperience() != null) {
-                        applicant.setShowExperience(request.getShowExperience());
-                }
-                if (request.getShowEducation() != null) {
-                        applicant.setShowEducation(request.getShowEducation());
-                }
-                if (request.getShowCertifications() != null) {
-                        applicant.setShowCertifications(request.getShowCertifications());
                 }
                 return applicant;
         }
