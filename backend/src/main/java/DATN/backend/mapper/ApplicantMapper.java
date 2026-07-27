@@ -38,18 +38,15 @@ public class ApplicantMapper {
         }
 
         public static ApplicantResponse toPublicApplicantResponse(Applicant applicant) {
-                boolean profileVisible = isVisible(applicant.getProfileVisibleToRecruiters(), true);
-                // Discoverability is the master consent. If it is disabled, an
-                // applicant can still share individual sections explicitly.
-                boolean showFullName = profileVisible || isVisible(applicant.getShowFullName(), false);
-                boolean showContactInfo = profileVisible || isVisible(applicant.getShowContactInfo(), false);
-                boolean showAddress = profileVisible || isVisible(applicant.getShowAddress(), false);
-                boolean showCvFile = profileVisible || isVisible(applicant.getShowCvFile(), false);
-                boolean showObjective = profileVisible || isVisible(applicant.getShowObjective(), true);
-                boolean showSkills = profileVisible || isVisible(applicant.getShowSkills(), true);
-                boolean showExperience = profileVisible || isVisible(applicant.getShowExperience(), true);
-                boolean showEducation = profileVisible || isVisible(applicant.getShowEducation(), true);
-                boolean showCertifications = profileVisible || isVisible(applicant.getShowCertifications(), true);
+                boolean showFullName = isVisible(applicant.getShowFullName(), false);
+                boolean showContactInfo = isVisible(applicant.getShowContactInfo(), false);
+                boolean showAddress = isVisible(applicant.getShowAddress(), false);
+                boolean showCvFile = isVisible(applicant.getShowCvFile(), false);
+                boolean showObjective = isVisible(applicant.getShowObjective(), true);
+                boolean showSkills = isVisible(applicant.getShowSkills(), true);
+                boolean showExperience = isVisible(applicant.getShowExperience(), true);
+                boolean showEducation = isVisible(applicant.getShowEducation(), true);
+                boolean showCertifications = isVisible(applicant.getShowCertifications(), true);
                 return new ApplicantResponse(
                                 applicant.getId(),
                                 null,
@@ -58,7 +55,7 @@ public class ApplicantMapper {
                                 showContactInfo ? applicant.getPhone() : null,
                                 showAddress ? applicant.getAddress() : null,
                                 null,
-                                profileVisible && applicant.getStatus() != null ? applicant.getStatus().name() : null,
+                                applicant.getStatus() == null ? null : applicant.getStatus().name(),
                                 null,
                                 applicant.getCv() == null ? null
                                                 : toCvResponse(applicant.getCv(), showFullName, showAddress,

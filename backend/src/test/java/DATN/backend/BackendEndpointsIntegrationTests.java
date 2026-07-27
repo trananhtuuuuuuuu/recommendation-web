@@ -984,17 +984,16 @@ class BackendEndpointsIntegrationTests {
     Applicant viewer = seedApplicant("viewer", "viewer@example.com");
     Applicant savedOnly = seedApplicant("savedonly", "savedonly@example.com");
     Applicant optedOut = seedApplicant("optedout", "optedout@example.com");
-    Applicant recruiterVisibleOnly = seedApplicant("recruiteronly", "recruiteronly@example.com");
+    Applicant candidateWithoutPreviewConsent = seedApplicant("no-preview-consent", "no-preview@example.com");
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
     Job job = seedJob(recruiter, "Backend Engineer");
 
     applicantJobRepository.save(new ApplicantJob(viewer, job, "APPLIED"));
     applicantJobRepository.save(new ApplicantJob(savedOnly, job, "SAVED"));
     applicantJobRepository.save(new ApplicantJob(optedOut, job, "APPLIED"));
-    recruiterVisibleOnly.setProfileVisibleToRecruiters(true);
-    recruiterVisibleOnly.setProfileVisibleToOtherApplicants(false);
-    applicantRepository.save(recruiterVisibleOnly);
-    applicantJobRepository.save(new ApplicantJob(recruiterVisibleOnly, job, "APPLIED"));
+    candidateWithoutPreviewConsent.setProfileVisibleToOtherApplicants(false);
+    applicantRepository.save(candidateWithoutPreviewConsent);
+    applicantJobRepository.save(new ApplicantJob(candidateWithoutPreviewConsent, job, "APPLIED"));
 
     mockMvc.perform(get("/api/v1/jobs/{jobId}/anonymous-candidate-previews", job.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
@@ -1174,6 +1173,107 @@ class BackendEndpointsIntegrationTests {
             .value("Only the posting recruiter can access applicants for this job"));
   }
 
+  @Test
+  void postingRecruiterShouldReceiveRankedEligibleCandidatesForPublishedJob() throws Exception {
+    Recruiter recruiter = seedRecruiter("talent-recruiter", "talent-recruiter@example.com");
+    Recruiter otherRecruiter = seedRecruiter("other-talent-recruiter", "other-talent@example.com");
+    Job job = seedJob(recruiter, "Senior Java Engineer");
+
+    Applicant lowerMatch = seedApplicant("visible-candidate-one", "visible-one@example.com");
+    lowerMatch.setCv(seedCv("Java, SQL", "2 years"));
+    applicantRepository.save(lowerMatch);
+
+    Applicant topMatch = seedApplicant("visible-candidate-two", "visible-two@example.com");
+    topMatch.setCv(seedCv("Java, Spring Boot, PostgreSQL", "5 years"));
+    applicantRepository.save(topMatch);
+
+    Applicant unavailableCandidate = seedApplicant("unavailable-candidate", "unavailable@example.com");
+    unavailableCandidate.setStatus(ApplicantStatusEnum.Normal);
+    unavailableCandidate.setCv(seedCv("Java, Spring Boot", "6 years"));
+    applicantRepository.save(unavailableCandidate);
+
+    when(cvMatchService.matchApplicantToJob(any(), eq(job.getId()), any())).thenAnswer(invocation -> {
+      Long applicantId = invocation.getArgument(0);
+      int percent = applicantId.equals(topMatch.getId()) ? 94 : 68;
+      return new CvJobMatchResponse(
+          applicantId, job.getId(), true, percent / 100.0, percent,
+          "Internal batch explanation", java.util.List.of("Internal batch suggestion"),
+          java.util.Map.of("SKILL", percent / 100.0), java.util.List.of(),
+          "tfidf", "svm", false, null, null, null);
+    });
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations",
+        recruiter.getId(), job.getId())
+        .param("limit", "10")
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"llm\":true,\"method\":\"tfidf\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("Recommended candidates ranked"))
+        .andExpect(jsonPath("$.data.length()").value(2))
+        .andExpect(jsonPath("$.data[0].rank").value(1))
+        .andExpect(jsonPath("$.data[0].applicant.id").value(topMatch.getId()))
+        .andExpect(jsonPath("$.data[0].match.matchPercent").value(94))
+        .andExpect(jsonPath("$.data[0].match.reason").doesNotExist())
+        .andExpect(jsonPath("$.data[0].match.suggestions").isEmpty())
+        .andExpect(jsonPath("$.data[1].rank").value(2))
+        .andExpect(jsonPath("$.data[1].applicant.id").value(lowerMatch.getId()))
+        .andExpect(jsonPath("$.data[1].match.matchPercent").value(68));
+
+    verify(cvMatchService, times(2)).matchApplicantToJob(
+        any(),
+        eq(job.getId()),
+        argThat(options -> Boolean.FALSE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
+
+    mockMvc.perform(post(
+        "/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations/{applicantId}/ai-suggestion",
+        recruiter.getId(), job.getId(), topMatch.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"llm\":true,\"method\":\"tfidf\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("Candidate AI suggestion generated"))
+        .andExpect(jsonPath("$.data.applicantId").value(topMatch.getId()))
+        .andExpect(jsonPath("$.data.matchPercent").value(94))
+        .andExpect(jsonPath("$.data.reason").value("Internal batch explanation"))
+        .andExpect(jsonPath("$.data.suggestions[0]").value("Internal batch suggestion"))
+        .andExpect(jsonPath("$.data.perFieldScores.SKILL").value(0.94));
+
+    verify(cvMatchService).matchApplicantToJob(
+        eq(topMatch.getId()),
+        eq(job.getId()),
+        argThat(options -> Boolean.TRUE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations",
+        recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherRecruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errors[0]")
+            .value("Only the posting recruiter can access applicants for this job"));
+
+    mockMvc.perform(post(
+        "/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations/{applicantId}/ai-suggestion",
+        recruiter.getId(), job.getId(), topMatch.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherRecruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errors[0]")
+            .value("Only the posting recruiter can access applicants for this job"));
+
+    mockMvc.perform(post(
+        "/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations/{applicantId}/ai-suggestion",
+        recruiter.getId(), job.getId(), unavailableCandidate.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.errors[0]")
+            .value("Candidate is not eligible for this job recommendation"));
+  }
+
   private Applicant seedApplicant(String userName, String email) {
     Role role = roleRepository.findByRoleName("APPLICANT")
         .orElseGet(() -> roleRepository.save(new Role("APPLICANT", "Applicant")));
@@ -1186,7 +1286,6 @@ class BackendEndpointsIntegrationTests {
     applicant.setFullName("Applicant One");
     applicant.setGender(GenderEnum.Male);
     applicant.setStatus(ApplicantStatusEnum.OpenToWork);
-    applicant.setProfileVisibleToRecruiters(false);
     applicant.setRole(role);
     return applicantRepository.save(applicant);
   }

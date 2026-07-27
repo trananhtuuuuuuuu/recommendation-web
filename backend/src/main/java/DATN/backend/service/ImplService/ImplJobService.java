@@ -8,12 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ResourcesNotFoundException;
+import DATN.backend.Enum.ApplicantStatusEnum;
 import DATN.backend.mapper.ApplicantMapper;
 import DATN.backend.mapper.JobMapper;
+import DATN.backend.model.Applicant;
 import DATN.backend.model.ApplicantJob;
 import DATN.backend.model.Job;
 import DATN.backend.model.Recruiter;
 import DATN.backend.repository.ApplicantJobRepository;
+import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.repository.RecruiterRepository;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
@@ -24,6 +27,7 @@ import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobApplicantResponse;
 import DATN.backend.response.job.JobResponse;
 import DATN.backend.response.job.RecruiterApplicantMatchResponse;
+import DATN.backend.response.job.RecruiterCandidateMatchResponse;
 import DATN.backend.service.InterfaceService.InterfaceCvMatchService;
 import DATN.backend.service.InterfaceService.InterfaceJobService;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,7 @@ public class ImplJobService implements InterfaceJobService {
         private final JobRepository jobDescriptionRepository;
         private final RecruiterRepository recruiterRepository;
         private final ApplicantJobRepository applicantJobRepository;
+        private final ApplicantRepository applicantRepository;
         private final InterfaceCvMatchService cvMatchService;
 
         @Override
@@ -124,28 +129,11 @@ public class ImplJobService implements InterfaceJobService {
         }
 
         private RecruiterApplicantMatchResponse toScoreOnlyMatch(RecruiterApplicantMatchResponse response) {
-                CvJobMatchResponse match = response.getMatch();
-                CvJobMatchResponse scoreOnly = new CvJobMatchResponse(
-                                match.getApplicantId(),
-                                match.getJobId(),
-                                match.isPassedFilter(),
-                                match.getMatchScore(),
-                                match.getMatchPercent(),
-                                null,
-                                List.of(),
-                                java.util.Map.of(),
-                                List.of(),
-                                match.getScoringMethod(),
-                                match.getModelUsed(),
-                                match.isDifferentialPrivacyApplied(),
-                                match.getPrivacyEpsilon(),
-                                match.getScoreSensitivity(),
-                                match.getPrivacyMechanism());
                 return new RecruiterApplicantMatchResponse(
                                 response.getApplicationId(),
                                 response.getApplicationOrder(),
                                 response.getApplicant(),
-                                scoreOnly);
+                                toScoreOnlyMatch(response.getMatch()));
         }
 
         /**
@@ -168,6 +156,67 @@ public class ImplJobService implements InterfaceJobService {
                 throw new ResourcesNotFoundException("Applicant has not applied to this job");
         }
 
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        @Transactional(readOnly = true)
+        public List<RecruiterCandidateMatchResponse> recommendCandidates(Long jobId, Long recruiterId,
+                        CvJobMatchRequest request, int limit) {
+                verifyPostingRecruiter(jobId, recruiterId);
+                CvJobMatchRequest options = new CvJobMatchRequest(
+                                false,
+                                request == null ? null : request.getMethod());
+
+                List<RecruiterCandidateMatchResponse> scoredCandidates = applicantRepository
+                                .findByStatusAndCvIsNotNullOrderByIdAsc(ApplicantStatusEnum.OpenToWork)
+                                .stream()
+                                .map(applicant -> toRecommendedCandidate(applicant, jobId, options))
+                                .sorted(java.util.Comparator
+                                                .comparingInt((RecruiterCandidateMatchResponse item) -> item.getMatch()
+                                                                .getMatchPercent())
+                                                .reversed()
+                                                .thenComparing(item -> item.getApplicant().getId()))
+                                .limit(limit)
+                                .toList();
+
+                return java.util.stream.IntStream.range(0, scoredCandidates.size())
+                                .mapToObj(index -> new RecruiterCandidateMatchResponse(
+                                                index + 1,
+                                                scoredCandidates.get(index).getApplicant(),
+                                                scoredCandidates.get(index).getMatch()))
+                                .toList();
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        @Transactional(readOnly = true)
+        public CvJobMatchResponse getRecommendedCandidateSuggestion(Long jobId, Long recruiterId,
+                        Long applicantId, CvJobMatchRequest request) {
+                verifyPostingRecruiter(jobId, recruiterId);
+                Applicant applicant = applicantRepository.findById(applicantId)
+                                .orElseThrow(() -> new ResourcesNotFoundException("Applicant not found"));
+                if (applicant.getStatus() != ApplicantStatusEnum.OpenToWork || applicant.getCv() == null) {
+                        throw new ResourcesNotFoundException(
+                                        "Candidate is not eligible for this job recommendation");
+                }
+                return cvMatchService.matchApplicantToJob(
+                                applicantId,
+                                jobId,
+                                request == null ? new CvJobMatchRequest() : request);
+        }
+
+        private RecruiterCandidateMatchResponse toRecommendedCandidate(Applicant applicant, Long jobId,
+                        CvJobMatchRequest options) {
+                CvJobMatchResponse match = cvMatchService.matchApplicantToJob(applicant.getId(), jobId, options);
+                return new RecruiterCandidateMatchResponse(
+                                0,
+                                ApplicantMapper.toRecruiterVisibleApplicantResponse(applicant),
+                                toScoreOnlyMatch(match));
+        }
+
         private RecruiterApplicantMatchResponse toRecruiterMatch(ApplicantJob relation, Long jobId,
                         int applicationOrder, CvJobMatchRequest request) {
                 CvJobMatchResponse match;
@@ -185,6 +234,25 @@ public class ImplJobService implements InterfaceJobService {
                                 applicationOrder,
                                 ApplicantMapper.toRecruiterVisibleApplicantResponse(relation.getApplicant()),
                                 match);
+        }
+
+        private CvJobMatchResponse toScoreOnlyMatch(CvJobMatchResponse match) {
+                return new CvJobMatchResponse(
+                                match.getApplicantId(),
+                                match.getJobId(),
+                                match.isPassedFilter(),
+                                match.getMatchScore(),
+                                match.getMatchPercent(),
+                                null,
+                                List.of(),
+                                java.util.Map.of(),
+                                List.of(),
+                                match.getScoringMethod(),
+                                match.getModelUsed(),
+                                match.isDifferentialPrivacyApplied(),
+                                match.getPrivacyEpsilon(),
+                                match.getScoreSensitivity(),
+                                match.getPrivacyMechanism());
         }
 
         private Job verifyPostingRecruiter(Long jobId, Long recruiterId) {

@@ -229,7 +229,31 @@ export default function JobDetail() {
                   <Users className="mr-1 h-3 w-3" /> {applicantsCount} applicants
                 </Badge>
               ) : null}
+              {role === "APPLICANT" && applicantActivityLoading ? (
+                <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Loading applicant activity
+                </Badge>
+              ) : null}
+              {role === "APPLICANT" && applicantActivity ? (
+                <Badge className="bg-primary/10 text-primary">
+                  <Users className="mr-1 h-3 w-3" /> {applicantActivity.displayText}
+                </Badge>
+              ) : null}
             </div>
+            {role === "APPLICANT" && applicantActivity ? (
+              <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Info className="h-4 w-4 shrink-0" />
+                This count is intentionally approximate to protect applicant privacy.
+              </p>
+            ) : null}
+            {role === "APPLICANT" && !applicantActivityLoading && applicantActivityError ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span>{applicantActivityError}</span>
+                <Button variant="outline" size="sm" onClick={() => id && loadApplicantPrivacy(id)}>
+                  Retry
+                </Button>
+              </div>
+            ) : null}
             <h1 className="mt-4 font-display text-3xl font-bold leading-tight text-foreground sm:text-4xl">
               {job.jobTitle || job.title}
             </h1>
@@ -256,34 +280,6 @@ export default function JobDetail() {
           {job.benefits ? (
             <Section title="Benefits">
               <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">{job.benefits}</p>
-            </Section>
-          ) : null}
-
-          {role === "APPLICANT" ? (
-            <Section title="Applicant activity">
-              {applicantActivityLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading approximate applicant activity...
-                </div>
-              ) : applicantActivity ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">{applicantActivity.displayText}</p>
-                  <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    This count is intentionally approximate to protect applicant privacy.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    {applicantActivityError ?? "Applicant activity is unavailable right now."}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={() => id && loadApplicantPrivacy(id)}>
-                    Retry
-                  </Button>
-                </div>
-              )}
             </Section>
           ) : null}
 

@@ -34,9 +34,6 @@ public class Applicant extends User {
     @Column(nullable = true)
     private String fullName;
 
-    @Column(nullable = false, columnDefinition = "boolean default true")
-    private Boolean profileVisibleToRecruiters = true;
-
     @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean profileVisibleToOtherApplicants = false;
 

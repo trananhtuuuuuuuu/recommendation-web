@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import DATN.backend.request.recruiter.RecruiterJobRequest;
@@ -103,6 +104,58 @@ public class RecruiterJobController {
         verifyRecruiterAccess(recruiterId, authentication);
         return ResponseEntity.ok(ApiResponse.success("Applicant AI suggestion generated", HttpStatus.OK,
                 jobDescriptionService.matchJobApplicant(jobId, recruiterId, applicantId,
+                        request == null ? new CvJobMatchRequest() : request)));
+    }
+
+    /**
+     * Recommends open-to-work candidates who have CVs available for matching.
+     *
+     * @param recruiterId posting recruiter identifier
+     * @param jobId published job identifier
+     * @param limit maximum result count from 1 through 20
+     * @param request optional AI matching options
+     * @param authentication current JWT authentication
+     * @return descending candidate ranking in the standard API envelope
+     */
+    @Operation(summary = "Recommend open-to-work candidates for a published job")
+    @PostMapping("/{recruiterId}/{jobId}/recommendations")
+    public ResponseEntity<ApiResponse> recommendCandidates(@PathVariable Long recruiterId,
+            @PathVariable Long jobId, @RequestParam(defaultValue = "10") int limit,
+            @RequestBody(required = false) CvJobMatchRequest request, Authentication authentication) {
+        verifyRecruiterAccess(recruiterId, authentication);
+        if (limit < 1 || limit > 20) {
+            throw new IllegalArgumentException("Recommendation limit must be between 1 and 20");
+        }
+        return ResponseEntity.ok(ApiResponse.success("Recommended candidates ranked", HttpStatus.OK,
+                jobDescriptionService.recommendCandidates(jobId, recruiterId,
+                        request == null ? new CvJobMatchRequest() : request, limit)));
+    }
+
+    /**
+     * Generates the detailed AI explanation for one candidate in a job
+     * recommendation ranking.
+     *
+     * @param recruiterId posting recruiter identifier
+     * @param jobId published job identifier
+     * @param applicantId recommended applicant identifier
+     * @param request optional AI matching options
+     * @param authentication current JWT authentication
+     * @return detailed candidate match in the standard API envelope
+     */
+    @Operation(summary = "Explain an AI candidate recommendation")
+    @PostMapping("/{recruiterId}/{jobId}/recommendations/{applicantId}/ai-suggestion")
+    public ResponseEntity<ApiResponse> getRecommendedCandidateSuggestion(
+            @PathVariable Long recruiterId,
+            @PathVariable Long jobId,
+            @PathVariable Long applicantId,
+            @RequestBody(required = false) CvJobMatchRequest request,
+            Authentication authentication) {
+        verifyRecruiterAccess(recruiterId, authentication);
+        return ResponseEntity.ok(ApiResponse.success("Candidate AI suggestion generated", HttpStatus.OK,
+                jobDescriptionService.getRecommendedCandidateSuggestion(
+                        jobId,
+                        recruiterId,
+                        applicantId,
                         request == null ? new CvJobMatchRequest() : request)));
     }
 

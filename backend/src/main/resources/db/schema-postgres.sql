@@ -88,6 +88,9 @@
 ALTER TABLE IF EXISTS users
     ALTER COLUMN email DROP NOT NULL;
 
+ALTER TABLE IF EXISTS applicants
+    DROP COLUMN IF EXISTS profile_visible_to_recruiters;
+
 -- ALTER TABLE IF EXISTS applicant_jobs
 --     ADD COLUMN IF NOT EXISTS created_at DATE,
 --     ADD COLUMN IF NOT EXISTS updated_at DATE,

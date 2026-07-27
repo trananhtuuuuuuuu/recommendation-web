@@ -200,6 +200,12 @@ export interface RecruiterApplicantMatch {
   match: CvJobMatch;
 }
 
+export interface RecruiterCandidateMatch {
+  rank: number;
+  applicant: Applicant;
+  match: CvJobMatch;
+}
+
 export interface ApplicationField {
   id: string;
   label: string;
@@ -333,6 +339,26 @@ export const matchRecruiterApplicant = (
   options: { llm?: boolean; method?: string } = {},
 ) => apiRequest<RecruiterApplicantMatch>(
   `/api/v1/recruiters/jobs/${recruiterId}/${jobId}/applicants/${applicantId}/ai-match`,
+  { method: "POST", body: options },
+);
+
+export const fetchRecommendedCandidates = (
+  recruiterId: string | number,
+  jobId: string | number,
+  limit = 10,
+  options: { llm?: boolean; method?: string } = {},
+) => apiRequest<RecruiterCandidateMatch[]>(
+  `/api/v1/recruiters/jobs/${recruiterId}/${jobId}/recommendations?limit=${limit}`,
+  { method: "POST", body: options },
+);
+
+export const fetchRecommendedCandidateSuggestion = (
+  recruiterId: string | number,
+  jobId: string | number,
+  applicantId: string | number,
+  options: { llm?: boolean; method?: string } = {},
+) => apiRequest<CvJobMatch>(
+  `/api/v1/recruiters/jobs/${recruiterId}/${jobId}/recommendations/${applicantId}/ai-suggestion`,
   { method: "POST", body: options },
 );
 

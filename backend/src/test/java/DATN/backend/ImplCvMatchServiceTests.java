@@ -81,11 +81,12 @@ class ImplCvMatchServiceTests {
         assertThat(result.getScoreSensitivity()).isNull();
         assertThat(result.getPrivacyMechanism()).isNull();
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> cvCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> cvCaptor = ArgumentCaptor.captor();
         org.mockito.Mockito.verify(aiService).matchCvToJob(
                 cvCaptor.capture(), any(), anyBoolean(), anyString());
-        Map<String, Object> entities = (Map<String, Object>) cvCaptor.getValue().get("entitiesByLabel");
+        Object entitiesValue = cvCaptor.getValue().get("entitiesByLabel");
+        assertThat(entitiesValue).isInstanceOf(Map.class);
+        Map<?, ?> entities = (Map<?, ?>) entitiesValue;
         assertThat(entities.get("EDUCATION"))
                 .isEqualTo(List.of("BSc", "Computer Science", "HCMUS"));
         assertThat(entities.get("CERTIFICATION"))

@@ -1,12 +1,39 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Save, ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BriefcaseBusiness,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Sparkles,
+  Trash2,
+  Trophy,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createRecruiterJob, fetchJob, updateRecruiterJob, type ApplicationField, type Job } from "@/lib/jobsApi";
+import {
+  AI_MATCH_OPTIONS,
+  AI_SCORE_OPTIONS,
+  createRecruiterJob,
+  fetchJob,
+  fetchRecommendedCandidateSuggestion,
+  fetchRecommendedCandidates,
+  getJobId,
+  updateRecruiterJob,
+  type ApplicationField,
+  type CvJobMatch,
+  type Job,
+  type RecruiterCandidateMatch,
+} from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -37,6 +64,10 @@ export default function PostEditJob() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [publishedJob, setPublishedJob] = useState<Job | null>(null);
+  const [recommendations, setRecommendations] = useState<RecruiterCandidateMatch[]>([]);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -69,6 +100,28 @@ export default function PostEditJob() {
     }]);
   };
 
+  const loadRecommendations = async (job: Job) => {
+    const jobId = getJobId(job);
+    if (!user?.id || !jobId) {
+      setRecommendationError("The job was saved, but its identifier is unavailable for matching.");
+      return;
+    }
+    setRecommendationLoading(true);
+    setRecommendationError(null);
+    try {
+      const ranking = await fetchRecommendedCandidates(user.id, jobId, 10, AI_SCORE_OPTIONS);
+      setRecommendations(Array.isArray(ranking) ? ranking : []);
+    } catch (error) {
+      setRecommendationError(
+        error instanceof ApiError
+          ? error.message
+          : "The job was saved, but candidate matching is temporarily unavailable.",
+      );
+    } finally {
+      setRecommendationLoading(false);
+    }
+  };
+
   const submit = async () => {
     if (!user?.id) { toast.error("Missing recruiter ID"); return; }
     setSaving(true); setErrors({});
@@ -77,10 +130,17 @@ export default function PostEditJob() {
         ...form,
         customApplicationFields: useCustomForm ? JSON.stringify(applicationFields.filter((field) => field.label.trim())) : "",
       };
-      if (isEdit && id) await updateRecruiterJob(user.id, id, payload);
-      else await createRecruiterJob(user.id, payload);
-      toast.success(isEdit ? "Job updated" : "Job posted");
-      navigate("/recruiters/jobs");
+      if (isEdit && id) {
+        const updatedJob = await updateRecruiterJob(user.id, id, payload);
+        setPublishedJob(updatedJob);
+        toast.success("Job updated");
+        await loadRecommendations(updatedJob);
+      } else {
+        const createdJob = await createRecruiterJob(user.id, payload);
+        setPublishedJob(createdJob);
+        toast.success("Job posted");
+        await loadRecommendations(createdJob);
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.errors && !Array.isArray(e.errors)) setErrors(e.errors as Record<string, string>);
@@ -91,6 +151,23 @@ export default function PostEditJob() {
 
   if (loading) {
     return <div className="text-center pt-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>;
+  }
+
+  if (publishedJob) {
+    return (
+      <PublishedJobRecommendations
+        job={publishedJob}
+        recruiterId={user?.id}
+        completionAction={isEdit ? "updated" : "published"}
+        recommendations={recommendations}
+        loading={recommendationLoading}
+        error={recommendationError}
+        onRetry={() => loadRecommendations(publishedJob)}
+        onViewJob={() => navigate(`/jobs/${getJobId(publishedJob)}`)}
+        onManageJobs={() => navigate("/recruiters/jobs")}
+        onViewApplicant={(applicantId) => navigate(`/applicants/${applicantId}`)}
+      />
+    );
   }
 
   const field = (k: keyof Job, label: string, opts: { placeholder?: string; type?: string; rows?: number; textarea?: boolean; required?: boolean } = {}) => (
@@ -198,6 +275,281 @@ export default function PostEditJob() {
       </motion.div>
     </div>
   );
+}
+
+function PublishedJobRecommendations({
+  job,
+  recruiterId,
+  completionAction,
+  recommendations,
+  loading,
+  error,
+  onRetry,
+  onViewJob,
+  onManageJobs,
+  onViewApplicant,
+}: {
+  job: Job;
+  recruiterId?: string | number;
+  completionAction: "published" | "updated";
+  recommendations: RecruiterCandidateMatch[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onViewJob: () => void;
+  onManageJobs: () => void;
+  onViewApplicant: (applicantId: string | number) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<Record<string, CvJobMatch>>({});
+  const [suggestionLoading, setSuggestionLoading] = useState<Record<string, boolean>>({});
+  const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
+  const [suggestionOpen, setSuggestionOpen] = useState<Record<string, boolean>>({});
+  const jobId = getJobId(job);
+
+  const handleSuggestion = async (applicantId: string | number) => {
+    const key = String(applicantId);
+    if (suggestions[key]) {
+      setSuggestionOpen((current) => ({ ...current, [key]: !current[key] }));
+      return;
+    }
+    if (!recruiterId || !jobId) return;
+    setSuggestionLoading((current) => ({ ...current, [key]: true }));
+    setSuggestionErrors((current) => ({ ...current, [key]: "" }));
+    try {
+      const result = await fetchRecommendedCandidateSuggestion(
+        recruiterId,
+        jobId,
+        applicantId,
+        AI_MATCH_OPTIONS,
+      );
+      setSuggestions((current) => ({ ...current, [key]: result }));
+      setSuggestionOpen((current) => ({ ...current, [key]: true }));
+    } catch (error) {
+      setSuggestionErrors((current) => ({
+        ...current,
+        [key]: error instanceof ApiError ? error.message : "AI suggestion is temporarily unavailable.",
+      }));
+    } finally {
+      setSuggestionLoading((current) => ({ ...current, [key]: false }));
+    }
+  };
+
+  const wasUpdated = completionAction === "updated";
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-primary/25 bg-primary/5 p-6"
+      >
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-display text-2xl font-bold text-foreground">
+                {wasUpdated ? "Job updated successfully" : "Job published successfully"}
+              </p>
+              <p className="mt-1 text-base text-muted-foreground">
+                {job.jobTitle || job.title} {wasUpdated ? "has been updated" : "is live"}. Here are the strongest matching candidates.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={onManageJobs}>Manage jobs</Button>
+            <Button onClick={onViewJob} className="gap-2">
+              View job <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="rounded-xl border bg-card p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h1 className="font-display text-xl font-bold text-foreground">Top matching candidates</h1>
+            </div>
+            <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
+              Ranked by CV-to-job match score. Open-to-work candidates with an uploaded CV are included.
+            </p>
+          </div>
+          {!loading ? (
+            <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Refresh ranking
+            </Button>
+          ) : null}
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-48 items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span>Matching candidate CVs to this job...</span>
+          </div>
+        ) : error ? (
+          <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-5">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button variant="outline" size="sm" onClick={onRetry} className="mt-3 gap-2">
+              <RefreshCw className="h-4 w-4" /> Try matching again
+            </Button>
+          </div>
+        ) : recommendations.length === 0 ? (
+          <div className="mt-6 rounded-lg border border-dashed p-8 text-center">
+            <UserRound className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 font-medium text-foreground">No eligible candidates found yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Candidates need an uploaded CV and Open to Work status.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-3">
+            {recommendations.map((item) => {
+              const applicant = item.applicant ?? {};
+              const applicantKey = String(applicant.id ?? item.rank);
+              const skills = candidateSkills(applicant);
+              const currentRole = candidateCurrentRole(applicant);
+              const suggestion = suggestions[applicantKey];
+              return (
+                <motion.div
+                  key={applicantKey}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: item.rank * 0.035 }}
+                  className="grid gap-4 rounded-lg border bg-background p-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start"
+                >
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-full font-display font-bold ${
+                    item.rank === 1 ? "bg-warning/15 text-warning" : "bg-secondary text-foreground"
+                  }`}>
+                    {item.rank === 1 ? <Trophy className="h-5 w-5" /> : `#${item.rank}`}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-display text-lg font-semibold text-foreground">
+                        {applicant.fullName || `Candidate #${item.rank}`}
+                      </p>
+                      {applicant.status ? <Badge variant="outline">{applicant.status}</Badge> : null}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      {currentRole ? (
+                        <span className="flex items-center gap-1.5">
+                          <BriefcaseBusiness className="h-4 w-4" /> {currentRole}
+                        </span>
+                      ) : null}
+                      {applicant.address ? <span>{applicant.address}</span> : null}
+                    </div>
+                    {skills.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {skills.slice(0, 6).map((skill) => (
+                          <Badge key={skill} variant="secondary">{skill}</Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                    <Badge className="bg-primary px-3 py-1 text-sm text-primary-foreground">
+                      {item.match?.matchPercent ?? 0}% match
+                    </Badge>
+                    {applicant.id ? (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => handleSuggestion(applicant.id!)}
+                          disabled={Boolean(suggestionLoading[applicantKey])}
+                          className="gap-1.5"
+                        >
+                          {suggestionLoading[applicantKey]
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Sparkles className="h-3.5 w-3.5" />}
+                          {suggestionLoading[applicantKey]
+                            ? "Generating..."
+                            : suggestion
+                              ? (suggestionOpen[applicantKey] ? "Hide AI" : "Show AI")
+                              : "AI Suggestion"}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => onViewApplicant(applicant.id!)} className="gap-1">
+                          View profile <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                  {suggestionErrors[applicantKey] ? (
+                    <p className="text-sm text-destructive sm:col-start-2 sm:col-span-2">
+                      {suggestionErrors[applicantKey]}
+                    </p>
+                  ) : null}
+                  {suggestion && suggestionOpen[applicantKey] ? (
+                    <CandidateSuggestionDetails match={suggestion} />
+                  ) : null}
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CandidateSuggestionDetails({ match }: { match: CvJobMatch }) {
+  const fieldScores = Object.entries(match.perFieldScores ?? {})
+    .sort(([, left], [, right]) => right - left);
+  return (
+    <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:col-start-2 sm:col-span-2">
+      <div>
+        <h3 className="font-display text-sm font-semibold text-foreground">Why this candidate matches</h3>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          {match.reason || "The AI service did not return a detailed explanation."}
+        </p>
+      </div>
+      {fieldScores.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fieldScores.map(([field, score]) => {
+            const percent = Math.round(score * 100);
+            return (
+              <div key={field}>
+                <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                  <span>{humanizeMatchField(field)}</span>
+                  <span>{percent}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {match.suggestions && match.suggestions.length > 0 ? (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">AI suggestions</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+            {match.suggestions.map((suggestion) => <li key={suggestion}>• {suggestion}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function humanizeMatchField(value: string): string {
+  return value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function candidateSkills(applicant: RecruiterCandidateMatch["applicant"]): string[] {
+  const raw = applicant.cv?.skills;
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  return typeof raw === "string" ? raw.split(/[\n,;|]/).map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function candidateCurrentRole(applicant: RecruiterCandidateMatch["applicant"]): string | null {
+  const experience = applicant.cv?.experience;
+  if (experience && typeof experience === "object") {
+    return experience.jobTitle || experience.companyName || null;
+  }
+  return typeof experience === "string" && experience.trim() ? experience.trim() : null;
 }
 
 function parseFields(raw?: string): ApplicationField[] {
