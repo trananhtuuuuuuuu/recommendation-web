@@ -144,6 +144,28 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         jd.put("experienceLevel", nullToEmpty(job.getExperienceLevel() != null ? job.getExperienceLevel()
                 : job.getYoe() == null ? "" : job.getYoe()));
         jd.put("industry", nullToEmpty(job.getIndustry()));
+        jd.put("educationMode",
+                job.getEducationRequirementMode() == null ? "" : job.getEducationRequirementMode().name());
+        String degrees = nullToEmpty(StringListConverter.join(job.getEducationDegrees()));
+        jd.put("degrees", degrees);
+        jd.put("educationLevel",
+                job.getEducationDegrees() == null || job.getEducationDegrees().isEmpty()
+                        ? ""
+                        : job.getEducationDegrees().getFirst());
+        jd.put("educationMajors", nullToEmpty(StringListConverter.join(job.getEducationMajors())));
+        jd.put("preferredInstitutions", nullToEmpty(StringListConverter.join(job.getPreferredInstitutions())));
+        jd.put("minimumYearsExperience",
+                job.getMinimumYearsExperience() == null ? "" : job.getMinimumYearsExperience().toString());
+        String experienceRequirements = nullToEmpty(StringListConverter.join(job.getExperienceRequirements()));
+        jd.put("experienceRequirements", experienceRequirements);
+        jd.put("experienceDescription", experienceRequirements);
+        jd.put("requiredSkills", nullToEmpty(StringListConverter.join(job.getRequiredSkills())));
+        jd.put("techStack", nullToEmpty(StringListConverter.join(job.getTechStack())));
+        jd.put("englishRequired", Boolean.TRUE.equals(job.getEnglishRequired()));
+        jd.put("englishLevel", nullToEmpty(job.getEnglishLevel()));
+        jd.put("englishSkills", nullToEmpty(StringListConverter.join(job.getEnglishSkills())));
+        jd.put("tools", nullToEmpty(StringListConverter.join(job.getTools())));
+        jd.put("technicalKnowledge", nullToEmpty(StringListConverter.join(job.getTechnicalKnowledge())));
         return jd;
     }
 

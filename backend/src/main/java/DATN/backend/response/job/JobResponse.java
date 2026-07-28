@@ -15,8 +15,11 @@ public class JobResponse {
     private Long id;
     private String jobTitle;
     private String aboutCompany;
+    private String jobDescriptionTitle;
     private String jobDescription;
+    private String requirementsTitle;
     private String requirements;
+    private String benefitsTitle;
     private List<String> benefits;
     private String location;
     private String salaryRange;
@@ -32,4 +35,5 @@ public class JobResponse {
     private String customApplicationFields;
     private Long recruiterId;
     private String recruiterName;
+    private JobRequirementDetailsResponse requirementDetails;
 }

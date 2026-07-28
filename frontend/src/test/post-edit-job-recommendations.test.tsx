@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchRecommendedCandidateSuggestion: vi.fn(),
   fetchRecommendedCandidates: vi.fn(),
   fetchJob: vi.fn(),
+  fetchRecruiter: vi.fn(),
   updateRecruiterJob: vi.fn(),
 }));
 
@@ -38,9 +39,28 @@ describe("post job candidate recommendations", () => {
       id: 50,
       jobTitle: "Backend Engineer",
     });
+    apiMocks.fetchRecruiter.mockResolvedValue({
+      id: 9,
+      companyDescription: "",
+    });
     apiMocks.fetchJob.mockResolvedValue({
       id: 50,
       jobTitle: "Backend Engineer",
+      requirementDetails: {
+        educationMode: "NOT_REQUIRED",
+        degrees: [],
+        educationMajors: [],
+        preferredInstitutions: [],
+        minimumYearsExperience: 3,
+        experienceRequirements: ["Built production backend services"],
+        requiredSkills: ["Java", "Debugging"],
+        techStack: ["Spring Boot", "PostgreSQL"],
+        englishRequired: false,
+        englishLevel: "",
+        englishSkills: [],
+        tools: ["Git"],
+        technicalKnowledge: ["REST API"],
+      },
     });
     apiMocks.updateRecruiterJob.mockResolvedValue({
       id: 50,
@@ -81,6 +101,26 @@ describe("post job candidate recommendations", () => {
     ]);
   });
 
+  it("uses the recruiter profile description without showing the company description field", async () => {
+    apiMocks.fetchRecruiter.mockResolvedValueOnce({
+      id: 9,
+      companyDescription: "Profile company overview",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/recruiters/jobs/new"]}>
+        <Routes>
+          <Route path="/recruiters/jobs/new" element={<PostEditJob />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(
+      "Company overview will be taken automatically from your recruiter profile.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText("About Company")).not.toBeInTheDocument();
+  });
+
   it("shows a descending candidate ranking immediately after publishing", async () => {
     render(
       <MemoryRouter initialEntries={["/recruiters/jobs/new"]}>
@@ -90,12 +130,37 @@ describe("post job candidate recommendations", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Senior Developer"), {
+    fireEvent.change(await screen.findByPlaceholderText("Senior Developer"), {
       target: { value: "Backend Engineer" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "No degree" }));
+    fireEvent.change(screen.getByLabelText("Minimum years of experience *"), {
+      target: { value: "3" },
+    });
+    fireEvent.change(screen.getByLabelText("Expected experience 1"), {
+      target: { value: "Built production backend services" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Debugging" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ React" }));
+    fireEvent.click(screen.getByRole("button", { name: "No requirement" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Git" }));
     fireEvent.click(screen.getByRole("button", { name: "Publish Job" }));
 
     await waitFor(() => expect(apiMocks.createRecruiterJob).toHaveBeenCalled());
+    expect(apiMocks.createRecruiterJob).toHaveBeenCalledWith(
+      "9",
+      expect.objectContaining({
+        requirementDetails: expect.objectContaining({
+          educationMode: "NOT_REQUIRED",
+          degrees: [],
+          minimumYearsExperience: 3,
+          requiredSkills: ["Debugging"],
+          techStack: ["React"],
+          englishRequired: false,
+          tools: ["Git"],
+        }),
+      }),
+    );
     await waitFor(() => expect(apiMocks.fetchRecommendedCandidates).toHaveBeenCalledWith(
       "9",
       "50",

@@ -10,8 +10,11 @@ describe("toRecruiterJobPayload", () => {
       jobTitle: " Frontend Engineer ",
       description: "Description alias",
       jobDescription: " Build UI ",
+      jobDescriptionTitle: " Job responsibilities ",
       aboutCompany: " Product team ",
+      requirementsTitle: " What you'll bring ",
       requirements: " React\nTypeScript ",
+      benefitsTitle: " What we offer ",
       benefits: "Health insurance\nLearning budget,, Remote work",
       location: " Remote ",
       salaryRange: " ",
@@ -25,13 +28,31 @@ describe("toRecruiterJobPayload", () => {
       applicationDeadline: "2026-08-01",
       companyName: "Example Corp",
       customApplicationFields: "[]",
+      requirementDetails: {
+        educationMode: "MINIMUM",
+        degrees: ["BACHELOR"],
+        educationMajors: ["Computer Science"],
+        preferredInstitutions: [],
+        minimumYearsExperience: 3,
+        experienceRequirements: ["Built production UIs"],
+        requiredSkills: ["Debugging"],
+        techStack: ["React", "TypeScript"],
+        englishRequired: false,
+        englishLevel: "",
+        englishSkills: [],
+        tools: ["Git"],
+        technicalKnowledge: ["REST API"],
+      },
     };
 
     expect(toRecruiterJobPayload(job)).toEqual({
       jobTitle: "Frontend Engineer",
       aboutCompany: "Product team",
+      jobDescriptionTitle: "Job responsibilities",
       jobDescription: "Build UI",
+      requirementsTitle: "What you'll bring",
       requirements: "React\nTypeScript",
+      benefitsTitle: "What we offer",
       benefits: ["Health insurance", "Learning budget", "Remote work"],
       location: "Remote",
       salaryRange: undefined,
@@ -45,6 +66,10 @@ describe("toRecruiterJobPayload", () => {
       startDate: "2026-09-01",
       endDate: "2027-09-01",
       customApplicationFields: "[]",
+      requirementDetails: {
+        ...job.requirementDetails!,
+        englishLevel: undefined,
+      },
     });
   });
 

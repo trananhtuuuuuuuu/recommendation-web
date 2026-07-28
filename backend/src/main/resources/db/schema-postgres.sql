@@ -91,6 +91,51 @@ ALTER TABLE IF EXISTS users
 ALTER TABLE IF EXISTS applicants
     DROP COLUMN IF EXISTS profile_visible_to_recruiters;
 
+-- Structured job requirements allow the matching service to compare each CV
+-- section against an explicit recruiter requirement instead of parsing prose.
+ALTER TABLE IF EXISTS jobs
+    ADD COLUMN IF NOT EXISTS education_requirement VARCHAR(32),
+    ADD COLUMN IF NOT EXISTS education_requirement_mode VARCHAR(32),
+    ADD COLUMN IF NOT EXISTS education_degrees TEXT,
+    ADD COLUMN IF NOT EXISTS education_majors TEXT,
+    ADD COLUMN IF NOT EXISTS preferred_institutions TEXT,
+    ADD COLUMN IF NOT EXISTS minimum_years_experience INTEGER,
+    ADD COLUMN IF NOT EXISTS experience_requirement TEXT,
+    ADD COLUMN IF NOT EXISTS required_skills TEXT,
+    ADD COLUMN IF NOT EXISTS tech_stack TEXT,
+    ADD COLUMN IF NOT EXISTS english_required BOOLEAN,
+    ADD COLUMN IF NOT EXISTS english_level VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS english_skills TEXT,
+    ADD COLUMN IF NOT EXISTS required_tools TEXT,
+    ADD COLUMN IF NOT EXISTS technical_knowledge TEXT,
+    ADD COLUMN IF NOT EXISTS job_desc_title VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS requirements_title VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS benefits_title VARCHAR(255);
+
+UPDATE jobs
+SET education_requirement_mode = CASE
+        WHEN education_requirement IS NULL OR education_requirement = 'NOT_REQUIRED'
+            THEN 'NOT_REQUIRED'
+        ELSE 'MINIMUM'
+    END
+WHERE education_requirement_mode IS NULL;
+
+UPDATE jobs
+SET education_degrees = CASE education_requirement
+        WHEN 'BACHELOR' THEN '["BACHELOR"]'
+        WHEN 'MASTER' THEN '["MASTER"]'
+        WHEN 'PHD' THEN '["PHD"]'
+        ELSE '[]'
+    END
+WHERE education_degrees IS NULL;
+
+UPDATE jobs SET job_desc_title = 'Job description'
+WHERE job_desc_title IS NULL OR BTRIM(job_desc_title) = '';
+UPDATE jobs SET requirements_title = 'Requirements'
+WHERE requirements_title IS NULL OR BTRIM(requirements_title) = '';
+UPDATE jobs SET benefits_title = 'Benefits'
+WHERE benefits_title IS NULL OR BTRIM(benefits_title) = '';
+
 -- ALTER TABLE IF EXISTS applicant_jobs
 --     ADD COLUMN IF NOT EXISTS created_at DATE,
 --     ADD COLUMN IF NOT EXISTS updated_at DATE,

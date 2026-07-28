@@ -149,4 +149,48 @@ describe("Job detail applicant privacy", () => {
     expect(await screen.findByRole("button", { name: /Hide AI/i })).toBeInTheDocument();
     expect(screen.getByText("Strong backend match")).toBeInTheDocument();
   });
+
+  it("renders structured recruiter requirements by CV section", async () => {
+    apiMocks.fetchApplicantActivityCount.mockResolvedValue({
+      jobId: 123,
+      approximateApplicantCount: 18,
+      displayText: "Approximately 18 candidates have applied",
+      approximate: true,
+    });
+    apiMocks.fetchJob.mockResolvedValue({
+      id: 123,
+      jobTitle: "Backend Engineer",
+      jobDescriptionTitle: "Job responsibilities",
+      jobDescription: "Build APIs\nReview pull requests",
+      requirementsTitle: "What you'll bring",
+      requirementDetails: {
+        educationMode: "ANY_OF",
+        degrees: ["BACHELOR", "MASTER"],
+        educationMajors: ["Computer Science"],
+        preferredInstitutions: ["HCMUS"],
+        minimumYearsExperience: 0,
+        experienceRequirements: ["Built production REST APIs"],
+        requiredSkills: ["Java", "Debugging"],
+        techStack: ["Spring Boot", "PostgreSQL"],
+        englishRequired: true,
+        englishLevel: "B2",
+        englishSkills: ["Speaking", "Reading"],
+        tools: ["Git", "Postman"],
+        technicalKnowledge: ["System design"],
+      },
+    });
+
+    renderJobDetail();
+
+    expect(await screen.findByText("What you'll bring")).toBeInTheDocument();
+    expect(screen.queryByText("Matching requirements")).not.toBeInTheDocument();
+    expect(screen.getByText("Job responsibilities")).toBeInTheDocument();
+    expect(screen.getByText("Build APIs")).toBeInTheDocument();
+    expect(screen.getByText("Relevant majors:", { exact: false })).toHaveTextContent("Computer Science");
+    expect(screen.getByText("Built production REST APIs")).toBeInTheDocument();
+    expect(screen.getByText("Không yêu cầu kinh nghiệm")).toBeInTheDocument();
+    expect(screen.getByText("Tech stack:", { exact: false })).toHaveTextContent("Spring Boot");
+    expect(screen.getByText("English:", { exact: false })).toHaveTextContent("B2");
+    expect(screen.getByText("Tools:", { exact: false })).toHaveTextContent("Git, Postman");
+  });
 });

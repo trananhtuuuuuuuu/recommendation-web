@@ -818,8 +818,11 @@ class BackendEndpointsIntegrationTests {
             {
               "jobTitle": "Frontend Engineer",
               "aboutCompany": "Product team",
+              "jobDescriptionTitle": "Job responsibilities",
               "jobDescription": "Build UI",
+              "requirementsTitle": "What you'll bring",
               "requirements": "React\\nTypeScript",
+              "benefitsTitle": "What we offer",
               "benefits": "Health insurance\\nLearning budget",
               "location": "Remote",
               "salaryRange": "3K$",
@@ -831,12 +834,33 @@ class BackendEndpointsIntegrationTests {
               "applyingDeadline": "2026-06-16",
               "startDate": "2026-07-01",
               "endDate": "2027-07-01",
-              "customApplicationFields": "[{\\"id\\":\\"portfolio_url\\",\\"label\\":\\"Portfolio URL\\",\\"type\\":\\"url\\"}]"
+              "customApplicationFields": "[{\\"id\\":\\"portfolio_url\\",\\"label\\":\\"Portfolio URL\\",\\"type\\":\\"url\\"}]",
+              "requirementDetails": {
+                "educationMode": "ANY_OF",
+                "degrees": ["BACHELOR", "MASTER"],
+                "educationMajors": ["Computer Science", "Software Engineering"],
+                "preferredInstitutions": ["HCMUS"],
+                "minimumYearsExperience": 3,
+                "experienceRequirements": [
+                  "Built production web applications",
+                  "Worked in a cross-functional team"
+                ],
+                "requiredSkills": ["JavaScript", "Debugging"],
+                "techStack": ["React", "TypeScript"],
+                "englishRequired": true,
+                "englishLevel": "B2",
+                "englishSkills": ["Speaking", "Reading"],
+                "tools": ["Git", "Jira"],
+                "technicalKnowledge": ["REST API", "System design"]
+              }
             }
             """))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.data.jobTitle").value("Frontend Engineer"))
-        .andExpect(jsonPath("$.data.aboutCompany").value("Product team"))
+        .andExpect(jsonPath("$.data.aboutCompany").value("General Java and React requirements"))
+        .andExpect(jsonPath("$.data.jobDescriptionTitle").value("Job responsibilities"))
+        .andExpect(jsonPath("$.data.requirementsTitle").value("What you'll bring"))
+        .andExpect(jsonPath("$.data.benefitsTitle").value("What we offer"))
         .andExpect(jsonPath("$.data.requirements").value("React\nTypeScript"))
         .andExpect(jsonPath("$.data.benefits[0]").value("Health insurance"))
         .andExpect(jsonPath("$.data.benefits[1]").value("Learning budget"))
@@ -849,7 +873,18 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.startDate").value("2026-07-01"))
         .andExpect(jsonPath("$.data.endDate").value("2027-07-01"))
         .andExpect(jsonPath("$.data.customApplicationFields")
-            .value("[{\"id\":\"portfolio_url\",\"label\":\"Portfolio URL\",\"type\":\"url\"}]"));
+            .value("[{\"id\":\"portfolio_url\",\"label\":\"Portfolio URL\",\"type\":\"url\"}]"))
+        .andExpect(jsonPath("$.data.requirementDetails.educationMode").value("ANY_OF"))
+        .andExpect(jsonPath("$.data.requirementDetails.degrees[0]").value("BACHELOR"))
+        .andExpect(jsonPath("$.data.requirementDetails.degrees[1]").value("MASTER"))
+        .andExpect(jsonPath("$.data.requirementDetails.educationMajors[0]").value("Computer Science"))
+        .andExpect(jsonPath("$.data.requirementDetails.minimumYearsExperience").value(3))
+        .andExpect(jsonPath("$.data.requirementDetails.requiredSkills[1]").value("Debugging"))
+        .andExpect(jsonPath("$.data.requirementDetails.techStack[0]").value("React"))
+        .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(true))
+        .andExpect(jsonPath("$.data.requirementDetails.englishSkills[0]").value("Speaking"))
+        .andExpect(jsonPath("$.data.requirementDetails.tools[0]").value("Git"))
+        .andExpect(jsonPath("$.data.requirementDetails.technicalKnowledge[1]").value("System design"));
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
         .contentType(MediaType.APPLICATION_JSON)
@@ -858,11 +893,36 @@ class BackendEndpointsIntegrationTests {
               "jobTitle": "Title Only Job"
             }
             """))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.jobTitle").value("Title Only Job"))
-        .andExpect(jsonPath("$.data.jobType").doesNotExist())
-        .andExpect(jsonPath("$.data.salaryRange").doesNotExist())
-        .andExpect(jsonPath("$.data.applyingDeadline").doesNotExist());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Validation failed"))
+        .andExpect(jsonPath("$.errors[0]").value("Structured requirement details are required"));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "jobTitle": "Invalid Structured Requirements",
+              "requirementDetails": {
+                "educationMode": "MINIMUM",
+                "degrees": [],
+                "educationMajors": [],
+                "preferredInstitutions": [],
+                "minimumYearsExperience": 0,
+                "experienceRequirements": ["Entry-level production work"],
+                "requiredSkills": ["Java"],
+                "techStack": ["Spring Boot"],
+                "englishRequired": true,
+                "englishSkills": [],
+                "tools": [],
+                "technicalKnowledge": []
+              }
+            }
+            """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.hasItems(
+            "Select valid degrees and at least one major for the chosen education mode",
+            "English level and at least one English skill are required when English is required",
+            "At least one tool or technical knowledge item is required")));
 
     mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(),
         existingJob.getId())
@@ -871,23 +931,45 @@ class BackendEndpointsIntegrationTests {
             {
               "jobTitle": "Senior Backend Engineer",
               "aboutCompany": "Platform team",
+              "jobDescriptionTitle": "Responsibilities",
               "jobDescription": "Build APIs",
+              "requirementsTitle": "What you'll bring",
               "requirements": "",
+              "benefitsTitle": "What we offer",
               "benefits": "",
               "location": "Hybrid",
               "experienceLevel": "Lead",
               "industry": "Platform",
               "postedDate": "2026-05-16",
-              "customApplicationFields": ""
+              "customApplicationFields": "",
+              "requirementDetails": {
+                "educationMode": "NOT_REQUIRED",
+                "degrees": [],
+                "educationMajors": [],
+                "preferredInstitutions": [],
+                "minimumYearsExperience": 5,
+                "experienceRequirements": ["Led backend platform delivery"],
+                "requiredSkills": ["Java", "Debugging"],
+                "techStack": ["Spring Boot", "PostgreSQL"],
+                "englishRequired": false,
+                "englishSkills": [],
+                "tools": ["Git"],
+                "technicalKnowledge": ["Microservices"]
+              }
             }
             """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.jobTitle").value("Senior Backend Engineer"))
-        .andExpect(jsonPath("$.data.aboutCompany").value("Platform team"))
+        .andExpect(jsonPath("$.data.aboutCompany").value("General Java and React requirements"))
         .andExpect(jsonPath("$.data.location").value("Hybrid"))
         .andExpect(jsonPath("$.data.experienceLevel").value("Lead"))
         .andExpect(jsonPath("$.data.industry").value("Platform"))
-        .andExpect(jsonPath("$.data.customApplicationFields").doesNotExist());
+        .andExpect(jsonPath("$.data.customApplicationFields").doesNotExist())
+        .andExpect(jsonPath("$.data.requirementDetails.educationMode").value("NOT_REQUIRED"))
+        .andExpect(jsonPath("$.data.requirementDetails.minimumYearsExperience").value(5))
+        .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(false))
+        .andExpect(jsonPath("$.data.requirementDetails.englishLevel").doesNotExist())
+        .andExpect(jsonPath("$.data.requirementDetails.englishSkills").isEmpty());
   }
 
   @Test

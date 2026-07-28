@@ -1,14 +1,36 @@
 import { apiRequest } from "@/lib/api";
 
+export type JobDegree = "BACHELOR" | "MASTER" | "PHD";
+export type JobEducationMode = "NOT_REQUIRED" | "ANY_OF" | "MINIMUM";
+
+export interface JobRequirementDetails {
+  educationMode?: JobEducationMode | "";
+  degrees: JobDegree[];
+  educationMajors: string[];
+  preferredInstitutions: string[];
+  minimumYearsExperience?: number;
+  experienceRequirements: string[];
+  requiredSkills: string[];
+  techStack: string[];
+  englishRequired?: boolean;
+  englishLevel?: string;
+  englishSkills: string[];
+  tools: string[];
+  technicalKnowledge: string[];
+}
+
 export interface Job {
   jobId?: string | number;
   id?: string | number;
   jobTitle?: string;
   title?: string;
   aboutCompany?: string;
+  jobDescriptionTitle?: string;
   jobDescription?: string;
   description?: string;
+  requirementsTitle?: string;
   requirements?: string;
+  benefitsTitle?: string;
   benefits?: string | string[];
   location?: string;
   salaryRange?: string;
@@ -26,14 +48,18 @@ export interface Job {
   recruiterName?: string;
   customApplicationFieldsId?: number;
   customApplicationFields?: string;
+  requirementDetails?: JobRequirementDetails;
   [k: string]: unknown;
 }
 
 export interface RecruiterJobPayload {
   jobTitle?: string;
   aboutCompany?: string;
+  jobDescriptionTitle?: string;
   jobDescription?: string;
+  requirementsTitle?: string;
   requirements?: string;
+  benefitsTitle?: string;
   benefits?: string[];
   location?: string;
   salaryRange?: string;
@@ -47,6 +73,7 @@ export interface RecruiterJobPayload {
   startDate?: string;
   endDate?: string;
   customApplicationFields?: string;
+  requirementDetails?: JobRequirementDetails;
 }
 
 export interface CvExperience {
@@ -244,9 +271,27 @@ export const getApplyingDeadline = (j: Job): string | undefined => j.applyingDea
 
 const normalizeJob = (job: Job): Job => ({
   ...job,
+  jobDescriptionTitle: job.jobDescriptionTitle || "Job description",
+  requirementsTitle: job.requirementsTitle || "Requirements",
+  benefitsTitle: job.benefitsTitle || "Benefits",
   benefits: Array.isArray(job.benefits) ? job.benefits.join("\n") : job.benefits,
   applicationDeadline: job.applicationDeadline ?? job.applyingDeadline,
   applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
+  requirementDetails: {
+    educationMode: job.requirementDetails?.educationMode ?? "",
+    degrees: job.requirementDetails?.degrees ?? [],
+    educationMajors: job.requirementDetails?.educationMajors ?? [],
+    preferredInstitutions: job.requirementDetails?.preferredInstitutions ?? [],
+    minimumYearsExperience: job.requirementDetails?.minimumYearsExperience,
+    experienceRequirements: job.requirementDetails?.experienceRequirements ?? [],
+    requiredSkills: job.requirementDetails?.requiredSkills ?? [],
+    techStack: job.requirementDetails?.techStack ?? [],
+    englishRequired: job.requirementDetails?.englishRequired,
+    englishLevel: job.requirementDetails?.englishLevel ?? "",
+    englishSkills: job.requirementDetails?.englishSkills ?? [],
+    tools: job.requirementDetails?.tools ?? [],
+    technicalKnowledge: job.requirementDetails?.technicalKnowledge ?? [],
+  },
 });
 
 const normalizeJobs = (jobs: Job[]): Job[] => jobs.map(normalizeJob);
@@ -275,11 +320,35 @@ const toTextList = (value: Job["benefits"]): string[] | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
+const cleanList = (values: string[] | undefined): string[] =>
+  Array.from(new Set(values?.map((value) => value.trim()).filter(Boolean) ?? []));
+
+const cleanRequirementDetails = (
+  details: JobRequirementDetails | undefined,
+): JobRequirementDetails | undefined => details ? {
+  ...details,
+  degrees: details.educationMode === "NOT_REQUIRED" ? [] : details.degrees,
+  educationMajors: details.educationMode === "NOT_REQUIRED" ? [] : cleanList(details.educationMajors),
+  preferredInstitutions: details.educationMode === "NOT_REQUIRED"
+    ? []
+    : cleanList(details.preferredInstitutions),
+  experienceRequirements: cleanList(details.experienceRequirements),
+  requiredSkills: cleanList(details.requiredSkills),
+  techStack: cleanList(details.techStack),
+  englishLevel: details.englishRequired ? cleanString(details.englishLevel) : undefined,
+  englishSkills: details.englishRequired ? cleanList(details.englishSkills) : [],
+  tools: cleanList(details.tools),
+  technicalKnowledge: cleanList(details.technicalKnowledge),
+} : undefined;
+
 export const toRecruiterJobPayload = (job: Job): RecruiterJobPayload => ({
   jobTitle: cleanString(job.jobTitle),
   aboutCompany: cleanString(job.aboutCompany),
+  jobDescriptionTitle: cleanString(job.jobDescriptionTitle),
   jobDescription: cleanString(job.jobDescription ?? job.description),
+  requirementsTitle: cleanString(job.requirementsTitle),
   requirements: cleanString(job.requirements),
+  benefitsTitle: cleanString(job.benefitsTitle),
   benefits: toTextList(job.benefits),
   location: cleanString(job.location),
   salaryRange: cleanString(job.salaryRange),
@@ -293,6 +362,7 @@ export const toRecruiterJobPayload = (job: Job): RecruiterJobPayload => ({
   startDate: cleanString(job.startDate),
   endDate: cleanString(job.endDate),
   customApplicationFields: cleanString(job.customApplicationFields),
+  requirementDetails: cleanRequirementDetails(job.requirementDetails),
 });
 
 export const fetchHome = () => apiRequest<HomeSummary>("/api/v1/home", { auth: false });

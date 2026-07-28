@@ -85,6 +85,7 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                         WHERE requirements IS NULL AND requirement IS NOT NULL
                                         """);
                 }
+                addStructuredJobRequirementColumns();
                 jdbcTemplate.execute("""
                                 ALTER TABLE IF EXISTS jobs
                                 ADD COLUMN IF NOT EXISTS yoe VARCHAR(255)
@@ -234,6 +235,69 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                         SET avatar_url = %s
                                         WHERE avatar_url IS NULL
                                         """.formatted(avatarExpression));
+                }
+        }
+
+        private void addStructuredJobRequirementColumns() {
+                for (String columnDefinition : java.util.List.of(
+                                "education_requirement VARCHAR(32)",
+                                "education_requirement_mode VARCHAR(32)",
+                                "education_degrees TEXT",
+                                "education_majors TEXT",
+                                "preferred_institutions TEXT",
+                                "minimum_years_experience INTEGER",
+                                "experience_requirement TEXT",
+                                "required_skills TEXT",
+                                "tech_stack TEXT",
+                                "english_required BOOLEAN",
+                                "english_level VARCHAR(255)",
+                                "english_skills TEXT",
+                                "required_tools TEXT",
+                                "technical_knowledge TEXT",
+                                "job_desc_title VARCHAR(255)",
+                                "requirements_title VARCHAR(255)",
+                                "benefits_title VARCHAR(255)")) {
+                        jdbcTemplate.execute("""
+                                        ALTER TABLE IF EXISTS jobs
+                                        ADD COLUMN IF NOT EXISTS %s
+                                        """.formatted(columnDefinition));
+                }
+                if (tableExists("jobs")) {
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET education_requirement_mode = CASE
+                                                WHEN education_requirement IS NULL
+                                                     OR education_requirement = 'NOT_REQUIRED'
+                                                        THEN 'NOT_REQUIRED'
+                                                ELSE 'MINIMUM'
+                                        END
+                                        WHERE education_requirement_mode IS NULL
+                                        """);
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET education_degrees = CASE education_requirement
+                                                WHEN 'BACHELOR' THEN '["BACHELOR"]'
+                                                WHEN 'MASTER' THEN '["MASTER"]'
+                                                WHEN 'PHD' THEN '["PHD"]'
+                                                ELSE '[]'
+                                        END
+                                        WHERE education_degrees IS NULL
+                                        """);
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET job_desc_title = 'Job description'
+                                        WHERE job_desc_title IS NULL OR TRIM(job_desc_title) = ''
+                                        """);
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET requirements_title = 'Requirements'
+                                        WHERE requirements_title IS NULL OR TRIM(requirements_title) = ''
+                                        """);
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET benefits_title = 'Benefits'
+                                        WHERE benefits_title IS NULL OR TRIM(benefits_title) = ''
+                                        """);
                 }
         }
 

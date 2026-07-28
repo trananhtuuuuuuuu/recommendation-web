@@ -42,6 +42,7 @@ import {
   type CvJobMatch,
   type Job,
   type JobApplicantsCount,
+  type JobRequirementDetails,
   type RecruiterApplicantMatch,
 } from "@/lib/jobsApi";
 import { ApiError } from "@/lib/api";
@@ -268,18 +269,23 @@ export default function JobDetail() {
             <Section title="About the company"><p className="text-sm leading-7 text-muted-foreground">{job.aboutCompany}</p></Section>
           ) : null}
           {job.jobDescription || job.description ? (
-            <Section title="Role description">
-              <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">{job.jobDescription || job.description}</p>
+            <Section title={job.jobDescriptionTitle || "Job description"}>
+              <BulletList value={job.jobDescription || job.description} />
             </Section>
           ) : null}
-          {job.requirements ? (
-            <Section title="Requirements">
-              <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">{job.requirements}</p>
+          {job.requirements || hasStructuredRequirements(job.requirementDetails) ? (
+            <Section title={job.requirementsTitle || "Requirements"}>
+              <div className="space-y-2">
+                <BulletList value={job.requirements} />
+                {hasStructuredRequirements(job.requirementDetails) ? (
+                  <StructuredJobRequirements details={job.requirementDetails!} />
+                ) : null}
+              </div>
             </Section>
           ) : null}
           {job.benefits ? (
-            <Section title="Benefits">
-              <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">{job.benefits}</p>
+            <Section title={job.benefitsTitle || "Benefits"}>
+              <BulletList value={job.benefits} />
             </Section>
           ) : null}
 
@@ -481,6 +487,73 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+function hasStructuredRequirements(details?: JobRequirementDetails): boolean {
+  return Boolean(details?.educationMode
+    || details?.experienceRequirements.length
+    || details?.requiredSkills.length
+    || details?.techStack.length
+    || details?.tools.length
+    || details?.technicalKnowledge.length);
+}
+
+function StructuredJobRequirements({ details }: { details: JobRequirementDetails }) {
+  const degreeLabels = details.degrees.map(formatDegree);
+  const education = details.educationMode === "NOT_REQUIRED"
+    ? "No degree requirement"
+    : details.educationMode === "MINIMUM"
+      ? `Minimum degree: ${degreeLabels[0] || "Not specified"}`
+      : `Accepted degrees: ${degreeLabels.join(", ") || "Not specified"}`;
+  const experience = details.minimumYearsExperience === 0
+    ? "Không yêu cầu kinh nghiệm"
+    : `Minimum experience: ${details.minimumYearsExperience ?? 0}+ years`;
+  const items = [
+    education,
+    details.educationMajors.length > 0
+      ? `Relevant majors: ${details.educationMajors.join(", ")}`
+      : "",
+    details.preferredInstitutions.length > 0
+      ? `Preferred institutes: ${details.preferredInstitutions.join(", ")}`
+      : "",
+    experience,
+    ...details.experienceRequirements,
+    details.requiredSkills.length > 0
+      ? `Required skills: ${details.requiredSkills.join(", ")}`
+      : "",
+    details.techStack.length > 0
+      ? `Tech stack: ${details.techStack.join(", ")}`
+      : "",
+    details.englishRequired
+      ? `English: ${details.englishLevel || "required"} — ${details.englishSkills.join(", ")}`
+      : "No English requirement",
+    details.tools.length > 0 ? `Tools: ${details.tools.join(", ")}` : "",
+    details.technicalKnowledge.length > 0
+      ? `Technical knowledge: ${details.technicalKnowledge.join(", ")}`
+      : "",
+  ].filter(Boolean);
+
+  return <BulletList value={items} />;
+}
+
+function BulletList({ value }: { value?: string | string[] }) {
+  const items = (Array.isArray(value) ? value : value?.split(/\r?\n/) ?? [])
+    .map((item) => item.replace(/^\s*[-*•]\s*/, "").trim())
+    .filter(Boolean);
+
+  if (items.length === 0) return null;
+  return (
+    <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-muted-foreground">
+      {items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+    </ul>
+  );
+}
+
+function formatDegree(degree: string): string {
+  if (degree === "BACHELOR") return "Bachelor";
+  if (degree === "MASTER") return "Master";
+  if (degree === "PHD") return "PhD";
+  return degree;
 }
 
 // ── AI Match Panel ────────────────────────────────────────────────────────────

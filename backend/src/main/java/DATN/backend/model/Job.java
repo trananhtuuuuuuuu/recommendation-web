@@ -8,6 +8,8 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
@@ -18,6 +20,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import DATN.backend.utils.StringListConverter;
+import DATN.backend.Enum.JobEducationRequirementModeEnum;
 
 @Entity
 @Table(name = "jobs")
@@ -46,6 +49,9 @@ public class Job extends BaseEntity {
 
     @Column(name = "job_desc", nullable = true, columnDefinition = "TEXT")
     private String jobDesc;
+
+    @Column(name = "job_desc_title")
+    private String jobDescriptionTitle;
 
     @Column(nullable = false, name = "job_title")
     private String jobTitle;
@@ -77,6 +83,61 @@ public class Job extends BaseEntity {
     @Column(name = "requirements", nullable = true, columnDefinition = "TEXT")
     @Convert(converter = StringListConverter.class)
     private List<String> requirements;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "education_requirement_mode")
+    private JobEducationRequirementModeEnum educationRequirementMode;
+
+    @Column(name = "education_degrees", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> educationDegrees;
+
+    @Column(name = "education_majors", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> educationMajors;
+
+    @Column(name = "preferred_institutions", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> preferredInstitutions;
+
+    @Column(name = "minimum_years_experience")
+    private Integer minimumYearsExperience;
+
+    @Column(name = "experience_requirement", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> experienceRequirements;
+
+    @Column(name = "requirements_title")
+    private String requirementsTitle;
+
+    @Column(name = "benefits_title")
+    private String benefitsTitle;
+
+    @Column(name = "required_skills", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> requiredSkills;
+
+    @Column(name = "tech_stack", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> techStack;
+
+    @Column(name = "english_required")
+    private Boolean englishRequired;
+
+    @Column(name = "english_level")
+    private String englishLevel;
+
+    @Column(name = "english_skills", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> englishSkills;
+
+    @Column(name = "required_tools", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> tools;
+
+    @Column(name = "technical_knowledge", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    private List<String> technicalKnowledge;
 
     @Column(nullable = true, name = "salary_range")
     private String salaryRange;

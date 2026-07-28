@@ -20,11 +20,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { JobRequirementsForm } from "@/components/JobRequirementsForm";
 import {
   AI_MATCH_OPTIONS,
   AI_SCORE_OPTIONS,
   createRecruiterJob,
   fetchJob,
+  fetchRecruiter,
   fetchRecommendedCandidateSuggestion,
   fetchRecommendedCandidates,
   getJobId,
@@ -32,17 +34,38 @@ import {
   type ApplicationField,
   type CvJobMatch,
   type Job,
+  type JobRequirementDetails,
   type RecruiterCandidateMatch,
 } from "@/lib/jobsApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
+const EMPTY_JOB_REQUIREMENTS: JobRequirementDetails = {
+  educationMode: "",
+  degrees: [],
+  educationMajors: [],
+  preferredInstitutions: [],
+  minimumYearsExperience: undefined,
+  experienceRequirements: [""],
+  requiredSkills: [],
+  techStack: [],
+  englishRequired: undefined,
+  englishLevel: "",
+  englishSkills: [],
+  tools: [],
+  technicalKnowledge: [],
+};
+
 const empty: Job = {
-  jobTitle: "", aboutCompany: "", jobDescription: "", requirements: "", benefits: "",
+  jobTitle: "", aboutCompany: "",
+  jobDescriptionTitle: "Job description", jobDescription: "",
+  requirementsTitle: "Requirements", requirements: "",
+  benefitsTitle: "Benefits", benefits: "",
   location: "", salaryRange: "", jobType: "", yoe: "", experienceLevel: "", industry: "",
   postedDate: "", applyingDeadline: "", startDate: "", endDate: "",
   customApplicationFields: "",
+  requirementDetails: EMPTY_JOB_REQUIREMENTS,
 };
 
 const defaultFields: ApplicationField[] = [
@@ -61,7 +84,8 @@ export default function PostEditJob() {
   const [form, setForm] = useState<Job>(empty);
   const [useCustomForm, setUseCustomForm] = useState(false);
   const [applicationFields, setApplicationFields] = useState<ApplicationField[]>(defaultFields);
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(true);
+  const [companyProfileDescription, setCompanyProfileDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [publishedJob, setPublishedJob] = useState<Job | null>(null);
@@ -70,21 +94,51 @@ export default function PostEditJob() {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isEdit || !id) return;
-    fetchJob(id)
-      .then((j) => {
-        setForm({ ...empty, ...j });
-        const parsed = parseFields(j.customApplicationFields);
+    let active = true;
+
+    const loadFormContext = async () => {
+      setLoading(true);
+      const [profileResult, jobResult] = await Promise.allSettled([
+        user?.id ? fetchRecruiter(user.id) : Promise.resolve(null),
+        isEdit && id ? fetchJob(id) : Promise.resolve(null),
+      ]);
+      if (!active) return;
+
+      const profileDescription = profileResult.status === "fulfilled"
+        ? profileResult.value?.companyDescription?.trim() ?? ""
+        : "";
+      setCompanyProfileDescription(profileDescription);
+
+      if (jobResult.status === "rejected") {
+        toast.error("Failed to load job");
+      } else if (jobResult.value) {
+        const job = jobResult.value;
+        setForm({
+          ...empty,
+          ...job,
+          aboutCompany: profileDescription || job.aboutCompany || "",
+        });
+        const parsed = parseFields(job.customApplicationFields);
         if (parsed.length > 0) {
           setUseCustomForm(true);
           setApplicationFields(parsed);
         }
-      })
-      .catch(() => toast.error("Failed to load job"))
-      .finally(() => setLoading(false));
-  }, [id, isEdit]);
+      } else if (profileDescription) {
+        setForm((current) => ({ ...current, aboutCompany: profileDescription }));
+      }
+      setLoading(false);
+    };
+
+    void loadFormContext();
+    return () => {
+      active = false;
+    };
+  }, [id, isEdit, user?.id]);
 
   const update = (k: keyof Job, v: string) => setForm({ ...form, [k]: v });
+  const updateRequirementDetails = (requirementDetails: JobRequirementDetails) => {
+    setForm((current) => ({ ...current, requirementDetails }));
+  };
 
   const updateField = (index: number, patch: Partial<ApplicationField>) => {
     setApplicationFields((current) => current.map((field, i) => i === index ? { ...field, ...patch } : field));
@@ -124,6 +178,12 @@ export default function PostEditJob() {
 
   const submit = async () => {
     if (!user?.id) { toast.error("Missing recruiter ID"); return; }
+    const validationErrors = validateJob(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast.error("Please complete the highlighted job requirements.");
+      return;
+    }
     setSaving(true); setErrors({});
     try {
       const payload = {
@@ -200,7 +260,6 @@ export default function PostEditJob() {
               {field("jobTitle", "Job Title", { placeholder: "Senior Developer", required: true })}
               {field("location", "Location", { placeholder: "Remote" })}
               {field("jobType", "Job Type")}
-              {field("yoe", "Years of Experience", { placeholder: "3+ years" })}
               {field("experienceLevel", "Experience Level", { placeholder: "Mid / Senior" })}
               {field("industry", "Industry")}
               {field("salaryRange", "Salary Range", { placeholder: "$100K - $140K" })}
@@ -210,10 +269,41 @@ export default function PostEditJob() {
               {field("endDate", "End Date", { type: "date" })}
             </div>
 
-            {field("aboutCompany", "About Company", { textarea: true })}
-            {field("jobDescription", "Description", { textarea: true, rows: 4 })}
-            {field("requirements", "Requirements", { textarea: true, rows: 4 })}
-            {field("benefits", "Benefits", { textarea: true })}
+            {companyProfileDescription ? (
+              <p className="rounded-lg border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                Company overview will be taken automatically from your recruiter profile.
+              </p>
+            ) : field("aboutCompany", "About Company", { textarea: true })}
+
+            <JobContentSection
+              titleField={field("jobDescriptionTitle", "Section title", {
+                placeholder: "e.g. Job responsibilities",
+              })}
+              contentField={field("jobDescription", "Content", {
+                textarea: true,
+                rows: 4,
+                placeholder: "Enter one responsibility per line",
+              })}
+            />
+            <JobContentSection
+              titleField={field("requirementsTitle", "Section title", {
+                placeholder: "e.g. What you'll bring",
+              })}
+              contentField={field("requirements", "Additional requirement notes", {
+                textarea: true,
+                rows: 3,
+                placeholder: "Enter one requirement per line",
+              })}
+            />
+            <JobContentSection
+              titleField={field("benefitsTitle", "Section title", {
+                placeholder: "e.g. What we offer",
+              })}
+              contentField={field("benefits", "Content", {
+                textarea: true,
+                placeholder: "Enter one benefit per line",
+              })}
+            />
           </div>
 
           <div className="rounded-lg border bg-card p-5 space-y-4">
@@ -265,6 +355,12 @@ export default function PostEditJob() {
           </div>
         </div>
 
+        <JobRequirementsForm
+          value={form.requirementDetails ?? EMPTY_JOB_REQUIREMENTS}
+          onChange={updateRequirementDetails}
+          errors={errors}
+        />
+
         <div className="flex gap-3">
           <Button onClick={submit} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -275,6 +371,69 @@ export default function PostEditJob() {
       </motion.div>
     </div>
   );
+}
+
+function JobContentSection({
+  titleField,
+  contentField,
+}: {
+  titleField: React.ReactNode;
+  contentField: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-3 rounded-lg border bg-secondary/20 p-4 sm:grid-cols-[minmax(180px,0.35fr)_1fr]">
+      {titleField}
+      {contentField}
+    </div>
+  );
+}
+
+function validateJob(job: Job): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const details = job.requirementDetails;
+
+  if (!job.jobTitle?.trim()) errors.jobTitle = "Job title is required";
+  if (!details?.educationMode) {
+    errors["requirementDetails.educationMode"] = "Select how degrees should be evaluated";
+  } else if (details.educationMode !== "NOT_REQUIRED") {
+    if (details.degrees.length === 0) {
+      errors["requirementDetails.degrees"] = "Select at least one degree";
+    } else if (details.educationMode === "MINIMUM" && details.degrees.length !== 1) {
+      errors["requirementDetails.degrees"] = "Select exactly one minimum degree";
+    }
+    if (details.educationMajors.length === 0) {
+      errors["requirementDetails.educationMajors"] = "Add at least one relevant major";
+    }
+  }
+  if (details?.minimumYearsExperience === undefined
+    || !Number.isInteger(details.minimumYearsExperience)
+    || details.minimumYearsExperience < 0) {
+    errors["requirementDetails.minimumYearsExperience"] = "Enter a whole number of zero or more";
+  }
+  if (!details?.experienceRequirements.some((item) => item.trim())) {
+    errors["requirementDetails.experienceRequirements"] = "Add at least one expected experience";
+  }
+  if (!details?.requiredSkills.length) {
+    errors["requirementDetails.requiredSkills"] = "Add at least one required skill";
+  }
+  if (!details?.techStack.length) {
+    errors["requirementDetails.techStack"] = "Add at least one technology";
+  }
+  if (details?.englishRequired === undefined) {
+    errors["requirementDetails.englishRequired"] = "Choose whether English is required";
+  } else if (details.englishRequired) {
+    if (!details.englishLevel?.trim()) {
+      errors["requirementDetails.englishLevel"] = "Select the minimum English level";
+    }
+    if (details.englishSkills.length === 0) {
+      errors["requirementDetails.englishSkills"] = "Select at least one English skill";
+    }
+  }
+  if (!details || (details.tools.length === 0 && details.technicalKnowledge.length === 0)) {
+    errors["requirementDetails.toolsOrTechnicalKnowledge"] =
+      "Add at least one tool or technical knowledge item";
+  }
+  return errors;
 }
 
 function PublishedJobRecommendations({
@@ -420,9 +579,8 @@ function PublishedJobRecommendations({
                   transition={{ delay: item.rank * 0.035 }}
                   className="grid gap-4 rounded-lg border bg-background p-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start"
                 >
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-full font-display font-bold ${
-                    item.rank === 1 ? "bg-warning/15 text-warning" : "bg-secondary text-foreground"
-                  }`}>
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-full font-display font-bold ${item.rank === 1 ? "bg-warning/15 text-warning" : "bg-secondary text-foreground"
+                    }`}>
                     {item.rank === 1 ? <Trophy className="h-5 w-5" /> : `#${item.rank}`}
                   </div>
                   <div className="min-w-0">

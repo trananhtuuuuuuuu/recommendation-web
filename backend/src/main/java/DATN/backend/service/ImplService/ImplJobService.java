@@ -296,7 +296,7 @@ public class ImplJobService implements InterfaceJobService {
                                 && !jobDescription.getRecruiter().getId().equals(recruiter.getId())) {
                         throw new AlreadyExistException("Only posting recruiter can edit this job");
                 }
-                JobMapper.updateJob(jobDescription, request);
+                JobMapper.updateJob(jobDescription, recruiter, request);
                 jobDescription.setRecruiter(recruiter);
                 Job savedJob = jobDescriptionRepository.save(jobDescription);
                 return JobMapper.toResponse(savedJob);

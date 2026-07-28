@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import DATN.backend.Enum.DegreeEnum;
+import DATN.backend.Enum.JobEducationRequirementModeEnum;
 import DATN.backend.model.Applicant;
 import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
@@ -58,6 +59,19 @@ class ImplCvMatchServiceTests {
         Job job = new Job();
         job.setId(20L);
         job.setJobTitle("Backend Engineer");
+        job.setEducationRequirementMode(JobEducationRequirementModeEnum.MINIMUM);
+        job.setEducationDegrees(List.of("BACHELOR"));
+        job.setEducationMajors(List.of("Computer Science"));
+        job.setPreferredInstitutions(List.of("HCMUS"));
+        job.setMinimumYearsExperience(3);
+        job.setExperienceRequirements(List.of("Built production REST APIs"));
+        job.setRequiredSkills(List.of("Java", "Debugging"));
+        job.setTechStack(List.of("Spring Boot", "PostgreSQL"));
+        job.setEnglishRequired(true);
+        job.setEnglishLevel("B2");
+        job.setEnglishSkills(List.of("Speaking", "Reading"));
+        job.setTools(List.of("Git", "Postman"));
+        job.setTechnicalKnowledge(List.of("REST API", "System design"));
 
         CvMatchAiResponse aiResponse = new CvMatchAiResponse();
         aiResponse.setPassedFilter(true);
@@ -82,8 +96,9 @@ class ImplCvMatchServiceTests {
         assertThat(result.getPrivacyMechanism()).isNull();
 
         ArgumentCaptor<Map<String, Object>> cvCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Map<String, Object>> jdCaptor = ArgumentCaptor.captor();
         org.mockito.Mockito.verify(aiService).matchCvToJob(
-                cvCaptor.capture(), any(), anyBoolean(), anyString());
+                cvCaptor.capture(), jdCaptor.capture(), anyBoolean(), anyString());
         Object entitiesValue = cvCaptor.getValue().get("entitiesByLabel");
         assertThat(entitiesValue).isInstanceOf(Map.class);
         Map<?, ?> entities = (Map<?, ?>) entitiesValue;
@@ -91,5 +106,21 @@ class ImplCvMatchServiceTests {
                 .isEqualTo(List.of("BSc", "Computer Science", "HCMUS"));
         assertThat(entities.get("CERTIFICATION"))
                 .isEqualTo(List.of("900", "TOEIC", "English Certificate"));
+        assertThat(jdCaptor.getValue())
+                .containsEntry("educationMode", "MINIMUM")
+                .containsEntry("degrees", "BACHELOR")
+                .containsEntry("educationLevel", "BACHELOR")
+                .containsEntry("educationMajors", "Computer Science")
+                .containsEntry("preferredInstitutions", "HCMUS")
+                .containsEntry("minimumYearsExperience", "3")
+                .containsEntry("experienceRequirements", "Built production REST APIs")
+                .containsEntry("experienceDescription", "Built production REST APIs")
+                .containsEntry("requiredSkills", "Java\nDebugging")
+                .containsEntry("techStack", "Spring Boot\nPostgreSQL")
+                .containsEntry("englishRequired", true)
+                .containsEntry("englishLevel", "B2")
+                .containsEntry("englishSkills", "Speaking\nReading")
+                .containsEntry("tools", "Git\nPostman")
+                .containsEntry("technicalKnowledge", "REST API\nSystem design");
     }
 }
