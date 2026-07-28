@@ -5,6 +5,7 @@ import java.util.List;
 import DATN.backend.Enum.JobDegreeEnum;
 import DATN.backend.Enum.JobEducationRequirementModeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -32,6 +33,9 @@ public class JobRequirementDetailsRequest {
     @NotNull(message = "Degrees must be provided, or use an empty list when education is not required")
     @Schema(example = "[\"BACHELOR\", \"MASTER\"]")
     private List<JobDegreeEnum> degrees;
+
+    @Schema(example = "Currently studying or has equivalent professional training")
+    private String noDegreeRequirement;
 
     @NotNull(message = "Education majors must be provided, or use an empty list when education is not required")
     @Schema(example = "[\"Computer Science\", \"Software Engineering\"]")
@@ -62,12 +66,16 @@ public class JobRequirementDetailsRequest {
     @Schema(example = "true")
     private Boolean englishRequired;
 
-    @Schema(example = "Upper-intermediate (B2)")
+    @Schema(example = "Upper-intermediate")
     private String englishLevel;
 
     @NotNull(message = "English skills must be provided, or use an empty list")
     @Schema(example = "[\"Speaking\", \"Reading technical documentation\"]")
     private List<@NotBlank(message = "English skill cannot be blank") String> englishSkills;
+
+    @Valid
+    @NotNull(message = "English certificates must be provided, or use an empty list")
+    private List<EnglishCertificateRequirementRequest> englishCertificates;
 
     @NotNull(message = "Tools must be provided, or use an empty list")
     @Schema(example = "[\"Git\", \"Jira\", \"Postman\"]")
@@ -82,14 +90,16 @@ public class JobRequirementDetailsRequest {
      *
      * @return {@code true} when the education selection is internally consistent
      */
-    @AssertTrue(message = "Select valid degrees and at least one major for the chosen education mode")
+    @AssertTrue(message = "Provide a no-degree applicant expectation, or select valid degrees and at least one major")
     @Schema(hidden = true)
     public boolean isEducationRequirementValid() {
         if (educationMode == null || degrees == null) {
             return true;
         }
         if (educationMode == JobEducationRequirementModeEnum.NOT_REQUIRED) {
-            return degrees.isEmpty();
+            return degrees.isEmpty()
+                    && noDegreeRequirement != null
+                    && !noDegreeRequirement.isBlank();
         }
         if (educationMajors == null || educationMajors.isEmpty()) {
             return false;

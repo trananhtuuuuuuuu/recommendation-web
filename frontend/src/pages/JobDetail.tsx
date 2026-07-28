@@ -510,6 +510,9 @@ function StructuredJobRequirements({ details }: { details: JobRequirementDetails
     : `Minimum experience: ${details.minimumYearsExperience ?? 0}+ years`;
   const items = [
     education,
+    details.educationMode === "NOT_REQUIRED" && details.noDegreeRequirement
+      ? `Accepted alternative: ${details.noDegreeRequirement}`
+      : "",
     details.educationMajors.length > 0
       ? `Relevant majors: ${details.educationMajors.join(", ")}`
       : "",
@@ -527,6 +530,8 @@ function StructuredJobRequirements({ details }: { details: JobRequirementDetails
     details.englishRequired
       ? `English: ${details.englishLevel || "required"} — ${details.englishSkills.join(", ")}`
       : "No English requirement",
+    ...details.englishCertificates.map((certificate) =>
+      `English certificate: ${certificate.certificateName} — ${certificate.minimumScore}`),
     details.tools.length > 0 ? `Tools: ${details.tools.join(", ")}` : "",
     details.technicalKnowledge.length > 0
       ? `Technical knowledge: ${details.technicalKnowledge.join(", ")}`

@@ -848,8 +848,14 @@ class BackendEndpointsIntegrationTests {
                 "requiredSkills": ["JavaScript", "Debugging"],
                 "techStack": ["React", "TypeScript"],
                 "englishRequired": true,
-                "englishLevel": "B2",
+                "englishLevel": "Proficient",
                 "englishSkills": ["Speaking", "Reading"],
+                "englishCertificates": [
+                  {
+                    "certificateName": "IELTS Academic",
+                    "minimumScore": "6.5 overall"
+                  }
+                ],
                 "tools": ["Git", "Jira"],
                 "technicalKnowledge": ["REST API", "System design"]
               }
@@ -882,7 +888,12 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.requirementDetails.requiredSkills[1]").value("Debugging"))
         .andExpect(jsonPath("$.data.requirementDetails.techStack[0]").value("React"))
         .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(true))
+        .andExpect(jsonPath("$.data.requirementDetails.englishLevel").value("Proficient"))
         .andExpect(jsonPath("$.data.requirementDetails.englishSkills[0]").value("Speaking"))
+        .andExpect(jsonPath("$.data.requirementDetails.englishCertificates[0].certificateName")
+            .value("IELTS Academic"))
+        .andExpect(jsonPath("$.data.requirementDetails.englishCertificates[0].minimumScore")
+            .value("6.5 overall"))
         .andExpect(jsonPath("$.data.requirementDetails.tools[0]").value("Git"))
         .andExpect(jsonPath("$.data.requirementDetails.technicalKnowledge[1]").value("System design"));
 
@@ -913,6 +924,7 @@ class BackendEndpointsIntegrationTests {
                 "techStack": ["Spring Boot"],
                 "englishRequired": true,
                 "englishSkills": [],
+                "englishCertificates": [],
                 "tools": [],
                 "technicalKnowledge": []
               }
@@ -920,7 +932,7 @@ class BackendEndpointsIntegrationTests {
             """))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.hasItems(
-            "Select valid degrees and at least one major for the chosen education mode",
+            "Provide a no-degree applicant expectation, or select valid degrees and at least one major",
             "English level and at least one English skill are required when English is required",
             "At least one tool or technical knowledge item is required")));
 
@@ -945,6 +957,7 @@ class BackendEndpointsIntegrationTests {
               "requirementDetails": {
                 "educationMode": "NOT_REQUIRED",
                 "degrees": [],
+                "noDegreeRequirement": "Currently studying or equivalent practical training",
                 "educationMajors": [],
                 "preferredInstitutions": [],
                 "minimumYearsExperience": 5,
@@ -953,6 +966,7 @@ class BackendEndpointsIntegrationTests {
                 "techStack": ["Spring Boot", "PostgreSQL"],
                 "englishRequired": false,
                 "englishSkills": [],
+                "englishCertificates": [],
                 "tools": ["Git"],
                 "technicalKnowledge": ["Microservices"]
               }
@@ -966,6 +980,8 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.industry").value("Platform"))
         .andExpect(jsonPath("$.data.customApplicationFields").doesNotExist())
         .andExpect(jsonPath("$.data.requirementDetails.educationMode").value("NOT_REQUIRED"))
+        .andExpect(jsonPath("$.data.requirementDetails.noDegreeRequirement")
+            .value("Currently studying or equivalent practical training"))
         .andExpect(jsonPath("$.data.requirementDetails.minimumYearsExperience").value(5))
         .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(false))
         .andExpect(jsonPath("$.data.requirementDetails.englishLevel").doesNotExist())

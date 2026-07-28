@@ -49,6 +49,7 @@ describe("post job candidate recommendations", () => {
       requirementDetails: {
         educationMode: "NOT_REQUIRED",
         degrees: [],
+        noDegreeRequirement: "Currently studying or equivalent practical training",
         educationMajors: [],
         preferredInstitutions: [],
         minimumYearsExperience: 3,
@@ -58,6 +59,7 @@ describe("post job candidate recommendations", () => {
         englishRequired: false,
         englishLevel: "",
         englishSkills: [],
+        englishCertificates: [],
         tools: ["Git"],
         technicalKnowledge: ["REST API"],
       },
@@ -134,6 +136,9 @@ describe("post job candidate recommendations", () => {
       target: { value: "Backend Engineer" },
     });
     fireEvent.click(screen.getByRole("button", { name: "No degree" }));
+    fireEvent.change(screen.getByLabelText("Applicant expectation without a degree *"), {
+      target: { value: "Currently studying or equivalent practical training" },
+    });
     fireEvent.change(screen.getByLabelText("Minimum years of experience *"), {
       target: { value: "3" },
     });
@@ -153,6 +158,7 @@ describe("post job candidate recommendations", () => {
         requirementDetails: expect.objectContaining({
           educationMode: "NOT_REQUIRED",
           degrees: [],
+          noDegreeRequirement: "Currently studying or equivalent practical training",
           minimumYearsExperience: 3,
           requiredSkills: ["Debugging"],
           techStack: ["React"],

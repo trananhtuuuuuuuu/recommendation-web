@@ -152,6 +152,7 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
                 job.getEducationDegrees() == null || job.getEducationDegrees().isEmpty()
                         ? ""
                         : job.getEducationDegrees().getFirst());
+        jd.put("noDegreeRequirement", nullToEmpty(job.getNoDegreeRequirement()));
         jd.put("educationMajors", nullToEmpty(StringListConverter.join(job.getEducationMajors())));
         jd.put("preferredInstitutions", nullToEmpty(StringListConverter.join(job.getPreferredInstitutions())));
         jd.put("minimumYearsExperience",
@@ -164,6 +165,11 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         jd.put("englishRequired", Boolean.TRUE.equals(job.getEnglishRequired()));
         jd.put("englishLevel", nullToEmpty(job.getEnglishLevel()));
         jd.put("englishSkills", nullToEmpty(StringListConverter.join(job.getEnglishSkills())));
+        jd.put("englishCertificates", job.getEnglishCertificates() == null
+                ? ""
+                : job.getEnglishCertificates().stream()
+                        .map(certificate -> certificate.getCertificateName() + ": " + certificate.getMinimumScore())
+                        .collect(java.util.stream.Collectors.joining("\n")));
         jd.put("tools", nullToEmpty(StringListConverter.join(job.getTools())));
         jd.put("technicalKnowledge", nullToEmpty(StringListConverter.join(job.getTechnicalKnowledge())));
         return jd;

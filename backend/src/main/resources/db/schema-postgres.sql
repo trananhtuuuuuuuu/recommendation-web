@@ -97,6 +97,7 @@ ALTER TABLE IF EXISTS jobs
     ADD COLUMN IF NOT EXISTS education_requirement VARCHAR(32),
     ADD COLUMN IF NOT EXISTS education_requirement_mode VARCHAR(32),
     ADD COLUMN IF NOT EXISTS education_degrees TEXT,
+    ADD COLUMN IF NOT EXISTS no_degree_requirement TEXT,
     ADD COLUMN IF NOT EXISTS education_majors TEXT,
     ADD COLUMN IF NOT EXISTS preferred_institutions TEXT,
     ADD COLUMN IF NOT EXISTS minimum_years_experience INTEGER,
@@ -135,6 +136,28 @@ UPDATE jobs SET requirements_title = 'Requirements'
 WHERE requirements_title IS NULL OR BTRIM(requirements_title) = '';
 UPDATE jobs SET benefits_title = 'Benefits'
 WHERE benefits_title IS NULL OR BTRIM(benefits_title) = '';
+
+UPDATE jobs
+SET english_level = CASE UPPER(BTRIM(english_level))
+        WHEN 'A1' THEN 'Beginner'
+        WHEN 'A2' THEN 'Elementary'
+        WHEN 'B1' THEN 'Intermediate'
+        WHEN 'B2' THEN 'Upper-intermediate'
+        WHEN 'C1' THEN 'Advanced'
+        WHEN 'C2' THEN 'Proficient'
+        ELSE english_level
+    END
+WHERE english_level IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS job_english_certificate_requirements (
+    job_id BIGINT NOT NULL,
+    display_order INTEGER NOT NULL,
+    certificate_name VARCHAR(255) NOT NULL,
+    minimum_score VARCHAR(255) NOT NULL,
+    PRIMARY KEY (job_id, display_order),
+    CONSTRAINT fk_job_english_certificate_requirement
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);
 
 -- ALTER TABLE IF EXISTS applicant_jobs
 --     ADD COLUMN IF NOT EXISTS created_at DATE,

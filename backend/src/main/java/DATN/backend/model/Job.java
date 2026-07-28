@@ -6,6 +6,9 @@ import java.util.List;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.EnumType;
@@ -13,6 +16,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -92,6 +96,9 @@ public class Job extends BaseEntity {
     @Convert(converter = StringListConverter.class)
     private List<String> educationDegrees;
 
+    @Column(name = "no_degree_requirement", columnDefinition = "TEXT")
+    private String noDegreeRequirement;
+
     @Column(name = "education_majors", columnDefinition = "TEXT")
     @Convert(converter = StringListConverter.class)
     private List<String> educationMajors;
@@ -130,6 +137,13 @@ public class Job extends BaseEntity {
     @Column(name = "english_skills", columnDefinition = "TEXT")
     @Convert(converter = StringListConverter.class)
     private List<String> englishSkills;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "job_english_certificate_requirements",
+            joinColumns = @JoinColumn(name = "job_id"))
+    @OrderColumn(name = "display_order")
+    private List<EnglishCertificateRequirement> englishCertificates;
 
     @Column(name = "required_tools", columnDefinition = "TEXT")
     @Convert(converter = StringListConverter.class)

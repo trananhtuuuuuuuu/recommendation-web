@@ -21,6 +21,7 @@ import lombok.Setter;
 public class JobRequirementDetailsResponse {
     private JobEducationRequirementModeEnum educationMode;
     private List<JobDegreeEnum> degrees;
+    private String noDegreeRequirement;
     private List<String> educationMajors;
     private List<String> preferredInstitutions;
     private Integer minimumYearsExperience;
@@ -30,6 +31,7 @@ public class JobRequirementDetailsResponse {
     private Boolean englishRequired;
     private String englishLevel;
     private List<String> englishSkills;
+    private List<EnglishCertificateRequirementResponse> englishCertificates;
     private List<String> tools;
     private List<String> technicalKnowledge;
 }

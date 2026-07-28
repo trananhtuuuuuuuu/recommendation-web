@@ -3,9 +3,15 @@ import { apiRequest } from "@/lib/api";
 export type JobDegree = "BACHELOR" | "MASTER" | "PHD";
 export type JobEducationMode = "NOT_REQUIRED" | "ANY_OF" | "MINIMUM";
 
+export interface EnglishCertificateRequirement {
+  certificateName: string;
+  minimumScore: string;
+}
+
 export interface JobRequirementDetails {
   educationMode?: JobEducationMode | "";
   degrees: JobDegree[];
+  noDegreeRequirement?: string;
   educationMajors: string[];
   preferredInstitutions: string[];
   minimumYearsExperience?: number;
@@ -15,6 +21,7 @@ export interface JobRequirementDetails {
   englishRequired?: boolean;
   englishLevel?: string;
   englishSkills: string[];
+  englishCertificates: EnglishCertificateRequirement[];
   tools: string[];
   technicalKnowledge: string[];
 }
@@ -280,6 +287,7 @@ const normalizeJob = (job: Job): Job => ({
   requirementDetails: {
     educationMode: job.requirementDetails?.educationMode ?? "",
     degrees: job.requirementDetails?.degrees ?? [],
+    noDegreeRequirement: job.requirementDetails?.noDegreeRequirement ?? "",
     educationMajors: job.requirementDetails?.educationMajors ?? [],
     preferredInstitutions: job.requirementDetails?.preferredInstitutions ?? [],
     minimumYearsExperience: job.requirementDetails?.minimumYearsExperience,
@@ -287,8 +295,9 @@ const normalizeJob = (job: Job): Job => ({
     requiredSkills: job.requirementDetails?.requiredSkills ?? [],
     techStack: job.requirementDetails?.techStack ?? [],
     englishRequired: job.requirementDetails?.englishRequired,
-    englishLevel: job.requirementDetails?.englishLevel ?? "",
+    englishLevel: normalizeEnglishLevel(job.requirementDetails?.englishLevel),
     englishSkills: job.requirementDetails?.englishSkills ?? [],
+    englishCertificates: job.requirementDetails?.englishCertificates ?? [],
     tools: job.requirementDetails?.tools ?? [],
     technicalKnowledge: job.requirementDetails?.technicalKnowledge ?? [],
   },
@@ -328,6 +337,9 @@ const cleanRequirementDetails = (
 ): JobRequirementDetails | undefined => details ? {
   ...details,
   degrees: details.educationMode === "NOT_REQUIRED" ? [] : details.degrees,
+  noDegreeRequirement: details.educationMode === "NOT_REQUIRED"
+    ? cleanString(details.noDegreeRequirement)
+    : undefined,
   educationMajors: details.educationMode === "NOT_REQUIRED" ? [] : cleanList(details.educationMajors),
   preferredInstitutions: details.educationMode === "NOT_REQUIRED"
     ? []
@@ -337,9 +349,31 @@ const cleanRequirementDetails = (
   techStack: cleanList(details.techStack),
   englishLevel: details.englishRequired ? cleanString(details.englishLevel) : undefined,
   englishSkills: details.englishRequired ? cleanList(details.englishSkills) : [],
+  englishCertificates: details.englishRequired
+    ? details.englishCertificates
+      .map((certificate) => ({
+        certificateName: certificate.certificateName.trim(),
+        minimumScore: certificate.minimumScore.trim(),
+      }))
+      .filter((certificate) => certificate.certificateName && certificate.minimumScore)
+    : [],
   tools: cleanList(details.tools),
   technicalKnowledge: cleanList(details.technicalKnowledge),
 } : undefined;
+
+const ENGLISH_LEVEL_LABELS: Record<string, string> = {
+  A1: "Beginner",
+  A2: "Elementary",
+  B1: "Intermediate",
+  B2: "Upper-intermediate",
+  C1: "Advanced",
+  C2: "Proficient",
+};
+
+function normalizeEnglishLevel(value?: string): string {
+  if (!value) return "";
+  return ENGLISH_LEVEL_LABELS[value.toUpperCase()] ?? value;
+}
 
 export const toRecruiterJobPayload = (job: Job): RecruiterJobPayload => ({
   jobTitle: cleanString(job.jobTitle),

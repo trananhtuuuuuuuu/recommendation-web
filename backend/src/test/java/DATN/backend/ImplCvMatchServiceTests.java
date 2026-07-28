@@ -20,6 +20,7 @@ import DATN.backend.model.Applicant;
 import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
 import DATN.backend.model.Education;
+import DATN.backend.model.EnglishCertificateRequirement;
 import DATN.backend.model.Job;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.JobRepository;
@@ -70,6 +71,8 @@ class ImplCvMatchServiceTests {
         job.setEnglishRequired(true);
         job.setEnglishLevel("B2");
         job.setEnglishSkills(List.of("Speaking", "Reading"));
+        job.setEnglishCertificates(List.of(
+                new EnglishCertificateRequirement("IELTS Academic", "6.5 overall")));
         job.setTools(List.of("Git", "Postman"));
         job.setTechnicalKnowledge(List.of("REST API", "System design"));
 
@@ -120,6 +123,7 @@ class ImplCvMatchServiceTests {
                 .containsEntry("englishRequired", true)
                 .containsEntry("englishLevel", "B2")
                 .containsEntry("englishSkills", "Speaking\nReading")
+                .containsEntry("englishCertificates", "IELTS Academic: 6.5 overall")
                 .containsEntry("tools", "Git\nPostman")
                 .containsEntry("technicalKnowledge", "REST API\nSystem design");
     }

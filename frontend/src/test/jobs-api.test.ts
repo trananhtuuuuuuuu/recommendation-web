@@ -31,6 +31,7 @@ describe("toRecruiterJobPayload", () => {
       requirementDetails: {
         educationMode: "MINIMUM",
         degrees: ["BACHELOR"],
+        noDegreeRequirement: "",
         educationMajors: ["Computer Science"],
         preferredInstitutions: [],
         minimumYearsExperience: 3,
@@ -40,6 +41,7 @@ describe("toRecruiterJobPayload", () => {
         englishRequired: false,
         englishLevel: "",
         englishSkills: [],
+        englishCertificates: [],
         tools: ["Git"],
         technicalKnowledge: ["REST API"],
       },
@@ -68,6 +70,7 @@ describe("toRecruiterJobPayload", () => {
       customApplicationFields: "[]",
       requirementDetails: {
         ...job.requirementDetails!,
+        noDegreeRequirement: undefined,
         englishLevel: undefined,
       },
     });

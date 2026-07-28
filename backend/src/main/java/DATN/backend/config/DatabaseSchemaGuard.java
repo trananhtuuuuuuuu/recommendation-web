@@ -243,6 +243,7 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                 "education_requirement VARCHAR(32)",
                                 "education_requirement_mode VARCHAR(32)",
                                 "education_degrees TEXT",
+                                "no_degree_requirement TEXT",
                                 "education_majors TEXT",
                                 "preferred_institutions TEXT",
                                 "minimum_years_experience INTEGER",
@@ -297,6 +298,30 @@ public class DatabaseSchemaGuard implements ApplicationRunner {
                                         UPDATE jobs
                                         SET benefits_title = 'Benefits'
                                         WHERE benefits_title IS NULL OR TRIM(benefits_title) = ''
+                                        """);
+                        jdbcTemplate.execute("""
+                                        UPDATE jobs
+                                        SET english_level = CASE UPPER(TRIM(english_level))
+                                                WHEN 'A1' THEN 'Beginner'
+                                                WHEN 'A2' THEN 'Elementary'
+                                                WHEN 'B1' THEN 'Intermediate'
+                                                WHEN 'B2' THEN 'Upper-intermediate'
+                                                WHEN 'C1' THEN 'Advanced'
+                                                WHEN 'C2' THEN 'Proficient'
+                                                ELSE english_level
+                                        END
+                                        WHERE english_level IS NOT NULL
+                                        """);
+                        jdbcTemplate.execute("""
+                                        CREATE TABLE IF NOT EXISTS job_english_certificate_requirements (
+                                                job_id BIGINT NOT NULL,
+                                                display_order INTEGER NOT NULL,
+                                                certificate_name VARCHAR(255) NOT NULL,
+                                                minimum_score VARCHAR(255) NOT NULL,
+                                                PRIMARY KEY (job_id, display_order),
+                                                CONSTRAINT fk_job_english_certificate_requirement
+                                                        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+                                        )
                                         """);
                 }
         }

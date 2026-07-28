@@ -44,6 +44,7 @@ import { toast } from "sonner";
 const EMPTY_JOB_REQUIREMENTS: JobRequirementDetails = {
   educationMode: "",
   degrees: [],
+  noDegreeRequirement: "",
   educationMajors: [],
   preferredInstitutions: [],
   minimumYearsExperience: undefined,
@@ -53,6 +54,7 @@ const EMPTY_JOB_REQUIREMENTS: JobRequirementDetails = {
   englishRequired: undefined,
   englishLevel: "",
   englishSkills: [],
+  englishCertificates: [],
   tools: [],
   technicalKnowledge: [],
 };
@@ -395,6 +397,11 @@ function validateJob(job: Job): Record<string, string> {
   if (!job.jobTitle?.trim()) errors.jobTitle = "Job title is required";
   if (!details?.educationMode) {
     errors["requirementDetails.educationMode"] = "Select how degrees should be evaluated";
+  } else if (details.educationMode === "NOT_REQUIRED") {
+    if (!details.noDegreeRequirement?.trim()) {
+      errors["requirementDetails.noDegreeRequirement"] =
+        "Describe what you expect from an applicant without a degree";
+    }
   } else if (details.educationMode !== "NOT_REQUIRED") {
     if (details.degrees.length === 0) {
       errors["requirementDetails.degrees"] = "Select at least one degree";
@@ -427,6 +434,12 @@ function validateJob(job: Job): Record<string, string> {
     }
     if (details.englishSkills.length === 0) {
       errors["requirementDetails.englishSkills"] = "Select at least one English skill";
+    }
+    if (details.englishCertificates.some(
+      (certificate) => !certificate.certificateName.trim() || !certificate.minimumScore.trim(),
+    )) {
+      errors["requirementDetails.englishCertificates"] =
+        "Complete both the certificate name and required score";
     }
   }
   if (!details || (details.tools.length === 0 && details.technicalKnowledge.length === 0)) {

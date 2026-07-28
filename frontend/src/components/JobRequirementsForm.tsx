@@ -22,7 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { JobDegree, JobRequirementDetails } from "@/lib/jobsApi";
+import type {
+  EnglishCertificateRequirement,
+  JobDegree,
+  JobRequirementDetails,
+} from "@/lib/jobsApi";
 
 const ENGLISH_SKILLS = ["Speaking", "Listening", "Reading", "Writing"];
 const DEGREES: Array<[JobDegree, string]> = [
@@ -73,7 +77,8 @@ export function JobRequirementsForm({
   const completedSections = [
     Boolean(value.educationMode)
       && (value.educationMode === "NOT_REQUIRED"
-        || (value.degrees.length > 0 && value.educationMajors.length > 0)),
+        ? Boolean(value.noDegreeRequirement?.trim())
+        : value.degrees.length > 0 && value.educationMajors.length > 0),
     value.minimumYearsExperience !== undefined
       && value.experienceRequirements.some((item) => item.trim())
       && value.requiredSkills.length > 0
@@ -81,7 +86,11 @@ export function JobRequirementsForm({
     value.englishRequired === false
       || (value.englishRequired === true
         && Boolean(value.englishLevel?.trim())
-        && value.englishSkills.length > 0),
+        && value.englishSkills.length > 0
+        && value.englishCertificates.every(
+          (certificate) => certificate.certificateName.trim()
+            && certificate.minimumScore.trim(),
+        )),
     value.tools.length > 0 || value.technicalKnowledge.length > 0,
   ].filter(Boolean).length;
 
@@ -118,6 +127,7 @@ export function JobRequirementsForm({
                   ...value,
                   educationMode: "NOT_REQUIRED",
                   degrees: [],
+                  noDegreeRequirement: value.noDegreeRequirement ?? "",
                   educationMajors: [],
                   preferredInstitutions: [],
                 })}
@@ -147,6 +157,23 @@ export function JobRequirementsForm({
             </div>
             <FieldError message={errors["requirementDetails.educationMode"]} />
           </div>
+
+          {value.educationMode === "NOT_REQUIRED" ? (
+            <div className="space-y-2">
+              <Label htmlFor="no-degree-requirement">Applicant expectation without a degree *</Label>
+              <Input
+                id="no-degree-requirement"
+                value={value.noDegreeRequirement ?? ""}
+                onChange={(event) => update("noDegreeRequirement", event.target.value)}
+                placeholder="e.g. Currently studying or has equivalent professional training"
+                aria-invalid={Boolean(errors["requirementDetails.noDegreeRequirement"])}
+              />
+              <p className="text-xs text-muted-foreground">
+                Describe the study status, equivalent training, or practical background you accept.
+              </p>
+              <FieldError message={errors["requirementDetails.noDegreeRequirement"]} />
+            </div>
+          ) : null}
 
           {value.educationMode && value.educationMode !== "NOT_REQUIRED" ? (
             <>
@@ -261,6 +288,7 @@ export function JobRequirementsForm({
                   englishRequired: false,
                   englishLevel: "",
                   englishSkills: [],
+                  englishCertificates: [],
                 })}
               >
                 No requirement
@@ -281,12 +309,12 @@ export function JobRequirementsForm({
                     <SelectValue placeholder="Select a level" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="A1">A1 — Beginner</SelectItem>
-                    <SelectItem value="A2">A2 — Elementary</SelectItem>
-                    <SelectItem value="B1">B1 — Intermediate</SelectItem>
-                    <SelectItem value="B2">B2 — Upper-intermediate</SelectItem>
-                    <SelectItem value="C1">C1 — Advanced</SelectItem>
-                    <SelectItem value="C2">C2 — Proficient</SelectItem>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Elementary">Elementary</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Upper-intermediate">Upper-intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                    <SelectItem value="Proficient">Proficient</SelectItem>
                   </SelectContent>
                 </Select>
                 <FieldError message={errors["requirementDetails.englishLevel"]} />
@@ -308,6 +336,12 @@ export function JobRequirementsForm({
                 </div>
                 <FieldError message={errors["requirementDetails.englishSkills"]} />
               </div>
+
+              <EnglishCertificateInputs
+                values={value.englishCertificates}
+                onChange={(certificates) => update("englishCertificates", certificates)}
+                error={errors["requirementDetails.englishCertificates"]}
+              />
             </>
           ) : null}
         </RequirementCard>
@@ -431,6 +465,83 @@ function StatementListInput({
       >
         <Plus className="h-4 w-4" />
         Add experience
+      </Button>
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function EnglishCertificateInputs({
+  values,
+  onChange,
+  error,
+}: {
+  values: EnglishCertificateRequirement[];
+  onChange: (values: EnglishCertificateRequirement[]) => void;
+  error?: string;
+}) {
+  const updateCertificate = (
+    index: number,
+    patch: Partial<EnglishCertificateRequirement>,
+  ) => {
+    onChange(values.map((certificate, itemIndex) =>
+      itemIndex === index ? { ...certificate, ...patch } : certificate));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label>English certificates</Label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Optional — add each accepted certificate and its required score.
+        </p>
+      </div>
+      {values.map((certificate, index) => (
+        <div
+          key={index}
+          className="grid gap-2 rounded-lg border bg-secondary/20 p-3 sm:grid-cols-[1fr_1fr_auto]"
+        >
+          <Input
+            value={certificate.certificateName}
+            onChange={(event) => updateCertificate(index, {
+              certificateName: event.target.value,
+            })}
+            placeholder="Certificate name, e.g. IELTS Academic"
+            aria-label={`English certificate name ${index + 1}`}
+            aria-invalid={Boolean(error)}
+          />
+          <Input
+            value={certificate.minimumScore}
+            onChange={(event) => updateCertificate(index, {
+              minimumScore: event.target.value,
+            })}
+            placeholder="Required score, e.g. 6.5 overall"
+            aria-label={`English certificate score ${index + 1}`}
+            aria-invalid={Boolean(error)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+            aria-label={`Remove English certificate ${index + 1}`}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={() => onChange([
+          ...values,
+          { certificateName: "", minimumScore: "" },
+        ])}
+      >
+        <Plus className="h-4 w-4" />
+        Add certificate
       </Button>
       <FieldError message={error} />
     </div>

@@ -173,8 +173,12 @@ describe("Job detail applicant privacy", () => {
         requiredSkills: ["Java", "Debugging"],
         techStack: ["Spring Boot", "PostgreSQL"],
         englishRequired: true,
-        englishLevel: "B2",
+        englishLevel: "Proficient",
         englishSkills: ["Speaking", "Reading"],
+        englishCertificates: [{
+          certificateName: "IELTS Academic",
+          minimumScore: "6.5 overall",
+        }],
         tools: ["Git", "Postman"],
         technicalKnowledge: ["System design"],
       },
@@ -190,7 +194,9 @@ describe("Job detail applicant privacy", () => {
     expect(screen.getByText("Built production REST APIs")).toBeInTheDocument();
     expect(screen.getByText("Không yêu cầu kinh nghiệm")).toBeInTheDocument();
     expect(screen.getByText("Tech stack:", { exact: false })).toHaveTextContent("Spring Boot");
-    expect(screen.getByText("English:", { exact: false })).toHaveTextContent("B2");
+    expect(screen.getByText("English:", { exact: false })).toHaveTextContent("Proficient");
+    expect(screen.getByText("English certificate:", { exact: false }))
+      .toHaveTextContent("IELTS Academic — 6.5 overall");
     expect(screen.getByText("Tools:", { exact: false })).toHaveTextContent("Git, Postman");
   });
 });

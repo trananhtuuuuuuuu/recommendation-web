@@ -2,16 +2,19 @@ package DATN.backend.mapper;
 
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import DATN.backend.Enum.JobDegreeEnum;
 import DATN.backend.Enum.JobEducationRequirementModeEnum;
 import DATN.backend.model.ApplicationForm;
+import DATN.backend.model.EnglishCertificateRequirement;
 import DATN.backend.model.Job;
 import DATN.backend.model.Recruiter;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobResponse;
+import DATN.backend.response.job.EnglishCertificateRequirementResponse;
 import DATN.backend.response.job.JobRequirementDetailsResponse;
 import DATN.backend.request.recruiter.JobRequirementDetailsRequest;
 import DATN.backend.utils.StringListConverter;
@@ -161,6 +164,9 @@ public class JobMapper {
         job.setEducationDegrees(educationRequired
                 ? details.getDegrees().stream().map(JobDegreeEnum::name).distinct().toList()
                 : List.of());
+        job.setNoDegreeRequirement(educationRequired
+                ? null
+                : blankToNull(details.getNoDegreeRequirement()));
         job.setEducationMajors(educationRequired
                 ? normalizeList(details.getEducationMajors())
                 : List.of());
@@ -173,11 +179,18 @@ public class JobMapper {
         job.setTechStack(normalizeList(details.getTechStack()));
         job.setEnglishRequired(details.getEnglishRequired());
         job.setEnglishLevel(Boolean.TRUE.equals(details.getEnglishRequired())
-                ? blankToNull(details.getEnglishLevel())
+                ? normalizeEnglishLevel(details.getEnglishLevel())
                 : null);
         job.setEnglishSkills(Boolean.TRUE.equals(details.getEnglishRequired())
                 ? normalizeList(details.getEnglishSkills())
                 : List.of());
+        job.setEnglishCertificates(Boolean.TRUE.equals(details.getEnglishRequired())
+                ? new ArrayList<>(details.getEnglishCertificates().stream()
+                        .map(certificate -> new EnglishCertificateRequirement(
+                                certificate.getCertificateName().trim(),
+                                certificate.getMinimumScore().trim()))
+                        .toList())
+                : new ArrayList<>());
         job.setTools(normalizeList(details.getTools()));
         job.setTechnicalKnowledge(normalizeList(details.getTechnicalKnowledge()));
     }
@@ -186,6 +199,7 @@ public class JobMapper {
         return new JobRequirementDetailsResponse(
                 job.getEducationRequirementMode(),
                 toDegrees(job.getEducationDegrees()),
+                job.getNoDegreeRequirement(),
                 emptyIfNull(job.getEducationMajors()),
                 emptyIfNull(job.getPreferredInstitutions()),
                 job.getMinimumYearsExperience(),
@@ -193,10 +207,38 @@ public class JobMapper {
                 emptyIfNull(job.getRequiredSkills()),
                 emptyIfNull(job.getTechStack()),
                 job.getEnglishRequired(),
-                job.getEnglishLevel(),
+                normalizeEnglishLevel(job.getEnglishLevel()),
                 emptyIfNull(job.getEnglishSkills()),
+                toEnglishCertificateResponses(job.getEnglishCertificates()),
                 emptyIfNull(job.getTools()),
                 emptyIfNull(job.getTechnicalKnowledge()));
+    }
+
+    private static List<EnglishCertificateRequirementResponse> toEnglishCertificateResponses(
+            List<EnglishCertificateRequirement> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .map(value -> new EnglishCertificateRequirementResponse(
+                        value.getCertificateName(),
+                        value.getMinimumScore()))
+                .toList();
+    }
+
+    private static String normalizeEnglishLevel(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return switch (value.trim().toUpperCase()) {
+            case "A1" -> "Beginner";
+            case "A2" -> "Elementary";
+            case "B1" -> "Intermediate";
+            case "B2" -> "Upper-intermediate";
+            case "C1" -> "Advanced";
+            case "C2" -> "Proficient";
+            default -> value.trim();
+        };
     }
 
     private static List<JobDegreeEnum> toDegrees(List<String> values) {
