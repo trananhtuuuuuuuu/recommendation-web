@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import DATN.backend.exception.ForbiddenException;
 import DATN.backend.response.ApiResponse;
 import DATN.backend.security.InforInsideToken;
+import DATN.backend.service.InterfaceService.InterfaceApplicantCountPrivacyService;
 import DATN.backend.service.InterfaceService.InterfaceApplicantPrivacyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,13 +26,17 @@ import lombok.RequiredArgsConstructor;
 public class JobPrivacyController {
 
     private final InterfaceApplicantPrivacyService applicantPrivacyService;
+    private final InterfaceApplicantCountPrivacyService applicantCountPrivacyService;
 
-    @Operation(summary = "Get differentially private applicant count for a job")
+    @Operation(
+            summary = "Get the applicant-facing private count for the current 12-hour window",
+            description = "Returns one stable epsilon-DP count release per job-relative window. "
+                    + "The exact count, sampled noise, and epsilon are not included in the response.")
     @GetMapping("/{jobId}/applicant-count")
     public ResponseEntity<ApiResponse> getApplicantCount(@PathVariable Long jobId, Authentication authentication) {
-        Long applicantId = requireApplicant(authentication);
+        requireApplicant(authentication);
         return ResponseEntity.ok(ApiResponse.success("Applicant activity found", HttpStatus.OK,
-                applicantPrivacyService.getDifferentiallyPrivateApplicantCount(jobId, applicantId)));
+                applicantCountPrivacyService.getApplicantCountRelease(jobId)));
     }
 
     @Operation(summary = "Get anonymous candidate previews for applicants who applied to the same job")

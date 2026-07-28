@@ -20,8 +20,9 @@ import DATN.backend.model.Applicant;
 import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
 import DATN.backend.model.Education;
-import DATN.backend.model.EnglishCertificateRequirement;
 import DATN.backend.model.Job;
+import DATN.backend.model.JobLanguageRequirement;
+import DATN.backend.model.LanguageCertificateRequirement;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.request.applicant.CvJobMatchRequest;
@@ -68,11 +69,23 @@ class ImplCvMatchServiceTests {
         job.setExperienceRequirements(List.of("Built production REST APIs"));
         job.setRequiredSkills(List.of("Java", "Debugging"));
         job.setTechStack(List.of("Spring Boot", "PostgreSQL"));
-        job.setEnglishRequired(true);
-        job.setEnglishLevel("B2");
-        job.setEnglishSkills(List.of("Speaking", "Reading"));
-        job.setEnglishCertificates(List.of(
-                new EnglishCertificateRequirement("IELTS Academic", "6.5 overall")));
+        JobLanguageRequirement english = new JobLanguageRequirement();
+        english.setJob(job);
+        english.setDisplayOrder(0);
+        english.setLanguageName("English");
+        english.setProficiencyLevel("Professional working proficiency");
+        english.setSkills(List.of("Speaking", "Reading"));
+        english.setCertificates(List.of(
+                new LanguageCertificateRequirement("IELTS Academic", "6.5 overall")));
+        JobLanguageRequirement japanese = new JobLanguageRequirement();
+        japanese.setJob(job);
+        japanese.setDisplayOrder(1);
+        japanese.setLanguageName("Japanese");
+        japanese.setProficiencyLevel("JLPT N2");
+        japanese.setSkills(List.of("Speaking", "Reading technical documents"));
+        japanese.setCertificates(List.of(
+                new LanguageCertificateRequirement("JLPT", "N2")));
+        job.setLanguageRequirements(List.of(english, japanese));
         job.setTools(List.of("Git", "Postman"));
         job.setTechnicalKnowledge(List.of("REST API", "System design"));
 
@@ -120,11 +133,20 @@ class ImplCvMatchServiceTests {
                 .containsEntry("experienceDescription", "Built production REST APIs")
                 .containsEntry("requiredSkills", "Java\nDebugging")
                 .containsEntry("techStack", "Spring Boot\nPostgreSQL")
+                .containsEntry("languageRequired", true)
                 .containsEntry("englishRequired", true)
-                .containsEntry("englishLevel", "B2")
+                .containsEntry("englishLevel", "Professional working proficiency")
                 .containsEntry("englishSkills", "Speaking\nReading")
                 .containsEntry("englishCertificates", "IELTS Academic: 6.5 overall")
                 .containsEntry("tools", "Git\nPostman")
                 .containsEntry("technicalKnowledge", "REST API\nSystem design");
+        assertThat(jdCaptor.getValue().get("languageRequirements")).isInstanceOf(List.class);
+        assertThat((List<?>) jdCaptor.getValue().get("languageRequirements")).hasSize(2);
+        Map<?, ?> japanesePayload =
+                (Map<?, ?>) ((List<?>) jdCaptor.getValue().get("languageRequirements")).get(1);
+        assertThat(japanesePayload.get("languageName")).isEqualTo("Japanese");
+        assertThat(japanesePayload.get("proficiencyLevel")).isEqualTo("JLPT N2");
+        assertThat(japanesePayload.get("skills"))
+                .isEqualTo(List.of("Speaking", "Reading technical documents"));
     }
 }

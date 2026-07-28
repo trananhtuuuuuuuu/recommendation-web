@@ -159,6 +159,99 @@ CREATE TABLE IF NOT EXISTS job_english_certificate_requirements (
         FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 
+-- Generic language requirements. The English-only columns and table above stay
+-- in place during the compatibility period but new Java code uses these tables.
+CREATE TABLE IF NOT EXISTS job_language_requirements (
+    id BIGSERIAL PRIMARY KEY,
+    job_id BIGINT NOT NULL,
+    display_order INTEGER NOT NULL,
+    language_name VARCHAR(255) NOT NULL,
+    proficiency_level VARCHAR(255) NOT NULL,
+    skills TEXT NOT NULL,
+    CONSTRAINT fk_job_language_requirement
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_job_language_requirement_order
+    ON job_language_requirements(job_id, display_order);
+
+CREATE TABLE IF NOT EXISTS job_language_certificate_requirements (
+    language_requirement_id BIGINT NOT NULL,
+    display_order INTEGER NOT NULL,
+    certificate_name VARCHAR(255) NOT NULL,
+    minimum_score VARCHAR(255) NOT NULL,
+    PRIMARY KEY (language_requirement_id, display_order),
+    CONSTRAINT fk_language_certificate_requirement
+        FOREIGN KEY (language_requirement_id)
+        REFERENCES job_language_requirements(id) ON DELETE CASCADE
+);
+
+INSERT INTO job_language_requirements (
+    job_id, display_order, language_name, proficiency_level, skills
+)
+SELECT id,
+       COALESCE((
+         SELECT MAX(existing.display_order) + 1
+         FROM job_language_requirements existing
+         WHERE existing.job_id = jobs.id
+       ), 0),
+       'English', COALESCE(NULLIF(BTRIM(english_level), ''), 'Not specified'),
+       COALESCE(NULLIF(BTRIM(english_skills), ''), '[]')
+FROM jobs
+WHERE english_required = TRUE
+  AND NOT EXISTS (
+    SELECT 1
+    FROM job_language_requirements language_requirement
+    WHERE language_requirement.job_id = jobs.id
+      AND LOWER(language_requirement.language_name) = 'english'
+  );
+
+INSERT INTO job_language_certificate_requirements (
+    language_requirement_id, display_order, certificate_name, minimum_score
+)
+SELECT language_requirement.id, certificate.display_order,
+       certificate.certificate_name, certificate.minimum_score
+FROM job_english_certificate_requirements certificate
+JOIN job_language_requirements language_requirement
+  ON language_requirement.job_id = certificate.job_id
+ AND LOWER(language_requirement.language_name) = 'english'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM job_language_certificate_requirements migrated
+    WHERE migrated.language_requirement_id = language_requirement.id
+      AND migrated.display_order = certificate.display_order
+);
+
+-- Applicant-facing DP releases refresh every 12 hours relative to the moment
+-- each job was published.
+ALTER TABLE IF EXISTS jobs
+    ADD COLUMN IF NOT EXISTS published_at TIMESTAMP WITH TIME ZONE;
+
+UPDATE jobs
+SET published_at = posted_date::TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'
+WHERE published_at IS NULL AND posted_date IS NOT NULL;
+
+UPDATE jobs
+SET published_at = CURRENT_TIMESTAMP
+WHERE published_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS privacy_releases (
+    id BIGSERIAL PRIMARY KEY,
+    release_key VARCHAR(512) NOT NULL,
+    metric_name VARCHAR(128) NOT NULL,
+    job_id BIGINT NOT NULL,
+    audience VARCHAR(64) NOT NULL,
+    release_window VARCHAR(64) NOT NULL,
+    released_value BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_privacy_release_key
+    ON privacy_releases(release_key);
+
+-- Existing job_applicant_count_snapshots tables are intentionally retained for
+-- compatibility, but new installations and Java runtime code no longer use them.
+
 -- ALTER TABLE IF EXISTS applicant_jobs
 --     ADD COLUMN IF NOT EXISTS created_at DATE,
 --     ADD COLUMN IF NOT EXISTS updated_at DATE,
@@ -311,15 +404,3 @@ CREATE TABLE IF NOT EXISTS job_english_certificate_requirements (
 --     ADD COLUMN IF NOT EXISTS updated_at DATE,
 --     ADD COLUMN IF NOT EXISTS deleted_at DATE,
 --     ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN;
-
--- CREATE TABLE IF NOT EXISTS privacy_releases (
---     id BIGSERIAL PRIMARY KEY,
---     release_key VARCHAR(512) NOT NULL,
---     metric_name VARCHAR(128) NOT NULL,
---     job_id BIGINT NOT NULL,
---     audience VARCHAR(64) NOT NULL,
---     release_window VARCHAR(64) NOT NULL,
---     released_value BIGINT NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
---     CONSTRAINT uk_privacy_release_key UNIQUE (release_key)
--- );

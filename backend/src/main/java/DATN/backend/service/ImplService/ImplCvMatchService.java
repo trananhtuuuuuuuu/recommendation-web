@@ -15,6 +15,7 @@ import DATN.backend.model.Cv;
 import DATN.backend.model.Education;
 import DATN.backend.model.Experience;
 import DATN.backend.model.Job;
+import DATN.backend.model.JobLanguageRequirement;
 import DATN.backend.repository.ApplicantRepository;
 import DATN.backend.repository.JobRepository;
 import DATN.backend.request.applicant.CvJobMatchRequest;
@@ -162,17 +163,44 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         jd.put("experienceDescription", experienceRequirements);
         jd.put("requiredSkills", nullToEmpty(StringListConverter.join(job.getRequiredSkills())));
         jd.put("techStack", nullToEmpty(StringListConverter.join(job.getTechStack())));
-        jd.put("englishRequired", Boolean.TRUE.equals(job.getEnglishRequired()));
-        jd.put("englishLevel", nullToEmpty(job.getEnglishLevel()));
-        jd.put("englishSkills", nullToEmpty(StringListConverter.join(job.getEnglishSkills())));
-        jd.put("englishCertificates", job.getEnglishCertificates() == null
+        List<JobLanguageRequirement> languages = job.getLanguageRequirements() == null
+                ? List.of()
+                : job.getLanguageRequirements();
+        jd.put("languageRequired", !languages.isEmpty());
+        jd.put("languageRequirements", languages.stream()
+                .map(this::toLanguageRequirementPayload)
+                .toList());
+        JobLanguageRequirement english = languages.stream()
+                .filter(language -> language.getLanguageName() != null
+                        && language.getLanguageName().equalsIgnoreCase("English"))
+                .findFirst()
+                .orElse(null);
+        jd.put("englishRequired", english != null);
+        jd.put("englishLevel", english == null ? "" : nullToEmpty(english.getProficiencyLevel()));
+        jd.put("englishSkills", english == null ? "" : nullToEmpty(StringListConverter.join(english.getSkills())));
+        jd.put("englishCertificates", english == null || english.getCertificates() == null
                 ? ""
-                : job.getEnglishCertificates().stream()
+                : english.getCertificates().stream()
                         .map(certificate -> certificate.getCertificateName() + ": " + certificate.getMinimumScore())
                         .collect(java.util.stream.Collectors.joining("\n")));
         jd.put("tools", nullToEmpty(StringListConverter.join(job.getTools())));
         jd.put("technicalKnowledge", nullToEmpty(StringListConverter.join(job.getTechnicalKnowledge())));
         return jd;
+    }
+
+    private Map<String, Object> toLanguageRequirementPayload(JobLanguageRequirement language) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("languageName", nullToEmpty(language.getLanguageName()));
+        payload.put("proficiencyLevel", nullToEmpty(language.getProficiencyLevel()));
+        payload.put("skills", language.getSkills() == null ? List.of() : language.getSkills());
+        payload.put("certificates", language.getCertificates() == null
+                ? List.of()
+                : language.getCertificates().stream()
+                        .map(certificate -> Map.of(
+                                "certificateName", nullToEmpty(certificate.getCertificateName()),
+                                "minimumScore", nullToEmpty(certificate.getMinimumScore())))
+                        .toList());
+        return payload;
     }
 
     private List<String> textList(String value) {

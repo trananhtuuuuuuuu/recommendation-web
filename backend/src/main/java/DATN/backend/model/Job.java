@@ -1,13 +1,13 @@
 package DATN.backend.model;
 
 import java.sql.Date;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,7 +16,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
-import jakarta.persistence.OrderColumn;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -40,6 +41,9 @@ public class Job extends BaseEntity {
 
     @Column(nullable = true, name = "applying_deadline")
     private Date applyingDeadline;
+
+    @Column(name = "published_at")
+    private Instant publishedAt;
 
     @Column(nullable = true, columnDefinition = "TEXT", name = "about_company")
     private String aboutCompany;
@@ -128,22 +132,10 @@ public class Job extends BaseEntity {
     @Convert(converter = StringListConverter.class)
     private List<String> techStack;
 
-    @Column(name = "english_required")
-    private Boolean englishRequired;
-
-    @Column(name = "english_level")
-    private String englishLevel;
-
-    @Column(name = "english_skills", columnDefinition = "TEXT")
-    @Convert(converter = StringListConverter.class)
-    private List<String> englishSkills;
-
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(
-            name = "job_english_certificate_requirements",
-            joinColumns = @JoinColumn(name = "job_id"))
-    @OrderColumn(name = "display_order")
-    private List<EnglishCertificateRequirement> englishCertificates;
+    @OneToMany(mappedBy = "job", cascade = jakarta.persistence.CascadeType.ALL,
+            orphanRemoval = true, fetch = FetchType.EAGER)
+    @OrderBy("displayOrder ASC")
+    private List<JobLanguageRequirement> languageRequirements = new ArrayList<>();
 
     @Column(name = "required_tools", columnDefinition = "TEXT")
     @Convert(converter = StringListConverter.class)

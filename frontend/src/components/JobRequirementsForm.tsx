@@ -14,21 +14,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type {
-  EnglishCertificateRequirement,
   JobDegree,
   JobRequirementDetails,
+  LanguageCertificateRequirement,
+  LanguageRequirement,
 } from "@/lib/jobsApi";
+import { createRequirementClientId } from "@/lib/jobsApi";
 
-const ENGLISH_SKILLS = ["Speaking", "Listening", "Reading", "Writing"];
+const LANGUAGE_SKILL_SUGGESTIONS = ["Speaking", "Listening", "Reading", "Writing"];
 const DEGREES: Array<[JobDegree, string]> = [
   ["BACHELOR", "Bachelor"],
   ["MASTER", "Master"],
@@ -53,14 +48,19 @@ export function JobRequirementsForm({
     nextValue: JobRequirementDetails[K],
   ) => onChange({ ...value, [key]: nextValue });
 
-  const toggleEnglishSkill = (skill: string) => {
-    const selected = value.englishSkills.includes(skill);
-    update(
-      "englishSkills",
-      selected
-        ? value.englishSkills.filter((item) => item !== skill)
-        : [...value.englishSkills, skill],
-    );
+  const languageRequirements = value.languageRequirements ?? [];
+
+  const newLanguageRequirement = (): LanguageRequirement => ({
+    clientId: createRequirementClientId("language"),
+    languageName: "",
+    proficiencyLevel: "",
+    skills: [],
+    certificates: [],
+  });
+
+  const updateLanguage = (index: number, patch: Partial<LanguageRequirement>) => {
+    update("languageRequirements", languageRequirements.map((language, itemIndex) =>
+      itemIndex === index ? { ...language, ...patch } : language));
   };
 
   const toggleDegree = (degree: JobDegree) => {
@@ -83,14 +83,17 @@ export function JobRequirementsForm({
       && value.experienceRequirements.some((item) => item.trim())
       && value.requiredSkills.length > 0
       && value.techStack.length > 0,
-    value.englishRequired === false
-      || (value.englishRequired === true
-        && Boolean(value.englishLevel?.trim())
-        && value.englishSkills.length > 0
-        && value.englishCertificates.every(
-          (certificate) => certificate.certificateName.trim()
-            && certificate.minimumScore.trim(),
-        )),
+    value.languageRequired === false
+      || (value.languageRequired === true
+        && languageRequirements.length > 0
+        && languageRequirements.every((language) =>
+          language.languageName.trim()
+          && language.proficiencyLevel.trim()
+          && language.skills.length > 0
+          && language.certificates.every(
+            (certificate) => certificate.certificateName.trim()
+              && certificate.minimumScore.trim(),
+          ))),
     value.tools.length > 0 || value.technicalKnowledge.length > 0,
   ].filter(Boolean).length;
 
@@ -269,80 +272,143 @@ export function JobRequirementsForm({
 
         <RequirementCard
           icon={Languages}
-          title="English"
-          description="Explicitly say whether English is required and which communication skills matter."
+          title="Language requirements"
+          description="Add every language needed for the role using recruiter-defined proficiency, skills, and certificates."
         >
           <div className="space-y-2">
-            <Label>Is English required? *</Label>
+            <Label>Are languages required? *</Label>
             <div className="grid grid-cols-2 gap-2">
               <ChoiceButton
-                selected={value.englishRequired === true}
-                onClick={() => update("englishRequired", true)}
-              >
-                Yes, required
-              </ChoiceButton>
-              <ChoiceButton
-                selected={value.englishRequired === false}
+                selected={value.languageRequired === true}
                 onClick={() => onChange({
                   ...value,
-                  englishRequired: false,
-                  englishLevel: "",
-                  englishSkills: [],
-                  englishCertificates: [],
+                  languageRequired: true,
+                  languageRequirements: languageRequirements.length > 0
+                    ? languageRequirements
+                    : [newLanguageRequirement()],
                 })}
               >
-                No requirement
+                Yes, languages required
+              </ChoiceButton>
+              <ChoiceButton
+                selected={value.languageRequired === false}
+                onClick={() => onChange({
+                  ...value,
+                  languageRequired: false,
+                  languageRequirements: [],
+                })}
+              >
+                No language requirement
               </ChoiceButton>
             </div>
-            <FieldError message={errors["requirementDetails.englishRequired"]} />
+            <FieldError message={errors["requirementDetails.languageRequired"]} />
           </div>
 
-          {value.englishRequired === true ? (
-            <>
-              <div className="space-y-2">
-                <Label>Minimum English level *</Label>
-                <Select
-                  value={value.englishLevel || undefined}
-                  onValueChange={(next) => update("englishLevel", next)}
+          {value.languageRequired === true ? (
+            <div className="space-y-4">
+              {languageRequirements.map((language, index) => (
+                <div
+                  key={language.clientId ?? `${language.languageName}-${index}`}
+                  className="space-y-4 rounded-xl border bg-secondary/10 p-4"
+                  aria-label={`Language requirement ${index + 1}`}
                 >
-                  <SelectTrigger aria-label="Minimum English level">
-                    <SelectValue placeholder="Select a level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Beginner">Beginner</SelectItem>
-                    <SelectItem value="Elementary">Elementary</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                    <SelectItem value="Upper-intermediate">Upper-intermediate</SelectItem>
-                    <SelectItem value="Advanced">Advanced</SelectItem>
-                    <SelectItem value="Proficient">Proficient</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FieldError message={errors["requirementDetails.englishLevel"]} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Required English skills *</Label>
-                <div className="flex flex-wrap gap-2">
-                  {ENGLISH_SKILLS.map((skill) => (
-                    <ChoiceButton
-                      key={skill}
-                      selected={value.englishSkills.includes(skill)}
-                      onClick={() => toggleEnglishSkill(skill)}
-                      compact
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">Language {index + 1}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1 text-muted-foreground"
+                      onClick={() => update(
+                        "languageRequirements",
+                        languageRequirements.filter((_, itemIndex) => itemIndex !== index),
+                      )}
+                      aria-label={`Remove language requirement ${index + 1}`}
                     >
-                      {skill}
-                    </ChoiceButton>
-                  ))}
-                </div>
-                <FieldError message={errors["requirementDetails.englishSkills"]} />
-              </div>
+                      <X className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
 
-              <EnglishCertificateInputs
-                values={value.englishCertificates}
-                onChange={(certificates) => update("englishCertificates", certificates)}
-                error={errors["requirementDetails.englishCertificates"]}
-              />
-            </>
+                  <div className="space-y-2">
+                    <Label htmlFor={`language-name-${language.clientId ?? index}`}>
+                      Language name *
+                    </Label>
+                    <Input
+                      id={`language-name-${language.clientId ?? index}`}
+                      value={language.languageName}
+                      onChange={(event) => updateLanguage(index, {
+                        languageName: event.target.value,
+                      })}
+                      placeholder="e.g. Japanese, Spanish, Korean"
+                      aria-invalid={Boolean(
+                        errors[`requirementDetails.languageRequirements.${index}.languageName`],
+                      )}
+                    />
+                    <FieldError
+                      message={errors[
+                        `requirementDetails.languageRequirements.${index}.languageName`
+                      ]}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`language-proficiency-${language.clientId ?? index}`}>
+                      Required proficiency *
+                    </Label>
+                    <Input
+                      id={`language-proficiency-${language.clientId ?? index}`}
+                      value={language.proficiencyLevel}
+                      onChange={(event) => updateLanguage(index, {
+                        proficiencyLevel: event.target.value,
+                      })}
+                      placeholder="e.g. JLPT N2 or business conversational"
+                      aria-invalid={Boolean(
+                        errors[`requirementDetails.languageRequirements.${index}.proficiencyLevel`],
+                      )}
+                    />
+                    <FieldError
+                      message={errors[
+                        `requirementDetails.languageRequirements.${index}.proficiencyLevel`
+                      ]}
+                    />
+                  </div>
+
+                  <TagInput
+                    label="Required skills *"
+                    hint="Type any skill, or use an optional suggestion."
+                    values={language.skills}
+                    onChange={(skills) => updateLanguage(index, { skills })}
+                    placeholder="e.g. Reading technical documents"
+                    suggestions={LANGUAGE_SKILL_SUGGESTIONS}
+                    error={errors[`requirementDetails.languageRequirements.${index}.skills`]}
+                  />
+
+                  <LanguageCertificateInputs
+                    languageLabel={language.languageName || `Language ${index + 1}`}
+                    values={language.certificates}
+                    onChange={(certificates) => updateLanguage(index, { certificates })}
+                    error={errors[
+                      `requirementDetails.languageRequirements.${index}.certificates`
+                    ]}
+                  />
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => update(
+                  "languageRequirements",
+                  [...languageRequirements, newLanguageRequirement()],
+                )}
+              >
+                <Plus className="h-4 w-4" />
+                Add language
+              </Button>
+              <FieldError message={errors["requirementDetails.languageRequirements"]} />
+            </div>
           ) : null}
         </RequirementCard>
 
@@ -471,18 +537,20 @@ function StatementListInput({
   );
 }
 
-function EnglishCertificateInputs({
+function LanguageCertificateInputs({
+  languageLabel,
   values,
   onChange,
   error,
 }: {
-  values: EnglishCertificateRequirement[];
-  onChange: (values: EnglishCertificateRequirement[]) => void;
+  languageLabel: string;
+  values: LanguageCertificateRequirement[];
+  onChange: (values: LanguageCertificateRequirement[]) => void;
   error?: string;
 }) {
   const updateCertificate = (
     index: number,
-    patch: Partial<EnglishCertificateRequirement>,
+    patch: Partial<LanguageCertificateRequirement>,
   ) => {
     onChange(values.map((certificate, itemIndex) =>
       itemIndex === index ? { ...certificate, ...patch } : certificate));
@@ -491,14 +559,14 @@ function EnglishCertificateInputs({
   return (
     <div className="space-y-2">
       <div>
-        <Label>English certificates</Label>
+        <Label>Certificates</Label>
         <p className="mt-1 text-xs text-muted-foreground">
           Optional — add each accepted certificate and its required score.
         </p>
       </div>
       {values.map((certificate, index) => (
         <div
-          key={index}
+          key={certificate.clientId ?? index}
           className="grid gap-2 rounded-lg border bg-secondary/20 p-3 sm:grid-cols-[1fr_1fr_auto]"
         >
           <Input
@@ -507,7 +575,7 @@ function EnglishCertificateInputs({
               certificateName: event.target.value,
             })}
             placeholder="Certificate name, e.g. IELTS Academic"
-            aria-label={`English certificate name ${index + 1}`}
+            aria-label={`${languageLabel} certificate name ${index + 1}`}
             aria-invalid={Boolean(error)}
           />
           <Input
@@ -516,7 +584,7 @@ function EnglishCertificateInputs({
               minimumScore: event.target.value,
             })}
             placeholder="Required score, e.g. 6.5 overall"
-            aria-label={`English certificate score ${index + 1}`}
+            aria-label={`${languageLabel} certificate score ${index + 1}`}
             aria-invalid={Boolean(error)}
           />
           <Button
@@ -524,7 +592,7 @@ function EnglishCertificateInputs({
             variant="outline"
             size="icon"
             onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-            aria-label={`Remove English certificate ${index + 1}`}
+            aria-label={`Remove ${languageLabel} certificate ${index + 1}`}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -537,7 +605,11 @@ function EnglishCertificateInputs({
         className="gap-2"
         onClick={() => onChange([
           ...values,
-          { certificateName: "", minimumScore: "" },
+          {
+            certificateName: "",
+            minimumScore: "",
+            clientId: createRequirementClientId("certificate"),
+          },
         ])}
       >
         <Plus className="h-4 w-4" />

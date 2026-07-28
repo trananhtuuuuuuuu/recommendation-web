@@ -5,6 +5,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,7 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import DATN.backend.exception.ForbiddenException;
 import DATN.backend.response.ApiResponse;
+import DATN.backend.security.InforInsideToken;
 import DATN.backend.service.InterfaceService.InterfaceJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,16 +48,38 @@ public class BrowseJobController {
 
     @Operation(summary = "Get applicant count for a job")
     @GetMapping("/applicants/{jobId}")
-    public ResponseEntity<ApiResponse> getApplicantCount(@PathVariable Long jobId) {
+    public ResponseEntity<ApiResponse> getApplicantCount(@PathVariable Long jobId, Authentication authentication) {
+        Long recruiterId = requirePostingRecruiterOrAdmin(authentication);
         return ResponseEntity.ok(ApiResponse.success("Applicant count found", HttpStatus.OK,
-                jobDescriptionService.getJobApplicantsCount(jobId, null)));
+                jobDescriptionService.getJobApplicantsCount(jobId, recruiterId)));
     }
 
     @Operation(summary = "Get applicants who applied for a job")
     @GetMapping("/applicants/{jobId}/list")
-    public ResponseEntity<ApiResponse> getApplicants(@PathVariable Long jobId) {
+    public ResponseEntity<ApiResponse> getApplicants(@PathVariable Long jobId, Authentication authentication) {
+        Long recruiterId = requirePostingRecruiterOrAdmin(authentication);
         return ResponseEntity.ok(ApiResponse.success("Job applicants found", HttpStatus.OK,
-                jobDescriptionService.getJobApplicants(jobId, null)));
+                jobDescriptionService.getJobApplicants(jobId, recruiterId)));
+    }
+
+    /**
+     * Resolves the recruiter identifier used for owner validation.
+     *
+     * @param authentication current JWT authentication
+     * @return recruiter identifier, or {@code null} for an administrator
+     * @throws ForbiddenException when the caller cannot access exact applicant data
+     */
+    private Long requirePostingRecruiterOrAdmin(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof InforInsideToken tokenInformation)) {
+            throw new ForbiddenException("Only the posting recruiter or an administrator can access applicants");
+        }
+        if ("ADMIN".equalsIgnoreCase(tokenInformation.getRoleName())) {
+            return null;
+        }
+        if ("RECRUITER".equalsIgnoreCase(tokenInformation.getRoleName())) {
+            return tokenInformation.getUserId();
+        }
+        throw new ForbiddenException("Only the posting recruiter or an administrator can access applicants");
     }
 
     private Pageable toPageable(int page, int size, String sort) {

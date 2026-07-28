@@ -51,6 +51,8 @@ const EMPTY_JOB_REQUIREMENTS: JobRequirementDetails = {
   experienceRequirements: [""],
   requiredSkills: [],
   techStack: [],
+  languageRequired: undefined,
+  languageRequirements: [],
   englishRequired: undefined,
   englishLevel: "",
   englishSkills: [],
@@ -426,21 +428,40 @@ function validateJob(job: Job): Record<string, string> {
   if (!details?.techStack.length) {
     errors["requirementDetails.techStack"] = "Add at least one technology";
   }
-  if (details?.englishRequired === undefined) {
-    errors["requirementDetails.englishRequired"] = "Choose whether English is required";
-  } else if (details.englishRequired) {
-    if (!details.englishLevel?.trim()) {
-      errors["requirementDetails.englishLevel"] = "Select the minimum English level";
+  if (details?.languageRequired === undefined) {
+    errors["requirementDetails.languageRequired"] =
+      "Choose whether languages are required";
+  } else if (details.languageRequired) {
+    const languages = details.languageRequirements ?? [];
+    if (languages.length === 0) {
+      errors["requirementDetails.languageRequirements"] =
+        "Add at least one language requirement";
     }
-    if (details.englishSkills.length === 0) {
-      errors["requirementDetails.englishSkills"] = "Select at least one English skill";
-    }
-    if (details.englishCertificates.some(
-      (certificate) => !certificate.certificateName.trim() || !certificate.minimumScore.trim(),
-    )) {
-      errors["requirementDetails.englishCertificates"] =
-        "Complete both the certificate name and required score";
-    }
+    const languageNames = new Set<string>();
+    languages.forEach((language, index) => {
+      const path = `requirementDetails.languageRequirements.${index}`;
+      const normalizedName = language.languageName.trim().toLocaleLowerCase();
+      if (!normalizedName) {
+        errors[`${path}.languageName`] = "Enter the language name";
+      } else if (languageNames.has(normalizedName)) {
+        errors[`${path}.languageName`] = "Each language can only be added once";
+      } else {
+        languageNames.add(normalizedName);
+      }
+      if (!language.proficiencyLevel.trim()) {
+        errors[`${path}.proficiencyLevel`] = "Enter the required proficiency";
+      }
+      if (!language.skills.some((skill) => skill.trim())) {
+        errors[`${path}.skills`] = "Add at least one required language skill";
+      }
+      if (language.certificates.some(
+        (certificate) => !certificate.certificateName.trim()
+          || !certificate.minimumScore.trim(),
+      )) {
+        errors[`${path}.certificates`] =
+          "Complete both the certificate name and required score";
+      }
+    });
   }
   if (!details || (details.tools.length === 0 && details.technicalKnowledge.length === 0)) {
     errors["requirementDetails.toolsOrTechnicalKnowledge"] =

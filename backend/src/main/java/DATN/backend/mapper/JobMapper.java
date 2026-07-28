@@ -4,17 +4,22 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import DATN.backend.Enum.JobDegreeEnum;
 import DATN.backend.Enum.JobEducationRequirementModeEnum;
 import DATN.backend.model.ApplicationForm;
-import DATN.backend.model.EnglishCertificateRequirement;
 import DATN.backend.model.Job;
+import DATN.backend.model.JobLanguageRequirement;
+import DATN.backend.model.LanguageCertificateRequirement;
 import DATN.backend.model.Recruiter;
+import DATN.backend.request.recruiter.LanguageRequirementRequest;
 import DATN.backend.request.recruiter.RecruiterJobRequest;
 import DATN.backend.response.job.JobApplicantsResponse;
 import DATN.backend.response.job.JobResponse;
 import DATN.backend.response.job.EnglishCertificateRequirementResponse;
+import DATN.backend.response.job.LanguageCertificateRequirementResponse;
+import DATN.backend.response.job.LanguageRequirementResponse;
 import DATN.backend.response.job.JobRequirementDetailsResponse;
 import DATN.backend.request.recruiter.JobRequirementDetailsRequest;
 import DATN.backend.utils.StringListConverter;
@@ -177,25 +182,17 @@ public class JobMapper {
         job.setExperienceRequirements(normalizeList(details.getExperienceRequirements()));
         job.setRequiredSkills(normalizeList(details.getRequiredSkills()));
         job.setTechStack(normalizeList(details.getTechStack()));
-        job.setEnglishRequired(details.getEnglishRequired());
-        job.setEnglishLevel(Boolean.TRUE.equals(details.getEnglishRequired())
-                ? normalizeEnglishLevel(details.getEnglishLevel())
-                : null);
-        job.setEnglishSkills(Boolean.TRUE.equals(details.getEnglishRequired())
-                ? normalizeList(details.getEnglishSkills())
-                : List.of());
-        job.setEnglishCertificates(Boolean.TRUE.equals(details.getEnglishRequired())
-                ? new ArrayList<>(details.getEnglishCertificates().stream()
-                        .map(certificate -> new EnglishCertificateRequirement(
-                                certificate.getCertificateName().trim(),
-                                certificate.getMinimumScore().trim()))
-                        .toList())
-                : new ArrayList<>());
+        replaceLanguageRequirements(job, details);
         job.setTools(normalizeList(details.getTools()));
         job.setTechnicalKnowledge(normalizeList(details.getTechnicalKnowledge()));
     }
 
     private static JobRequirementDetailsResponse toRequirementDetailsResponse(Job job) {
+        List<LanguageRequirementResponse> languages = toLanguageRequirementResponses(job.getLanguageRequirements());
+        LanguageRequirementResponse english = languages.stream()
+                .filter(language -> "english".equals(language.getLanguageName().trim().toLowerCase(Locale.ROOT)))
+                .findFirst()
+                .orElse(null);
         return new JobRequirementDetailsResponse(
                 job.getEducationRequirementMode(),
                 toDegrees(job.getEducationDegrees()),
@@ -206,19 +203,81 @@ public class JobMapper {
                 emptyIfNull(job.getExperienceRequirements()),
                 emptyIfNull(job.getRequiredSkills()),
                 emptyIfNull(job.getTechStack()),
-                job.getEnglishRequired(),
-                normalizeEnglishLevel(job.getEnglishLevel()),
-                emptyIfNull(job.getEnglishSkills()),
-                toEnglishCertificateResponses(job.getEnglishCertificates()),
+                !languages.isEmpty(),
+                languages,
+                english != null,
+                english == null ? null : english.getProficiencyLevel(),
+                english == null ? List.of() : english.getSkills(),
+                english == null ? List.of() : toLegacyEnglishCertificateResponses(english.getCertificates()),
                 emptyIfNull(job.getTools()),
                 emptyIfNull(job.getTechnicalKnowledge()));
     }
 
-    private static List<EnglishCertificateRequirementResponse> toEnglishCertificateResponses(
-            List<EnglishCertificateRequirement> values) {
+    private static void replaceLanguageRequirements(Job job, JobRequirementDetailsRequest details) {
+        List<LanguageRequirementRequest> requestedLanguages;
+        if (details.getLanguageRequired() != null) {
+            requestedLanguages = Boolean.TRUE.equals(details.getLanguageRequired())
+                    ? details.getLanguageRequirements()
+                    : List.of();
+        } else if (Boolean.TRUE.equals(details.getEnglishRequired())) {
+            requestedLanguages = List.of(new LanguageRequirementRequest(
+                    "English",
+                    normalizeEnglishLevel(details.getEnglishLevel()),
+                    details.getEnglishSkills(),
+                    details.getEnglishCertificates().stream()
+                            .map(certificate -> new DATN.backend.request.recruiter.LanguageCertificateRequirementRequest(
+                                    certificate.getCertificateName(),
+                                    certificate.getMinimumScore()))
+                            .toList()));
+        } else {
+            requestedLanguages = List.of();
+        }
+
+        if (job.getLanguageRequirements() == null) {
+            job.setLanguageRequirements(new ArrayList<>());
+        } else {
+            job.getLanguageRequirements().clear();
+        }
+
+        for (int index = 0; index < requestedLanguages.size(); index++) {
+            LanguageRequirementRequest request = requestedLanguages.get(index);
+            JobLanguageRequirement language = new JobLanguageRequirement();
+            language.setJob(job);
+            language.setDisplayOrder(index);
+            language.setLanguageName(request.getLanguageName().trim());
+            language.setProficiencyLevel(request.getProficiencyLevel().trim());
+            language.setSkills(new ArrayList<>(normalizeList(request.getSkills())));
+            language.setCertificates(new ArrayList<>(request.getCertificates().stream()
+                    .map(certificate -> new LanguageCertificateRequirement(
+                            certificate.getCertificateName().trim(),
+                            certificate.getMinimumScore().trim()))
+                    .toList()));
+            job.getLanguageRequirements().add(language);
+        }
+    }
+
+    private static List<LanguageRequirementResponse> toLanguageRequirementResponses(
+            List<JobLanguageRequirement> values) {
         if (values == null) {
             return List.of();
         }
+        return values.stream()
+                .map(value -> new LanguageRequirementResponse(
+                        value.getLanguageName(),
+                        value.getProficiencyLevel(),
+                        emptyIfNull(value.getSkills()),
+                        value.getCertificates() == null
+                                ? List.of()
+                                : value.getCertificates().stream()
+                                        .map(certificate -> new LanguageCertificateRequirementResponse(
+                                                certificate.getCertificateName(),
+                                                certificate.getMinimumScore()))
+                                        .toList()))
+                .toList();
+    }
+
+    private static List<EnglishCertificateRequirementResponse> toLegacyEnglishCertificateResponses(
+            List<LanguageCertificateRequirementResponse> values) {
         return values.stream()
                 .map(value -> new EnglishCertificateRequirementResponse(
                         value.getCertificateName(),

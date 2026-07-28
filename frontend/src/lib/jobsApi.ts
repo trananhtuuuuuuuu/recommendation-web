@@ -3,9 +3,21 @@ import { apiRequest } from "@/lib/api";
 export type JobDegree = "BACHELOR" | "MASTER" | "PHD";
 export type JobEducationMode = "NOT_REQUIRED" | "ANY_OF" | "MINIMUM";
 
-export interface EnglishCertificateRequirement {
+export interface LanguageCertificateRequirement {
   certificateName: string;
   minimumScore: string;
+  clientId?: string;
+}
+
+/** @deprecated Use LanguageCertificateRequirement. */
+export type EnglishCertificateRequirement = LanguageCertificateRequirement;
+
+export interface LanguageRequirement {
+  languageName: string;
+  proficiencyLevel: string;
+  skills: string[];
+  certificates: LanguageCertificateRequirement[];
+  clientId?: string;
 }
 
 export interface JobRequirementDetails {
@@ -18,10 +30,16 @@ export interface JobRequirementDetails {
   experienceRequirements: string[];
   requiredSkills: string[];
   techStack: string[];
+  languageRequired?: boolean;
+  languageRequirements?: LanguageRequirement[];
+  /** @deprecated Compatibility fields for English-only API responses. */
   englishRequired?: boolean;
+  /** @deprecated Compatibility fields for English-only API responses. */
   englishLevel?: string;
-  englishSkills: string[];
-  englishCertificates: EnglishCertificateRequirement[];
+  /** @deprecated Compatibility fields for English-only API responses. */
+  englishSkills?: string[];
+  /** @deprecated Compatibility fields for English-only API responses. */
+  englishCertificates?: EnglishCertificateRequirement[];
   tools: string[];
   technicalKnowledge: string[];
 }
@@ -195,11 +213,13 @@ export interface JobApplicantsCount {
   count?: number;
 }
 
-export interface ApplicantActivityCount {
+export interface ApplicantCountRelease {
   jobId: string | number;
-  approximateApplicantCount: number;
+  applicantCount: number;
   displayText: string;
-  approximate: boolean;
+  snapshotCapturedAt: string;
+  nextRefreshAt: string;
+  refreshIntervalHours: number;
 }
 
 export interface AnonymousCandidatePreviewProfile {
@@ -276,32 +296,79 @@ export const getJobId = (j: Job | SavedJob): string => String(j.jobId ?? j.id ??
 export const getJobTitle = (j: Job): string => j.jobTitle ?? j.title ?? "Untitled";
 export const getApplyingDeadline = (j: Job): string | undefined => j.applyingDeadline ?? j.applicationDeadline;
 
-const normalizeJob = (job: Job): Job => ({
-  ...job,
-  jobDescriptionTitle: job.jobDescriptionTitle || "Job description",
-  requirementsTitle: job.requirementsTitle || "Requirements",
-  benefitsTitle: job.benefitsTitle || "Benefits",
-  benefits: Array.isArray(job.benefits) ? job.benefits.join("\n") : job.benefits,
-  applicationDeadline: job.applicationDeadline ?? job.applyingDeadline,
-  applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
-  requirementDetails: {
-    educationMode: job.requirementDetails?.educationMode ?? "",
-    degrees: job.requirementDetails?.degrees ?? [],
-    noDegreeRequirement: job.requirementDetails?.noDegreeRequirement ?? "",
-    educationMajors: job.requirementDetails?.educationMajors ?? [],
-    preferredInstitutions: job.requirementDetails?.preferredInstitutions ?? [],
-    minimumYearsExperience: job.requirementDetails?.minimumYearsExperience,
-    experienceRequirements: job.requirementDetails?.experienceRequirements ?? [],
-    requiredSkills: job.requirementDetails?.requiredSkills ?? [],
-    techStack: job.requirementDetails?.techStack ?? [],
-    englishRequired: job.requirementDetails?.englishRequired,
-    englishLevel: normalizeEnglishLevel(job.requirementDetails?.englishLevel),
-    englishSkills: job.requirementDetails?.englishSkills ?? [],
-    englishCertificates: job.requirementDetails?.englishCertificates ?? [],
-    tools: job.requirementDetails?.tools ?? [],
-    technicalKnowledge: job.requirementDetails?.technicalKnowledge ?? [],
-  },
-});
+let clientIdSequence = 0;
+
+export const createRequirementClientId = (prefix: string): string => {
+  clientIdSequence += 1;
+  return `${prefix}-${clientIdSequence}`;
+};
+
+const normalizeLanguageRequirements = (
+  details: JobRequirementDetails | undefined,
+): LanguageRequirement[] => {
+  if (Array.isArray(details?.languageRequirements)) {
+    return details.languageRequirements.map((language) => ({
+      ...language,
+      languageName: language.languageName ?? "",
+      proficiencyLevel: language.proficiencyLevel ?? "",
+      skills: language.skills ?? [],
+      certificates: (language.certificates ?? []).map((certificate) => ({
+        ...certificate,
+        clientId: certificate.clientId ?? createRequirementClientId("certificate"),
+      })),
+      clientId: language.clientId ?? createRequirementClientId("language"),
+    }));
+  }
+  if (details?.englishRequired) {
+    return [{
+      languageName: "English",
+      proficiencyLevel: normalizeEnglishLevel(details.englishLevel),
+      skills: details.englishSkills ?? [],
+      certificates: (details.englishCertificates ?? []).map((certificate) => ({
+        ...certificate,
+        clientId: createRequirementClientId("certificate"),
+      })),
+      clientId: createRequirementClientId("language"),
+    }];
+  }
+  return [];
+};
+
+export const normalizeJob = (job: Job): Job => {
+  const languages = normalizeLanguageRequirements(job.requirementDetails);
+  const languageRequired = typeof job.requirementDetails?.languageRequired === "boolean"
+    ? job.requirementDetails.languageRequired
+    : job.requirementDetails?.englishRequired;
+
+  return {
+    ...job,
+    jobDescriptionTitle: job.jobDescriptionTitle || "Job description",
+    requirementsTitle: job.requirementsTitle || "Requirements",
+    benefitsTitle: job.benefitsTitle || "Benefits",
+    benefits: Array.isArray(job.benefits) ? job.benefits.join("\n") : job.benefits,
+    applicationDeadline: job.applicationDeadline ?? job.applyingDeadline,
+    applyingDeadline: job.applyingDeadline ?? job.applicationDeadline,
+    requirementDetails: {
+      educationMode: job.requirementDetails?.educationMode ?? "",
+      degrees: job.requirementDetails?.degrees ?? [],
+      noDegreeRequirement: job.requirementDetails?.noDegreeRequirement ?? "",
+      educationMajors: job.requirementDetails?.educationMajors ?? [],
+      preferredInstitutions: job.requirementDetails?.preferredInstitutions ?? [],
+      minimumYearsExperience: job.requirementDetails?.minimumYearsExperience,
+      experienceRequirements: job.requirementDetails?.experienceRequirements ?? [],
+      requiredSkills: job.requirementDetails?.requiredSkills ?? [],
+      techStack: job.requirementDetails?.techStack ?? [],
+      languageRequired,
+      languageRequirements: languageRequired === false ? [] : languages,
+      englishRequired: job.requirementDetails?.englishRequired,
+      englishLevel: normalizeEnglishLevel(job.requirementDetails?.englishLevel),
+      englishSkills: job.requirementDetails?.englishSkills ?? [],
+      englishCertificates: job.requirementDetails?.englishCertificates ?? [],
+      tools: job.requirementDetails?.tools ?? [],
+      technicalKnowledge: job.requirementDetails?.technicalKnowledge ?? [],
+    },
+  };
+};
 
 const normalizeJobs = (jobs: Job[]): Job[] => jobs.map(normalizeJob);
 
@@ -335,8 +402,8 @@ const cleanList = (values: string[] | undefined): string[] =>
 const cleanRequirementDetails = (
   details: JobRequirementDetails | undefined,
 ): JobRequirementDetails | undefined => details ? {
-  ...details,
   degrees: details.educationMode === "NOT_REQUIRED" ? [] : details.degrees,
+  educationMode: details.educationMode,
   noDegreeRequirement: details.educationMode === "NOT_REQUIRED"
     ? cleanString(details.noDegreeRequirement)
     : undefined,
@@ -344,18 +411,21 @@ const cleanRequirementDetails = (
   preferredInstitutions: details.educationMode === "NOT_REQUIRED"
     ? []
     : cleanList(details.preferredInstitutions),
+  minimumYearsExperience: details.minimumYearsExperience,
   experienceRequirements: cleanList(details.experienceRequirements),
   requiredSkills: cleanList(details.requiredSkills),
   techStack: cleanList(details.techStack),
-  englishLevel: details.englishRequired ? cleanString(details.englishLevel) : undefined,
-  englishSkills: details.englishRequired ? cleanList(details.englishSkills) : [],
-  englishCertificates: details.englishRequired
-    ? details.englishCertificates
-      .map((certificate) => ({
+  languageRequired: details.languageRequired,
+  languageRequirements: details.languageRequired
+    ? (details.languageRequirements ?? []).map((language) => ({
+      languageName: language.languageName.trim(),
+      proficiencyLevel: language.proficiencyLevel.trim(),
+      skills: cleanList(language.skills),
+      certificates: language.certificates.map((certificate) => ({
         certificateName: certificate.certificateName.trim(),
         minimumScore: certificate.minimumScore.trim(),
-      }))
-      .filter((certificate) => certificate.certificateName && certificate.minimumScore)
+      })),
+    }))
     : [],
   tools: cleanList(details.tools),
   technicalKnowledge: cleanList(details.technicalKnowledge),
@@ -416,8 +486,8 @@ export const fetchJob = (id: string | number) =>
 export const fetchJobApplicantCount = (id: string | number) =>
   apiRequest<number | JobApplicantsCount>(`/api/v1/browse-jobs/applicants/${id}`);
 
-export const fetchApplicantActivityCount = (id: string | number) =>
-  apiRequest<ApplicantActivityCount>(`/api/v1/jobs/${id}/applicant-count`);
+export const fetchApplicantCountRelease = (id: string | number) =>
+  apiRequest<ApplicantCountRelease>(`/api/v1/jobs/${id}/applicant-count`);
 
 export const fetchAnonymousCandidatePreviews = (id: string | number) =>
   apiRequest<AnonymousCandidatePreviews>(`/api/v1/jobs/${id}/anonymous-candidate-previews`);

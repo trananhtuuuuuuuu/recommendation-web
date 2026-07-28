@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Info,
   Loader2,
   MapPin,
   ShieldCheck,
@@ -29,7 +28,7 @@ import {
   applyJob,
   AI_MATCH_OPTIONS,
   fetchAnonymousCandidatePreviews,
-  fetchApplicantActivityCount,
+  fetchApplicantCountRelease,
   fetchJob,
   fetchJobApplicantCount,
   matchCvToJob,
@@ -38,7 +37,7 @@ import {
   saveJob,
   type ApplicationField,
   type AnonymousCandidatePreviews,
-  type ApplicantActivityCount,
+  type ApplicantCountRelease,
   type CvJobMatch,
   type Job,
   type JobApplicantsCount,
@@ -55,7 +54,7 @@ export default function JobDetail() {
   const { user, role, isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [applicantsCount, setApplicantsCount] = useState<number | null>(null);
-  const [applicantActivity, setApplicantActivity] = useState<ApplicantActivityCount | null>(null);
+  const [applicantCountRelease, setApplicantCountRelease] = useState<ApplicantCountRelease | null>(null);
   const [applicantActivityLoading, setApplicantActivityLoading] = useState(false);
   const [applicantActivityError, setApplicantActivityError] = useState<string | null>(null);
   const [anonymousPreviews, setAnonymousPreviews] = useState<AnonymousCandidatePreviews | null>(null);
@@ -74,18 +73,18 @@ export default function JobDetail() {
   const [recruiterMatching, setRecruiterMatching] = useState(false);
   const [recruiterMatchExpanded, setRecruiterMatchExpanded] = useState(false);
 
-  const loadApplicantPrivacy = useCallback(async (jobId: string | number, active = true) => {
+  const loadApplicantActivity = useCallback(async (jobId: string | number, active = true) => {
     setApplicantActivityLoading(true);
     setApplicantActivityError(null);
     const [countResult, previewResult] = await Promise.allSettled([
-      fetchApplicantActivityCount(jobId),
+      fetchApplicantCountRelease(jobId),
       fetchAnonymousCandidatePreviews(jobId),
     ]);
     if (!active) return;
     if (countResult.status === "fulfilled") {
-      setApplicantActivity(countResult.value);
+      setApplicantCountRelease(countResult.value);
     } else {
-      setApplicantActivity(null);
+      setApplicantCountRelease(null);
       setApplicantActivityError(
         countResult.reason instanceof ApiError
           ? countResult.reason.message
@@ -110,7 +109,7 @@ export default function JobDetail() {
       .finally(() => { if (active) setLoading(false); });
 
     if (role === "APPLICANT") {
-      loadApplicantPrivacy(id, active);
+      loadApplicantActivity(id, active);
     } else if (role === "RECRUITER" || role === "ADMIN") {
       fetchJobApplicantCount(id)
         .then((res) => {
@@ -121,7 +120,18 @@ export default function JobDetail() {
         .catch(() => { /* non-fatal */ });
     }
     return () => { active = false; };
-  }, [id, role, loadApplicantPrivacy]);
+  }, [id, role, loadApplicantActivity]);
+
+  useEffect(() => {
+    if (role !== "APPLICANT" || !id || !applicantCountRelease?.nextRefreshAt) return;
+    const refreshAt = Date.parse(applicantCountRelease.nextRefreshAt);
+    if (Number.isNaN(refreshAt)) return;
+    const delay = Math.max(1_000, refreshAt - Date.now() + 250);
+    const timeoutId = window.setTimeout(() => {
+      void loadApplicantActivity(id);
+    }, delay);
+    return () => window.clearTimeout(timeoutId);
+  }, [applicantCountRelease?.nextRefreshAt, id, loadApplicantActivity, role]);
 
   const handleSave = async () => {
     if (!isAuthenticated) { navigate("/auth"); return; }
@@ -183,7 +193,9 @@ export default function JobDetail() {
         portfolioUrl: applicationAnswers.portfolio_url || "",
         applicationAnswers: JSON.stringify(applicationAnswers),
       });
-      await loadApplicantPrivacy(id);
+      void fetchAnonymousCandidatePreviews(id)
+        .then((result) => setAnonymousPreviews(result.available ? result : null))
+        .catch(() => setAnonymousPreviews(null));
       setApplied(true);
       setShowApplyForm(false);
       toast.success("Application submitted.");
@@ -235,22 +247,16 @@ export default function JobDetail() {
                   <Loader2 className="h-3 w-3 animate-spin" /> Loading applicant activity
                 </Badge>
               ) : null}
-              {role === "APPLICANT" && applicantActivity ? (
+              {role === "APPLICANT" && applicantCountRelease ? (
                 <Badge className="bg-primary/10 text-primary">
-                  <Users className="mr-1 h-3 w-3" /> {applicantActivity.displayText}
+                  <Users className="mr-1 h-3 w-3" /> {applicantCountRelease.displayText}
                 </Badge>
               ) : null}
             </div>
-            {role === "APPLICANT" && applicantActivity ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <Info className="h-4 w-4 shrink-0" />
-                This count is intentionally approximate to protect applicant privacy.
-              </p>
-            ) : null}
             {role === "APPLICANT" && !applicantActivityLoading && applicantActivityError ? (
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span>{applicantActivityError}</span>
-                <Button variant="outline" size="sm" onClick={() => id && loadApplicantPrivacy(id)}>
+                <Button variant="outline" size="sm" onClick={() => id && loadApplicantActivity(id)}>
                   Retry
                 </Button>
               </div>
@@ -494,6 +500,8 @@ function hasStructuredRequirements(details?: JobRequirementDetails): boolean {
     || details?.experienceRequirements.length
     || details?.requiredSkills.length
     || details?.techStack.length
+    || details?.languageRequired !== undefined
+    || details?.languageRequirements?.length
     || details?.tools.length
     || details?.technicalKnowledge.length);
 }
@@ -506,8 +514,15 @@ function StructuredJobRequirements({ details }: { details: JobRequirementDetails
       ? `Minimum degree: ${degreeLabels[0] || "Not specified"}`
       : `Accepted degrees: ${degreeLabels.join(", ") || "Not specified"}`;
   const experience = details.minimumYearsExperience === 0
-    ? "Không yêu cầu kinh nghiệm"
+    ? "No experience required"
     : `Minimum experience: ${details.minimumYearsExperience ?? 0}+ years`;
+  const languageItems = details.languageRequired
+    ? (details.languageRequirements ?? []).flatMap((language) => [
+      `${language.languageName}: ${language.proficiencyLevel} — ${language.skills.join(", ")}`,
+      ...language.certificates.map((certificate) =>
+        `${language.languageName} certificate: ${certificate.certificateName} — ${certificate.minimumScore}`),
+    ])
+    : ["No language requirement"];
   const items = [
     education,
     details.educationMode === "NOT_REQUIRED" && details.noDegreeRequirement
@@ -527,11 +542,7 @@ function StructuredJobRequirements({ details }: { details: JobRequirementDetails
     details.techStack.length > 0
       ? `Tech stack: ${details.techStack.join(", ")}`
       : "",
-    details.englishRequired
-      ? `English: ${details.englishLevel || "required"} — ${details.englishSkills.join(", ")}`
-      : "No English requirement",
-    ...details.englishCertificates.map((certificate) =>
-      `English certificate: ${certificate.certificateName} — ${certificate.minimumScore}`),
+    ...languageItems,
     details.tools.length > 0 ? `Tools: ${details.tools.join(", ")}` : "",
     details.technicalKnowledge.length > 0
       ? `Technical knowledge: ${details.technicalKnowledge.join(", ")}`
@@ -751,7 +762,7 @@ function RecruiterMatchPanel({
         <h2 className="font-display text-sm font-semibold text-foreground">AI candidate ranking</h2>
       </div>
       <p className="text-xs leading-5 text-muted-foreground">
-        Run the real CV-to-JD matcher for applicants to this published role. Scores are returned without added noise.
+        Run the CV-to-JD matcher for applicants to this published role.
       </p>
       <Button
         onClick={matches ? onToggle : onCheck}

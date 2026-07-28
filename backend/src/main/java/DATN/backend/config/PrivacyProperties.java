@@ -13,6 +13,9 @@ import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Type-safe configuration for applicant-facing privacy features.
+ */
 @Getter
 @Setter
 @Validated
@@ -27,14 +30,13 @@ public class PrivacyProperties {
 
     @PostConstruct
     void validate() {
-        applicantCount().validate();
+        differential.validate();
         anonymousCandidatePreview.validate();
     }
 
-    private ApplicantCount applicantCount() {
-        return differential.getApplicantCount();
-    }
-
+    /**
+     * Groups differential-privacy configuration.
+     */
     @Getter
     @Setter
     public static class Differential {
@@ -42,27 +44,32 @@ public class PrivacyProperties {
 
         @Valid
         private ApplicantCount applicantCount = new ApplicantCount();
+
+        void validate() {
+            applicantCount.validate();
+        }
     }
 
+    /**
+     * Configures the applicant-facing count mechanism.
+     */
     @Getter
     @Setter
     public static class ApplicantCount {
         @Positive(message = "privacy.differential.applicant-count.epsilon must be greater than zero")
         private double epsilon = 0.5;
 
-        private Duration releaseWindow = Duration.ofDays(7);
-
-        @NotBlank(message = "privacy.differential.applicant-count.release-secret must be configured")
-        private String releaseSecret = "local-development-dp-release-secret-change-me";
-
         void validate() {
-            if (releaseWindow == null || releaseWindow.isZero() || releaseWindow.isNegative()) {
+            if (!Double.isFinite(epsilon) || epsilon <= 0.0) {
                 throw new IllegalArgumentException(
-                        "privacy.differential.applicant-count.release-window must be positive");
+                        "privacy.differential.applicant-count.epsilon must be finite and greater than zero");
             }
         }
     }
 
+    /**
+     * Configures consent-based anonymous candidate previews.
+     */
     @Getter
     @Setter
     public static class AnonymousCandidatePreview {

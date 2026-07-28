@@ -1,5 +1,6 @@
 package DATN.backend.service.ImplService;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import DATN.backend.exception.AlreadyExistException;
+import DATN.backend.exception.ForbiddenException;
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.Enum.ApplicantStatusEnum;
 import DATN.backend.mapper.ApplicantMapper;
@@ -70,9 +72,9 @@ public class ImplJobService implements InterfaceJobService {
                                 .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
                 if (recruiterId != null && (jobDescription.getRecruiter() == null
                                 || !jobDescription.getRecruiter().getId().equals(recruiterId))) {
-                        throw new AlreadyExistException("Only posting recruiter can access this resource");
+                        throw new ForbiddenException("Only the posting recruiter can access this resource");
                 }
-                Long count = applicantJobRepository.countByJob_IdAndActionType(jobId,
+                Long count = applicantJobRepository.countDistinctApplicantsByJobAndActionType(jobId,
                                 APPLIED_ACTION);
                 return JobMapper.toApplicantsResponse(jobId, count);
         }
@@ -83,7 +85,7 @@ public class ImplJobService implements InterfaceJobService {
                                 .orElseThrow(() -> new ResourcesNotFoundException("Job description not found"));
                 if (recruiterId != null && (jobDescription.getRecruiter() == null
                                 || !jobDescription.getRecruiter().getId().equals(recruiterId))) {
-                        throw new AlreadyExistException("Only posting recruiter can access this resource");
+                        throw new ForbiddenException("Only the posting recruiter can access this resource");
                 }
                 List<ApplicantJob> applications = applicantJobRepository.findByJob_IdAndActionTypeOrderByIdAsc(jobId,
                                 APPLIED_ACTION);
@@ -281,6 +283,7 @@ public class ImplJobService implements InterfaceJobService {
                 Recruiter recruiter = recruiterRepository.findById(recruiterId)
                                 .orElseThrow(() -> new ResourcesNotFoundException("Recruiter not found"));
                 Job jobDescription = JobMapper.toNewJob(recruiter, request);
+                jobDescription.setPublishedAt(Instant.now());
                 Job savedJob = jobDescriptionRepository.save(jobDescription);
                 return JobMapper.toResponse(savedJob);
         }

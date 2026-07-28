@@ -56,8 +56,9 @@ describe("post job candidate recommendations", () => {
         experienceRequirements: ["Built production backend services"],
         requiredSkills: ["Java", "Debugging"],
         techStack: ["Spring Boot", "PostgreSQL"],
+        languageRequired: false,
+        languageRequirements: [],
         englishRequired: false,
-        englishLevel: "",
         englishSkills: [],
         englishCertificates: [],
         tools: ["Git"],
@@ -147,7 +148,7 @@ describe("post job candidate recommendations", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "+ Debugging" }));
     fireEvent.click(screen.getByRole("button", { name: "+ React" }));
-    fireEvent.click(screen.getByRole("button", { name: "No requirement" }));
+    fireEvent.click(screen.getByRole("button", { name: "No language requirement" }));
     fireEvent.click(screen.getByRole("button", { name: "+ Git" }));
     fireEvent.click(screen.getByRole("button", { name: "Publish Job" }));
 
@@ -162,7 +163,8 @@ describe("post job candidate recommendations", () => {
           minimumYearsExperience: 3,
           requiredSkills: ["Debugging"],
           techStack: ["React"],
-          englishRequired: false,
+          languageRequired: false,
+          languageRequirements: [],
           tools: ["Git"],
         }),
       }),

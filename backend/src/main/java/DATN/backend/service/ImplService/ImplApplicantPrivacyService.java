@@ -1,6 +1,5 @@
 package DATN.backend.service.ImplService;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,11 +27,8 @@ import DATN.backend.model.ApplicantJob;
 import DATN.backend.model.Cv;
 import DATN.backend.model.Education;
 import DATN.backend.model.Experience;
-import DATN.backend.model.PrivacyRelease;
 import DATN.backend.repository.ApplicantJobRepository;
 import DATN.backend.repository.JobRepository;
-import DATN.backend.repository.PrivacyReleaseRepository;
-import DATN.backend.response.job.ApplicantActivityCountResponse;
 import DATN.backend.response.job.AnonymousCandidatePreviewProfileResponse;
 import DATN.backend.response.job.AnonymousCandidatePreviewsResponse;
 import DATN.backend.service.InterfaceService.InterfaceApplicantPrivacyService;
@@ -43,39 +39,13 @@ import lombok.RequiredArgsConstructor;
 public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacyService {
 
     private static final String APPLIED_ACTION = "APPLIED";
-    private static final String COUNT_METRIC = "JOB_APPLICANT_COUNT";
-    private static final String APPLICANT_AUDIENCE = "APPLICANT";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final String UNAVAILABLE_MESSAGE = "Anonymous candidate previews are unavailable for this job.";
 
     private final JobRepository jobRepository;
     private final ApplicantJobRepository applicantJobRepository;
-    private final PrivacyReleaseRepository privacyReleaseRepository;
     private final PrivacyProperties privacyProperties;
     private final Map<String, Integer> anonymousPreviewRateLimits = new ConcurrentHashMap<>();
-
-    @Override
-    @Transactional
-    public ApplicantActivityCountResponse getDifferentiallyPrivateApplicantCount(Long jobId, Long viewerApplicantId) {
-        requireExistingJob(jobId);
-        if (!privacyProperties.getDifferential().isEnabled()) {
-            throw new ForbiddenException("Applicant activity privacy release is disabled");
-        }
-        PrivacyProperties.ApplicantCount config = privacyProperties.getDifferential().getApplicantCount();
-        validateEpsilon(config.getEpsilon());
-        String window = currentWindow(config.getReleaseWindow());
-        String releaseKey = COUNT_METRIC + "|jobId=" + jobId + "|audience=" + APPLICANT_AUDIENCE + "|window=" + window;
-        // Reuse the same release inside the window so refreshes cannot be averaged back
-        // toward the raw count.
-        Long releasedCount = privacyReleaseRepository.findByReleaseKey(releaseKey)
-                .map(PrivacyRelease::getReleasedValue)
-                .orElseGet(() -> createApplicantCountRelease(jobId, config, window, releaseKey));
-        return new ApplicantActivityCountResponse(
-                jobId,
-                releasedCount,
-                "Approximately " + releasedCount + " candidates have applied",
-                true);
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -103,40 +73,6 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
                         .map(relation -> toAnonymousProfile(relation.getApplicant(), viewerApplicantId, jobId, window,
                                 config.getTokenSecret()))
                         .toList());
-    }
-
-    private Long createApplicantCountRelease(Long jobId, PrivacyProperties.ApplicantCount config, String window,
-            String releaseKey) {
-        // Sensitivity is 1 because one applicant can change COUNT(DISTINCT
-        // applicant_id) by at most one.
-        // The raw count and generated noise stay inside this method and must never be
-        // serialized or logged.
-        long rawCount = applicantJobRepository.countDistinctApplicantsByJobAndActionType(jobId, APPLIED_ACTION);
-        long noise = sampleDiscreteLaplace(config.getEpsilon(),
-                hmacBytes(config.getReleaseSecret(), releaseKey + "|noise"));
-        long releasedCount = Math.max(0L, rawCount + noise);
-        return privacyReleaseRepository
-                .save(new PrivacyRelease(releaseKey, COUNT_METRIC, jobId, APPLICANT_AUDIENCE, window, releasedCount))
-                .getReleasedValue();
-    }
-
-    static long sampleDiscreteLaplace(double epsilon, byte[] randomBytes) {
-        // If G1 and G2 are independent Geometric(1 - exp(-epsilon)) samples,
-        // G1 - G2 has the exact two-sided geometric (discrete Laplace) distribution.
-        long positiveComponent = sampleGeometric(epsilon, unsignedLongUnit(randomBytes, 0));
-        long negativeComponent = sampleGeometric(epsilon, unsignedLongUnit(randomBytes, Long.BYTES));
-        return positiveComponent - negativeComponent;
-    }
-
-    static long sampleGeometric(double epsilon, double uniform) {
-        // q = exp(-epsilon), so log(q) = -epsilon. log1p is stable when uniform is near
-        // zero.
-        return (long) Math.floor(-Math.log1p(-uniform) / epsilon);
-    }
-
-    private static double unsignedLongUnit(byte[] bytes, int offset) {
-        long value = ByteBuffer.wrap(bytes, offset, Long.BYTES).getLong() >>> 1;
-        return Math.min(value / (double) Long.MAX_VALUE, Math.nextDown(1.0));
     }
 
     private AnonymousCandidatePreviewProfileResponse toAnonymousProfile(Applicant candidate, Long viewerApplicantId,
@@ -273,13 +209,6 @@ public class ImplApplicantPrivacyService implements InterfaceApplicantPrivacySer
         int attempts = anonymousPreviewRateLimits.merge(key, 1, Integer::sum);
         if (attempts > limit) {
             throw new ForbiddenException("Anonymous candidate preview rate limit exceeded");
-        }
-    }
-
-    private void validateEpsilon(double epsilon) {
-        if (epsilon <= 0.0) {
-            throw new IllegalArgumentException(
-                    "privacy.differential.applicant-count.epsilon must be greater than zero");
         }
     }
 

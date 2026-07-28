@@ -14,6 +14,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Stores one stable differentially private value for a release window.
+ *
+ * <p>The raw aggregate and sampled noise are deliberately not persisted. A
+ * unique release key prevents repeated requests from obtaining independent
+ * noisy values for the same metric, audience, job, and window.</p>
+ */
 @Entity
 @Table(name = "privacy_releases", uniqueConstraints = {
         @UniqueConstraint(name = "uk_privacy_release_key", columnNames = "release_key")
@@ -49,6 +56,16 @@ public class PrivacyRelease {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
+    /**
+     * Creates a persisted private release.
+     *
+     * @param releaseKey unique metric, audience, job, and window key
+     * @param metricName aggregate metric name
+     * @param jobId job identifier
+     * @param audience audience receiving the release
+     * @param releaseWindow stable release-window identifier
+     * @param releasedValue non-negative noisy value
+     */
     public PrivacyRelease(String releaseKey, String metricName, Long jobId, String audience, String releaseWindow,
             Long releasedValue) {
         this.releaseKey = releaseKey;

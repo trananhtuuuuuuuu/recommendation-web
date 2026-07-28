@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import JobDetail from "@/pages/JobDetail";
 import { ApiError } from "@/lib/api";
@@ -13,7 +13,7 @@ const authState = vi.hoisted(() => ({
 
 const apiMocks = vi.hoisted(() => ({
   fetchJob: vi.fn(),
-  fetchApplicantActivityCount: vi.fn(),
+  fetchApplicantCountRelease: vi.fn(),
   fetchAnonymousCandidatePreviews: vi.fn(),
   fetchJobApplicantCount: vi.fn(),
   applyJob: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("@/lib/jobsApi", async () => {
   return {
     ...actual,
     fetchJob: apiMocks.fetchJob,
-    fetchApplicantActivityCount: apiMocks.fetchApplicantActivityCount,
+    fetchApplicantCountRelease: apiMocks.fetchApplicantCountRelease,
     fetchAnonymousCandidatePreviews: apiMocks.fetchAnonymousCandidatePreviews,
     fetchJobApplicantCount: apiMocks.fetchJobApplicantCount,
     applyJob: apiMocks.applyJob,
@@ -56,7 +56,7 @@ const renderJobDetail = () => render(
   </MemoryRouter>,
 );
 
-describe("Job detail applicant privacy", () => {
+describe("Job detail applicant-count privacy releases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.fetchJob.mockResolvedValue({
@@ -73,29 +73,34 @@ describe("Job detail applicant privacy", () => {
     });
   });
 
-  it("shows the applicant-facing approximate count with privacy explanation", async () => {
-    apiMocks.fetchApplicantActivityCount.mockResolvedValue({
+  it("shows only the released count without DP or refresh explanations", async () => {
+    apiMocks.fetchApplicantCountRelease.mockResolvedValue({
       jobId: 123,
-      approximateApplicantCount: 18,
-      displayText: "Approximately 18 candidates have applied",
-      approximate: true,
+      applicantCount: 18,
+      displayText: "18 candidates have applied",
+      snapshotCapturedAt: "2026-07-28T10:15:00Z",
+      nextRefreshAt: "2026-07-28T22:00:00Z",
+      refreshIntervalHours: 12,
     });
 
     renderJobDetail();
 
-    expect(await screen.findByText("Approximately 18 candidates have applied")).toBeInTheDocument();
-    expect(screen.getByText("This count is intentionally approximate to protect applicant privacy.")).toBeInTheDocument();
+    expect(await screen.findByText("18 candidates have applied")).toBeInTheDocument();
+    expect(screen.queryByText(/Updated every|Next update/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/approximate|differential privacy|noise|epsilon/i)).not.toBeInTheDocument();
     expect(screen.queryByText("18 applicants")).not.toBeInTheDocument();
   });
 
-  it("shows an error and retries the approximate count without exposing an exact fallback", async () => {
-    apiMocks.fetchApplicantActivityCount
+  it("shows an error and retries the snapshot without using the recruiter exact endpoint", async () => {
+    apiMocks.fetchApplicantCountRelease
       .mockRejectedValueOnce(new ApiError("Applicant activity is unavailable right now.", 503))
       .mockResolvedValueOnce({
         jobId: 123,
-        approximateApplicantCount: 21,
-        displayText: "Approximately 21 candidates have applied",
-        approximate: true,
+        applicantCount: 21,
+        displayText: "21 candidates have applied",
+        snapshotCapturedAt: "2026-07-28T10:15:00Z",
+        nextRefreshAt: "2026-07-28T22:00:00Z",
+        refreshIntervalHours: 12,
       });
 
     renderJobDetail();
@@ -103,16 +108,19 @@ describe("Job detail applicant privacy", () => {
     expect(await screen.findByText("Applicant activity is unavailable right now.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    await waitFor(() => expect(apiMocks.fetchApplicantActivityCount).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("Approximately 21 candidates have applied")).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchApplicantCountRelease).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("21 candidates have applied")).toBeInTheDocument();
+    expect(apiMocks.fetchJobApplicantCount).not.toHaveBeenCalled();
   });
 
   it("runs the AI suggestion from the UI and toggles the result panel", async () => {
-    apiMocks.fetchApplicantActivityCount.mockResolvedValue({
+    apiMocks.fetchApplicantCountRelease.mockResolvedValue({
       jobId: 123,
-      approximateApplicantCount: 18,
-      displayText: "Approximately 18 candidates have applied",
-      approximate: true,
+      applicantCount: 18,
+      displayText: "18 candidates have applied",
+      snapshotCapturedAt: "2026-07-28T10:15:00Z",
+      nextRefreshAt: "2026-07-28T22:00:00Z",
+      refreshIntervalHours: 12,
     });
     apiMocks.matchCvToJob.mockResolvedValue({
       matchPercent: 82,
@@ -151,11 +159,13 @@ describe("Job detail applicant privacy", () => {
   });
 
   it("renders structured recruiter requirements by CV section", async () => {
-    apiMocks.fetchApplicantActivityCount.mockResolvedValue({
+    apiMocks.fetchApplicantCountRelease.mockResolvedValue({
       jobId: 123,
-      approximateApplicantCount: 18,
-      displayText: "Approximately 18 candidates have applied",
-      approximate: true,
+      applicantCount: 18,
+      displayText: "18 candidates have applied",
+      snapshotCapturedAt: "2026-07-28T10:15:00Z",
+      nextRefreshAt: "2026-07-28T22:00:00Z",
+      refreshIntervalHours: 12,
     });
     apiMocks.fetchJob.mockResolvedValue({
       id: 123,
@@ -172,13 +182,27 @@ describe("Job detail applicant privacy", () => {
         experienceRequirements: ["Built production REST APIs"],
         requiredSkills: ["Java", "Debugging"],
         techStack: ["Spring Boot", "PostgreSQL"],
-        englishRequired: true,
-        englishLevel: "Proficient",
-        englishSkills: ["Speaking", "Reading"],
-        englishCertificates: [{
-          certificateName: "IELTS Academic",
-          minimumScore: "6.5 overall",
-        }],
+        languageRequired: true,
+        languageRequirements: [
+          {
+            languageName: "Japanese",
+            proficiencyLevel: "JLPT N2 or business conversational",
+            skills: ["Speaking", "Reading technical documents"],
+            certificates: [{
+              certificateName: "JLPT",
+              minimumScore: "N2",
+            }],
+          },
+          {
+            languageName: "Spanish",
+            proficiencyLevel: "Professional working proficiency",
+            skills: ["Speaking", "Writing"],
+            certificates: [],
+          },
+        ],
+        englishRequired: false,
+        englishSkills: [],
+        englishCertificates: [],
         tools: ["Git", "Postman"],
         technicalKnowledge: ["System design"],
       },
@@ -192,11 +216,55 @@ describe("Job detail applicant privacy", () => {
     expect(screen.getByText("Build APIs")).toBeInTheDocument();
     expect(screen.getByText("Relevant majors:", { exact: false })).toHaveTextContent("Computer Science");
     expect(screen.getByText("Built production REST APIs")).toBeInTheDocument();
-    expect(screen.getByText("Không yêu cầu kinh nghiệm")).toBeInTheDocument();
+    expect(screen.getByText("No experience required")).toBeInTheDocument();
     expect(screen.getByText("Tech stack:", { exact: false })).toHaveTextContent("Spring Boot");
-    expect(screen.getByText("English:", { exact: false })).toHaveTextContent("Proficient");
-    expect(screen.getByText("English certificate:", { exact: false }))
-      .toHaveTextContent("IELTS Academic — 6.5 overall");
+    expect(screen.getByText("Japanese:", { exact: false }))
+      .toHaveTextContent("JLPT N2 or business conversational");
+    expect(screen.getByText("Japanese certificate:", { exact: false }))
+      .toHaveTextContent("JLPT — N2");
+    expect(screen.getByText("Spanish:", { exact: false }))
+      .toHaveTextContent("Professional working proficiency");
     expect(screen.getByText("Tools:", { exact: false })).toHaveTextContent("Git, Postman");
+  });
+
+  it("refetches the snapshot when the current 12-hour window ends", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-28T10:00:00Z"));
+    apiMocks.fetchApplicantCountRelease
+      .mockResolvedValueOnce({
+        jobId: 123,
+        applicantCount: 18,
+        displayText: "18 candidates have applied",
+        snapshotCapturedAt: "2026-07-28T09:00:00Z",
+        nextRefreshAt: "2026-07-28T10:00:01Z",
+        refreshIntervalHours: 12,
+      })
+      .mockResolvedValueOnce({
+        jobId: 123,
+        applicantCount: 20,
+        displayText: "20 candidates have applied",
+        snapshotCapturedAt: "2026-07-28T10:00:01Z",
+        nextRefreshAt: "2026-07-28T22:00:01Z",
+        refreshIntervalHours: 12,
+      });
+
+    const view = renderJobDetail();
+    try {
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(apiMocks.fetchApplicantCountRelease).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_250);
+      });
+
+      expect(apiMocks.fetchApplicantCountRelease).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("20 candidates have applied")).toBeInTheDocument();
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
   });
 });

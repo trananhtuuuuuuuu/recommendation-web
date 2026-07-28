@@ -16,9 +16,18 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 import java.sql.Date;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +51,9 @@ import DATN.backend.model.Cv;
 import DATN.backend.model.Education;
 import DATN.backend.model.Experience;
 import DATN.backend.model.Job;
+import DATN.backend.model.JobLanguageRequirement;
+import DATN.backend.model.LanguageCertificateRequirement;
+import DATN.backend.model.PrivacyRelease;
 import DATN.backend.model.Recruiter;
 import DATN.backend.model.Role;
 import DATN.backend.repository.ApplicantJobRepository;
@@ -59,6 +71,8 @@ import DATN.backend.security.JwtService;
 import DATN.backend.response.cv.CvAnalysisResponse;
 import DATN.backend.response.cv.CvExperienceResponse;
 import DATN.backend.response.applicant.CvJobMatchResponse;
+import DATN.backend.service.ImplService.DiscreteLaplaceNoiseGenerator;
+import DATN.backend.service.InterfaceService.InterfaceApplicantCountPrivacyService;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 import DATN.backend.service.InterfaceService.InterfaceCvMatchService;
 
@@ -78,6 +92,7 @@ class BackendEndpointsIntegrationTests {
   private final RoleRepository roleRepository;
   private final JobRepository jobDescriptionRepository;
   private final PrivacyReleaseRepository privacyReleaseRepository;
+  private final InterfaceApplicantCountPrivacyService applicantCountPrivacyService;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
 
@@ -87,12 +102,16 @@ class BackendEndpointsIntegrationTests {
   @MockitoBean
   private InterfaceCvMatchService cvMatchService;
 
+  @MockitoBean
+  private DiscreteLaplaceNoiseGenerator noiseGenerator;
+
   BackendEndpointsIntegrationTests(WebApplicationContext webApplicationContext, UserRepository userRepository,
       ApplicantRepository applicantRepository,
       ApplicantJobRepository applicantJobRepository, CvRepository cvRepository,
       ExperienceRepository experienceRepository, EducationRepository educationRepository,
       RecruiterRepository recruiterRepository, RoleRepository roleRepository,
       PrivacyReleaseRepository privacyReleaseRepository,
+      InterfaceApplicantCountPrivacyService applicantCountPrivacyService,
       JobRepository jobDescriptionRepository, PasswordEncoder passwordEncoder,
       JwtService jwtService) {
     this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
@@ -107,6 +126,7 @@ class BackendEndpointsIntegrationTests {
     this.recruiterRepository = recruiterRepository;
     this.roleRepository = roleRepository;
     this.privacyReleaseRepository = privacyReleaseRepository;
+    this.applicantCountPrivacyService = applicantCountPrivacyService;
     this.jobDescriptionRepository = jobDescriptionRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
@@ -736,6 +756,17 @@ class BackendEndpointsIntegrationTests {
   void recruiterAndJobEndpointsShouldReadCreateAndUpdateJobs() throws Exception {
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
     Job existingJob = seedJob(recruiter, "Backend Engineer");
+    JobLanguageRequirement existingLanguage = new JobLanguageRequirement();
+    existingLanguage.setJob(existingJob);
+    existingLanguage.setDisplayOrder(0);
+    existingLanguage.setLanguageName("Korean");
+    existingLanguage.setProficiencyLevel("Professional conversation");
+    existingLanguage.setSkills(List.of("Speaking"));
+    existingLanguage.setCertificates(List.of(
+        new LanguageCertificateRequirement("TOPIK", "Level 4")));
+    existingJob.getLanguageRequirements().add(existingLanguage);
+    existingJob = jobDescriptionRepository.save(existingJob);
+    Instant existingPublishedAt = existingJob.getPublishedAt();
 
     mockMvc.perform(get("/api/v1/recruiters"))
         .andExpect(status().isOk())
@@ -812,6 +843,7 @@ class BackendEndpointsIntegrationTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].jobTitle").value("Backend Engineer"));
 
+    Instant beforeCreate = Instant.now();
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
         .contentType(MediaType.APPLICATION_JSON)
         .content("""
@@ -847,13 +879,35 @@ class BackendEndpointsIntegrationTests {
                 ],
                 "requiredSkills": ["JavaScript", "Debugging"],
                 "techStack": ["React", "TypeScript"],
-                "englishRequired": true,
-                "englishLevel": "Proficient",
-                "englishSkills": ["Speaking", "Reading"],
-                "englishCertificates": [
+                "languageRequired": true,
+                "languageRequirements": [
                   {
-                    "certificateName": "IELTS Academic",
-                    "minimumScore": "6.5 overall"
+                    "languageName": "English",
+                    "proficiencyLevel": "Professional working proficiency",
+                    "skills": ["Speaking", "Reading"],
+                    "certificates": [
+                      {
+                        "certificateName": "IELTS Academic",
+                        "minimumScore": "6.5 overall"
+                      }
+                    ]
+                  },
+                  {
+                    "languageName": "Japanese",
+                    "proficiencyLevel": "JLPT N2 or business conversational",
+                    "skills": ["Speaking", "Reading technical documents"],
+                    "certificates": [
+                      {
+                        "certificateName": "JLPT",
+                        "minimumScore": "N2"
+                      }
+                    ]
+                  },
+                  {
+                    "languageName": "Spanish",
+                    "proficiencyLevel": "Professional working proficiency",
+                    "skills": ["Speaking", "Writing"],
+                    "certificates": []
                   }
                 ],
                 "tools": ["Git", "Jira"],
@@ -887,8 +941,17 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.requirementDetails.minimumYearsExperience").value(3))
         .andExpect(jsonPath("$.data.requirementDetails.requiredSkills[1]").value("Debugging"))
         .andExpect(jsonPath("$.data.requirementDetails.techStack[0]").value("React"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequired").value(true))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements.length()").value(3))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[1].languageName").value("Japanese"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[1].proficiencyLevel")
+            .value("JLPT N2 or business conversational"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[1].skills[1]")
+            .value("Reading technical documents"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[1].certificates[0].certificateName")
+            .value("JLPT"))
         .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(true))
-        .andExpect(jsonPath("$.data.requirementDetails.englishLevel").value("Proficient"))
+        .andExpect(jsonPath("$.data.requirementDetails.englishLevel").value("Professional working proficiency"))
         .andExpect(jsonPath("$.data.requirementDetails.englishSkills[0]").value("Speaking"))
         .andExpect(jsonPath("$.data.requirementDetails.englishCertificates[0].certificateName")
             .value("IELTS Academic"))
@@ -896,6 +959,14 @@ class BackendEndpointsIntegrationTests {
             .value("6.5 overall"))
         .andExpect(jsonPath("$.data.requirementDetails.tools[0]").value("Git"))
         .andExpect(jsonPath("$.data.requirementDetails.technicalKnowledge[1]").value("System design"));
+    Instant afterCreate = Instant.now();
+
+    Job createdJob = jobDescriptionRepository.findAll().stream()
+        .filter(job -> "Frontend Engineer".equals(job.getJobTitle()))
+        .findFirst()
+        .orElseThrow();
+    org.assertj.core.api.Assertions.assertThat(createdJob.getPublishedAt())
+        .isBetween(beforeCreate, afterCreate);
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
         .contentType(MediaType.APPLICATION_JSON)
@@ -922,9 +993,26 @@ class BackendEndpointsIntegrationTests {
                 "experienceRequirements": ["Entry-level production work"],
                 "requiredSkills": ["Java"],
                 "techStack": ["Spring Boot"],
-                "englishRequired": true,
-                "englishSkills": [],
-                "englishCertificates": [],
+                "languageRequired": true,
+                "languageRequirements": [
+                  {
+                    "languageName": "Japanese",
+                    "proficiencyLevel": "",
+                    "skills": [],
+                    "certificates": [
+                      {
+                        "certificateName": "JLPT",
+                        "minimumScore": ""
+                      }
+                    ]
+                  },
+                  {
+                    "languageName": " japanese ",
+                    "proficiencyLevel": "Business",
+                    "skills": ["Speaking"],
+                    "certificates": []
+                  }
+                ],
                 "tools": [],
                 "technicalKnowledge": []
               }
@@ -933,8 +1021,45 @@ class BackendEndpointsIntegrationTests {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.hasItems(
             "Provide a no-degree applicant expectation, or select valid degrees and at least one major",
-            "English level and at least one English skill are required when English is required",
+            "Select language requirements and provide a name, proficiency, and at least one skill for each language",
+            "Required language proficiency cannot be blank",
+            "At least one language skill is required",
+            "Language certificate score or requirement cannot be blank",
             "At least one tool or technical knowledge item is required")));
+
+    mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}", recruiter.getId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {
+              "jobTitle": "Legacy English Client Job",
+              "requirementDetails": {
+                "educationMode": "NOT_REQUIRED",
+                "degrees": [],
+                "noDegreeRequirement": "Equivalent practical training",
+                "educationMajors": [],
+                "preferredInstitutions": [],
+                "minimumYearsExperience": 0,
+                "experienceRequirements": ["Entry-level delivery"],
+                "requiredSkills": ["Communication"],
+                "techStack": ["Web"],
+                "englishRequired": true,
+                "englishLevel": "B2",
+                "englishSkills": ["Speaking"],
+                "englishCertificates": [],
+                "tools": ["Git"],
+                "technicalKnowledge": []
+              }
+            }
+            """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequired").value(true))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements.length()").value(1))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].languageName")
+            .value("English"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].proficiencyLevel")
+            .value("Upper-intermediate"))
+        .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(true))
+        .andExpect(jsonPath("$.data.requirementDetails.englishLevel").value("Upper-intermediate"));
 
     mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(),
         existingJob.getId())
@@ -964,9 +1089,8 @@ class BackendEndpointsIntegrationTests {
                 "experienceRequirements": ["Led backend platform delivery"],
                 "requiredSkills": ["Java", "Debugging"],
                 "techStack": ["Spring Boot", "PostgreSQL"],
-                "englishRequired": false,
-                "englishSkills": [],
-                "englishCertificates": [],
+                "languageRequired": false,
+                "languageRequirements": [],
                 "tools": ["Git"],
                 "technicalKnowledge": ["Microservices"]
               }
@@ -983,9 +1107,19 @@ class BackendEndpointsIntegrationTests {
         .andExpect(jsonPath("$.data.requirementDetails.noDegreeRequirement")
             .value("Currently studying or equivalent practical training"))
         .andExpect(jsonPath("$.data.requirementDetails.minimumYearsExperience").value(5))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequired").value(false))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements").isEmpty())
         .andExpect(jsonPath("$.data.requirementDetails.englishRequired").value(false))
         .andExpect(jsonPath("$.data.requirementDetails.englishLevel").doesNotExist())
         .andExpect(jsonPath("$.data.requirementDetails.englishSkills").isEmpty());
+
+    org.assertj.core.api.Assertions.assertThat(
+        jobDescriptionRepository.findById(existingJob.getId()).orElseThrow().getPublishedAt())
+        .isCloseTo(existingPublishedAt,
+            org.assertj.core.api.Assertions.within(1, java.time.temporal.ChronoUnit.MICROS));
+    org.assertj.core.api.Assertions.assertThat(
+        jobDescriptionRepository.findById(existingJob.getId()).orElseThrow().getLanguageRequirements())
+        .isEmpty();
   }
 
   @Test
@@ -1015,11 +1149,13 @@ class BackendEndpointsIntegrationTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.id").value(jobDescription.getId()));
 
-    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", jobDescription.getId()))
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", jobDescription.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.applicantCount").value(1));
 
-    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId()))
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", jobDescription.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].applicationOrder").value(1))
         .andExpect(jsonPath("$.data[0].applicant.fullName").value("Applicant One"))
@@ -1030,14 +1166,16 @@ class BackendEndpointsIntegrationTests {
   }
 
   @Test
-  void applicantFacingCountShouldBeDifferentiallyPrivateStickyAndDistinct() throws Exception {
+  void applicantFacingCountShouldBePrivateStableForTwelveHoursAndAccessControlled() throws Exception {
     Applicant viewer = seedApplicant("viewer", "viewer@example.com");
     Applicant duplicateApplicant = seedApplicant("duplicate", "duplicate@example.com");
     Applicant savedOnlyApplicant = seedApplicant("savedonly", "savedonly@example.com");
     Applicant withdrawnApplicant = seedApplicant("withdrawn", "withdrawn@example.com");
     Applicant browsingApplicant = seedApplicant("browser", "browser@example.com");
     Recruiter recruiter = seedRecruiter("recruiter01", "recruiter@example.com");
+    Recruiter otherRecruiter = seedRecruiter("recruiter02", "other-recruiter@example.com");
     Job job = seedJob(recruiter, "Backend Engineer");
+    when(noiseGenerator.sample(0.5)).thenReturn(4L, -2L);
 
     applicantJobRepository.save(new ApplicantJob(viewer, job, "APPLIED"));
     applicantJobRepository.save(new ApplicantJob(duplicateApplicant, job, "APPLIED"));
@@ -1045,28 +1183,65 @@ class BackendEndpointsIntegrationTests {
     applicantJobRepository.save(new ApplicantJob(savedOnlyApplicant, job, "SAVED"));
     applicantJobRepository.save(new ApplicantJob(withdrawnApplicant, job, "WITHDRAWN"));
 
-    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId()))
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.applicantCount").value(3));
+        .andExpect(jsonPath("$.data.applicantCount").value(2));
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId()))
+        .andExpect(status().isForbidden());
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isForbidden());
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(otherRecruiter)))
+        .andExpect(status().isForbidden());
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(1L, "ADMIN")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.applicantCount").value(2));
+
+    mockMvc.perform(get("/api/v1/browse-jobs/applicants/{jobId}/list", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isForbidden());
 
     org.assertj.core.api.Assertions
         .assertThat(applicantJobRepository.countDistinctApplicantsByJobAndActionType(job.getId(), "APPLIED"))
         .isEqualTo(2);
 
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId()))
+        .andExpect(status().isForbidden());
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter)))
+        .andExpect(status().isForbidden());
+
     mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.jobId").value(job.getId()))
-        .andExpect(jsonPath("$.data.approximateApplicantCount").isNumber())
-        .andExpect(jsonPath("$.data.displayText").value(org.hamcrest.Matchers.startsWith("Approximately ")))
-        .andExpect(jsonPath("$.data.approximate").value(true))
-        .andExpect(jsonPath("$.data.rawCount").doesNotExist())
-        .andExpect(jsonPath("$.data.noise").doesNotExist());
+        .andExpect(jsonPath("$.data.applicantCount").value(6))
+        .andExpect(jsonPath("$.data.displayText").value("6 candidates have applied"))
+        .andExpect(jsonPath("$.data.snapshotCapturedAt").isString())
+        .andExpect(jsonPath("$.data.nextRefreshAt").isString())
+        .andExpect(jsonPath("$.data.refreshIntervalHours").value(12))
+        .andExpect(jsonPath("$.data.approximateApplicantCount").doesNotExist())
+        .andExpect(jsonPath("$.data.approximate").doesNotExist())
+        .andExpect(jsonPath("$.data.noise").doesNotExist())
+        .andExpect(jsonPath("$.data.privacyEpsilon").doesNotExist());
 
     mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(browsingApplicant)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.displayText").value(org.hamcrest.Matchers.startsWith("Approximately ")));
+        .andExpect(jsonPath("$.data.applicantCount").value(6));
+
+    org.assertj.core.api.Assertions.assertThat(privacyReleaseRepository.findAll())
+        .singleElement()
+        .extracting(PrivacyRelease::getReleasedValue)
+        .isEqualTo(6L);
 
     String firstResponse = mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
@@ -1075,6 +1250,64 @@ class BackendEndpointsIntegrationTests {
         .header(HttpHeaders.AUTHORIZATION, authorizationHeader(duplicateApplicant)))
         .andReturn().getResponse().getContentAsString();
     org.assertj.core.api.Assertions.assertThat(secondResponse).isEqualTo(firstResponse);
+
+    applicantJobRepository.save(new ApplicantJob(browsingApplicant, job, "APPLIED"));
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.applicantCount").value(6));
+
+    job.setPublishedAt(Instant.now().minus(Duration.ofHours(13)));
+    jobDescriptionRepository.save(job);
+
+    mockMvc.perform(get("/api/v1/jobs/{jobId}/applicant-count", job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.applicantCount").value(1));
+
+    org.assertj.core.api.Assertions.assertThat(privacyReleaseRepository.findAll())
+        .hasSize(2)
+        .extracting(PrivacyRelease::getReleasedValue)
+        .containsExactlyInAnyOrder(6L, 1L);
+  }
+
+  @Test
+  void concurrentApplicantCountRequestsShouldCreateOneRelease() throws Exception {
+    Recruiter recruiter = seedRecruiter("concurrent-recruiter", "concurrent-recruiter@example.com");
+    Job job = seedJob(recruiter, "Concurrent Systems Engineer");
+    Applicant applicant = seedApplicant("concurrent-applicant", "concurrent-applicant@example.com");
+    applicantJobRepository.save(new ApplicantJob(applicant, job, "APPLIED"));
+    when(noiseGenerator.sample(0.5)).thenReturn(2L);
+
+    int requestCount = 6;
+    CountDownLatch ready = new CountDownLatch(requestCount);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(requestCount);
+    List<Future<Long>> futures = new ArrayList<>();
+    try {
+      for (int index = 0; index < requestCount; index++) {
+        futures.add(executor.submit(() -> {
+          ready.countDown();
+          start.await(5, TimeUnit.SECONDS);
+          return applicantCountPrivacyService.getApplicantCountRelease(job.getId()).getApplicantCount();
+        }));
+      }
+      org.assertj.core.api.Assertions.assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+
+      for (Future<Long> future : futures) {
+        org.assertj.core.api.Assertions.assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(3L);
+      }
+    } finally {
+      start.countDown();
+      executor.shutdownNow();
+    }
+
+    org.assertj.core.api.Assertions.assertThat(privacyReleaseRepository.findAll())
+        .singleElement()
+        .extracting(PrivacyRelease::getReleasedValue)
+        .isEqualTo(3L);
+    verify(noiseGenerator, times(1)).sample(0.5);
   }
 
   @Test
@@ -1411,6 +1644,7 @@ class BackendEndpointsIntegrationTests {
     jobDescription.setJobType("Full-time");
     jobDescription.setLocation("Remote");
     jobDescription.setPostedDate(Date.valueOf(LocalDate.now()));
+    jobDescription.setPublishedAt(Instant.now());
     jobDescription.setRecruiter(recruiter);
     return jobDescriptionRepository.save(jobDescription);
   }
@@ -1450,6 +1684,15 @@ class BackendEndpointsIntegrationTests {
         recruiter.getUserName(),
         recruiter.getEmail(),
         "RECRUITER"));
+    return "Bearer " + token;
+  }
+
+  private String authorizationHeader(Long userId, String roleName) {
+    String token = jwtService.generateToken(new InforInsideToken(
+        userId,
+        roleName.toLowerCase(),
+        roleName.toLowerCase() + "@example.com",
+        roleName));
     return "Bearer " + token;
   }
 }

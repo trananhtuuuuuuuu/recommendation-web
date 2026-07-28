@@ -28,9 +28,27 @@ public class JobRequirementDetailsResponse {
     private List<String> experienceRequirements;
     private List<String> requiredSkills;
     private List<String> techStack;
+    private Boolean languageRequired;
+    private List<LanguageRequirementResponse> languageRequirements;
+
+    /** @deprecated use {@link #languageRequirements}. */
+    @Deprecated
+    @Schema(deprecated = true)
     private Boolean englishRequired;
+
+    /** @deprecated use {@link #languageRequirements}. */
+    @Deprecated
+    @Schema(deprecated = true)
     private String englishLevel;
+
+    /** @deprecated use {@link #languageRequirements}. */
+    @Deprecated
+    @Schema(deprecated = true)
     private List<String> englishSkills;
+
+    /** @deprecated use {@link #languageRequirements}. */
+    @Deprecated
+    @Schema(deprecated = true)
     private List<EnglishCertificateRequirementResponse> englishCertificates;
     private List<String> tools;
     private List<String> technicalKnowledge;

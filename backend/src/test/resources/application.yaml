@@ -16,8 +16,6 @@ privacy:
     enabled: true
     applicant-count:
       epsilon: 0.5
-      release-window: P7D
-      release-secret: test-dp-release-secret
   anonymous-candidate-preview:
     enabled: true
     minimum-eligible-candidates: 3

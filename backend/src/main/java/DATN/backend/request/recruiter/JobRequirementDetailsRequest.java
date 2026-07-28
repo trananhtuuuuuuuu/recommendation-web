@@ -1,6 +1,9 @@
 package DATN.backend.request.recruiter;
 
 import java.util.List;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 import DATN.backend.Enum.JobDegreeEnum;
 import DATN.backend.Enum.JobEducationRequirementModeEnum;
@@ -62,20 +65,35 @@ public class JobRequirementDetailsRequest {
     @Schema(example = "[\"Spring Boot\", \"PostgreSQL\", \"Docker\"]")
     private List<@NotBlank(message = "Tech stack item cannot be blank") String> techStack;
 
-    @NotNull(message = "English requirement must be explicitly selected")
-    @Schema(example = "true")
+    @Schema(description = "Whether this job requires at least one language", example = "true")
+    private Boolean languageRequired;
+
+    @Schema(description = "Required languages. Must be empty when languageRequired is false")
+    private List<@Valid LanguageRequirementRequest> languageRequirements;
+
+    /**
+     * Legacy English-only flag retained for older clients.
+     *
+     * @deprecated use {@link #languageRequired}
+     */
+    @Deprecated
+    @Schema(deprecated = true, example = "true")
     private Boolean englishRequired;
 
-    @Schema(example = "Upper-intermediate")
+    /** @deprecated use {@link LanguageRequirementRequest#getProficiencyLevel()} */
+    @Deprecated
+    @Schema(deprecated = true, example = "Upper-intermediate")
     private String englishLevel;
 
-    @NotNull(message = "English skills must be provided, or use an empty list")
-    @Schema(example = "[\"Speaking\", \"Reading technical documentation\"]")
+    /** @deprecated use {@link LanguageRequirementRequest#getSkills()} */
+    @Deprecated
+    @Schema(deprecated = true, example = "[\"Speaking\", \"Reading technical documentation\"]")
     private List<@NotBlank(message = "English skill cannot be blank") String> englishSkills;
 
-    @Valid
-    @NotNull(message = "English certificates must be provided, or use an empty list")
-    private List<EnglishCertificateRequirementRequest> englishCertificates;
+    /** @deprecated use {@link LanguageRequirementRequest#getCertificates()} */
+    @Deprecated
+    @Schema(deprecated = true)
+    private List<@Valid EnglishCertificateRequirementRequest> englishCertificates;
 
     @NotNull(message = "Tools must be provided, or use an empty list")
     @Schema(example = "[\"Git\", \"Jira\", \"Postman\"]")
@@ -110,17 +128,39 @@ public class JobRequirementDetailsRequest {
     }
 
     /**
-     * Checks the conditional English level and skill requirements.
+     * Checks generic language requirements and the deprecated English fallback.
      *
-     * @return {@code true} when English is not required or its details are complete
+     * @return {@code true} when the selected language mode is internally consistent
      */
-    @AssertTrue(message = "English level and at least one English skill are required when English is required")
+    @AssertTrue(message = "Select language requirements and provide a name, proficiency, and at least one skill for each language")
     @Schema(hidden = true)
-    public boolean isEnglishRequirementValid() {
-        return englishRequired == null
-                || !englishRequired
-                || (englishLevel != null && !englishLevel.isBlank()
-                        && englishSkills != null && !englishSkills.isEmpty());
+    public boolean isLanguageRequirementValid() {
+        if (languageRequired != null) {
+            if (languageRequirements == null) {
+                return false;
+            }
+            if (!languageRequired) {
+                return languageRequirements.isEmpty();
+            }
+            return !languageRequirements.isEmpty() && hasUniqueLanguageNames(languageRequirements);
+        }
+
+        return englishRequired != null
+                && (!englishRequired
+                        || (englishLevel != null && !englishLevel.isBlank()
+                                && englishSkills != null && !englishSkills.isEmpty()
+                                && englishCertificates != null));
+    }
+
+    private boolean hasUniqueLanguageNames(List<LanguageRequirementRequest> requirements) {
+        Set<String> names = new HashSet<>();
+        for (LanguageRequirementRequest requirement : requirements) {
+            if (requirement == null || requirement.getLanguageName() == null
+                    || !names.add(requirement.getLanguageName().trim().toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
