@@ -46,12 +46,18 @@ app = FastAPI(
 @app.get("/health")
 def health() -> dict:
     """Report service readiness and whether the trained model is mounted."""
+    from .recommend.config import hard_filter_enabled
+    from .recommend.decision import recommender_health
+
+    recommender = recommender_health()
     return {
         "status": "ok",
         "modelLoaded": parser.model_available,
         "fallbackAvailable": True,
         "imageOcrAvailable": parser.image_ocr_available,
-        "recommenderModelLoaded": _svm_loaded(),
+        "recommenderModelLoaded": any(recommender["available"].values()),
+        "recommender": recommender,
+        "hardFilterEnabled": hard_filter_enabled(),
         "word2vecLoaded": _word2vec_loaded(),
         "ollamaModel": os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
     }

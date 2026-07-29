@@ -55,7 +55,9 @@ def run_hard_filter(
         if precomputed_years is not None
         else total_experience_years(by_label.get("DATE", []), today=today)
     )
-    required_years = _required_years(jd.experience_level)
+    required_years = _required_years(
+        jd.minimum_years_experience or jd.experience_level
+    )
     years_ok, exp_fit = _experience_fit(candidate_years, required_years)
 
     cv_locations = list(by_label.get("CANDIDATE_LOCATION", [])) + list(by_label.get("LOCATION", []))
@@ -108,6 +110,8 @@ def _experience_fit(candidate_years: float, required_years: float) -> tuple[bool
 
 def _required_years(experience_level: str) -> float:
     text = normalize(experience_level)
+    if re.fullmatch(r"\d+(?:\.\d+)?", text):
+        return float(text)
     match = _YEARS_RE.search(text)
     if match:
         return float(match.group(1))

@@ -41,6 +41,10 @@ services:
       AI_MAX_UPLOAD_BYTES: ${AI_MAX_UPLOAD_BYTES:-15728640}
       AI_OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng+vie}
       AI_OCR_ENGINE: ${AI_OCR_ENGINE:-paddle}
+      AI_RECOMMENDER_PRIMARY: ${AI_RECOMMENDER_PRIMARY:-v21}
+      AI_RECOMMENDER_FALLBACKS: ${AI_RECOMMENDER_FALLBACKS:-legacy,v22}
+      # Temporary: keep hard-filter output for audit, but do not reject/penalise CVs.
+      AI_HARD_FILTER_ENABLED: ${AI_HARD_FILTER_ENABLED:-false}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 
@@ -10,6 +11,10 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 MODEL_DIR = Path(__file__).resolve().parents[2] / "model"
 SVM_MODEL_PATH = MODEL_DIR / "recommender_svm.joblib"
 WORD2VEC_PATH = MODEL_DIR / "word2vec.kv"
+STRUCTURED_MODEL_PATHS = {
+    "v21": MODEL_DIR / "recommender_svm_v21_primary.joblib",
+    "v22": MODEL_DIR / "recommender_svm_v22_backup.joblib",
+}
 
 # Group 1 -- PII labels removed before any scoring.
 MASK_LABELS = ("NAME", "EMAIL", "PHONE", "LINK")
@@ -57,6 +62,14 @@ FIELD_DISPLAY_NAMES: dict[str, str] = {
     "SUMMARY": "professional summary",
     "EXPERIENCE": "work experience",
     "PROJECT": "projects",
+    "required_skill_coverage": "required-skill coverage",
+    "weighted_required_skill_coverage": "weighted required-skill coverage",
+    "required_skill_f1": "required-skill balance",
+    "responsibility_similarity": "responsibility alignment",
+    "experience_task_similarity": "experience-task alignment",
+    "project_evidence": "project evidence",
+    "experience_present": "experience evidence",
+    "role_alignment": "role alignment",
 }
 
 FIELD_DISPLAY_NAMES_EN = FIELD_DISPLAY_NAMES
@@ -143,3 +156,29 @@ def svm_model_path(method: str = "tfidf") -> Path:
     if method == "embedding":
         return MODEL_DIR / "recommender_svm_embedding.joblib"
     return SVM_MODEL_PATH
+
+
+def recommender_sequence() -> tuple[str, ...]:
+    """Configured primary followed by technical fallbacks, without duplicates."""
+    primary = os.getenv("AI_RECOMMENDER_PRIMARY", "v21").strip().lower()
+    fallbacks = os.getenv(
+        "AI_RECOMMENDER_FALLBACKS",
+        "legacy,v22",
+    ).split(",")
+    ordered = [primary, *(item.strip().lower() for item in fallbacks)]
+    allowed = {"v21", "v22", "legacy"}
+    return tuple(
+        model
+        for index, model in enumerate(ordered)
+        if model in allowed and model not in ordered[:index]
+    )
+
+
+def hard_filter_enabled() -> bool:
+    """Whether hard-filter results are enforced instead of retained for audit only."""
+    return os.getenv("AI_HARD_FILTER_ENABLED", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }

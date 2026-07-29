@@ -14,6 +14,7 @@ _JD_ALIASES = {
     "salary_range": "salaryRange",
     "job_type": "jobType",
     "experience_level": "experienceLevel",
+    "minimum_years_experience": "minimumYearsExperience",
 }
 
 
@@ -30,6 +31,7 @@ class JobDescriptionInput:
     salary_range: str = ""
     job_type: str = ""
     experience_level: str = ""
+    minimum_years_experience: str = ""
     industry: str = ""
 
     @classmethod
@@ -76,6 +78,7 @@ class MatchResult:
 
     passed_filter: bool
     hard_filter: HardFilterResult
+    hard_filter_enforced: bool = True
     per_field_scores: dict[str, float] = field(default_factory=dict)
     match_score: float = 0.0
     scoring_method: str = "tfidf"

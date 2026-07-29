@@ -1,13 +1,13 @@
 """Orchestration -- run the five groups end to end.
 
-mask -> hard filter -> (short-circuit if rejected) -> vector + semantic ->
+mask -> hard-filter audit -> optional enforcement -> vector + semantic ->
 decision -> LLM suggestion.
 """
 
 from __future__ import annotations
 
-from .config import svm_model_path
-from .decision import decide, strong_fields, weak_fields
+from .config import hard_filter_enabled, svm_model_path
+from .decision import decide_registered, strong_fields, weak_fields
 from .embeddings import sentence_transformers_installed
 from .hard_filter import run_hard_filter
 from .llm_suggest import suggest
@@ -27,6 +27,13 @@ def run_match(
     enable_llm: bool = False,
 ) -> MatchResult:
     """Score a canonical CV against a structured JD and explain the result."""
+    raw_jd = jd if isinstance(jd, dict) else {
+        "jobTitle": jd.job_title,
+        "jobDescription": jd.job_description,
+        "requirements": jd.requirements,
+        "experienceLevel": jd.experience_level,
+        "minimumYearsExperience": jd.minimum_years_experience,
+    }
     if isinstance(jd, dict):
         jd = JobDescriptionInput.from_dict(jd)
 
@@ -39,10 +46,12 @@ def run_match(
         method = "tfidf"
 
     hard = run_hard_filter(cv_canonical, jd, today=today)
-    if not hard.passed:
+    enforce_hard_filter = hard_filter_enabled()
+    if enforce_hard_filter and not hard.passed:
         return MatchResult(
             passed_filter=False,
             hard_filter=hard,
+            hard_filter_enforced=True,
             per_field_scores={},
             match_score=0.0,
             scoring_method=method,
@@ -52,16 +61,36 @@ def run_match(
         )
 
     masked = mask_entities(cv_canonical.get("entitiesByLabel", {}))
-    keyed_vectors = load_word2vec() if method == "word2vec" else None
-    field_scores = score_vector_fields(
-        masked, jd, method=method, keyed_vectors=keyed_vectors
-    ) + score_semantic_fields(masked, jd, method=method)
-    per_field = {score.field: score.score for score in field_scores}
+    legacy_cache: dict[str, float] | None = None
 
-    match_score, reason, model_used = decide(per_field, method=method)
+    def legacy_scores() -> dict[str, float]:
+        nonlocal legacy_cache
+        if legacy_cache is None:
+            keyed_vectors = load_word2vec() if method == "word2vec" else None
+            field_scores = score_vector_fields(
+                masked,
+                jd,
+                method=method,
+                keyed_vectors=keyed_vectors,
+            ) + score_semantic_fields(masked, jd, method=method)
+            legacy_cache = {
+                score.field: score.score for score in field_scores
+            }
+        return legacy_cache
+
+    outcome = decide_registered(
+        cv_canonical,
+        raw_jd,
+        legacy_scores,
+        method=method,
+    )
+    match_score = outcome.score
+    reason = outcome.reason
+    model_used = outcome.model_used
+    per_field = outcome.per_field_scores
     # Experience is a soft signal: a years shortfall scales the knowledge-based
     # score down rather than rejecting the candidate outright.
-    if hard.exp_fit < 1.0:
+    if enforce_hard_filter and hard.exp_fit < 1.0:
         match_score = round(match_score * hard.exp_fit, 4)
         reason += f" (Adjusted for limited experience: multiplier {hard.exp_fit:.2f}.)"
     suggestions = suggest(
@@ -78,11 +107,14 @@ def run_match(
     )
 
     return MatchResult(
-        passed_filter=True,
+        # When disabled, the original hard-filter result remains in ``hard_filter``
+        # for audit/reporting but cannot reject or penalise the candidate.
+        passed_filter=hard.passed if enforce_hard_filter else True,
         hard_filter=hard,
+        hard_filter_enforced=enforce_hard_filter,
         per_field_scores=per_field,
         match_score=match_score,
-        scoring_method=method,
+        scoring_method=outcome.scoring_method,
         reason=reason,
         model_used=model_used,
         suggestions=suggestions,
