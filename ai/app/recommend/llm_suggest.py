@@ -1,8 +1,8 @@
-"""Career-coaching improvement suggestions (English) for the candidate.
+"""Role-aware CV-to-job guidance grounded in the recommender output.
 
 Primary path calls a local Ollama server (small ~2B model on CPU); when Ollama
-is unreachable or disabled, a deterministic rule-based template keyed off the
-weak fields is used so /match always returns suggestions.
+is unreachable or disabled, deterministic applicant/recruiter templates keyed
+off the weak fields are used so /match always returns appropriate guidance.
 """
 
 from __future__ import annotations
@@ -16,18 +16,53 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
 
-# Rule-based fallback suggestion per field (used when the LLM is unavailable).
-_TEMPLATES = {
-    "SKILL": "Add the specific technical skills this job calls for, and move the most relevant ones to the top of your CV.",
-    "SOFT_SKILL": "Show soft skills like communication and teamwork through short, concrete examples rather than a plain list.",
-    "LANGUAGE": "List the languages you speak with your proficiency level, especially any the role asks for.",
-    "CERTIFICATION": "Add a certification that fits this role (for example AWS, PMP, or a recognised language certificate).",
-    "JOB_TITLE": "Align your headline or career objective more closely with the exact title you're applying for.",
-    "COMPANY": "Highlight experience at companies in the same industry to show you know the domain.",
-    "EDUCATION": "Make your education section speak to what this job description expects.",
-    "SUMMARY": "Rewrite your summary so it speaks directly to this role and what you'd bring to it.",
-    "EXPERIENCE": "Describe your experience with concrete achievements and numbers that map to the job's needs.",
-    "PROJECT": "Add one or two projects that clearly demonstrate the skills this role is looking for.",
+# Several model fields describe the same evidence area. Grouping them prevents
+# the fallback from returning three near-identical skill suggestions.
+_FIELD_TOPICS = {
+    "SKILL": "skills",
+    "required_skill_coverage": "skills",
+    "weighted_required_skill_coverage": "skills",
+    "required_skill_f1": "skills",
+    "SOFT_SKILL": "soft_skills",
+    "LANGUAGE": "language",
+    "CERTIFICATION": "certification",
+    "JOB_TITLE": "role_alignment",
+    "role_alignment": "role_alignment",
+    "COMPANY": "industry",
+    "EDUCATION": "education",
+    "SUMMARY": "responsibilities",
+    "responsibility_similarity": "responsibilities",
+    "EXPERIENCE": "experience",
+    "experience_task_similarity": "experience",
+    "experience_present": "experience",
+    "PROJECT": "projects",
+    "project_evidence": "projects",
+}
+
+_APPLICANT_TEMPLATES = {
+    "skills": "Add concrete evidence for the required skills that are missing or weak, prioritising tools you have actually used in work or projects.",
+    "soft_skills": "Show communication and teamwork through short, concrete examples rather than a plain list.",
+    "language": "State your language proficiency and any relevant test result when the job explicitly requires it.",
+    "certification": "Add relevant certificates you already hold; if the certificate is only preferred, treat it as supporting evidence rather than the main focus.",
+    "role_alignment": "Clarify the target role in your headline, but support it with transferable skills and achievements instead of copying the job title.",
+    "industry": "Highlight experience in the same or a transferable industry and explain the relevant domain knowledge.",
+    "education": "Make the education section clearly show how your degree or coursework meets the stated requirement.",
+    "responsibilities": "Rewrite the most relevant experience bullets so they mirror the role's responsibilities and include measurable outcomes.",
+    "experience": "Prioritise achievements that demonstrate the job's day-to-day tasks, including scope, ownership, and results.",
+    "projects": "Add one or two projects that prove the required skills, your contribution, and the outcome.",
+}
+
+_RECRUITER_TEMPLATES = {
+    "skills": "Verify hands-on evidence for the required skills with the lowest coverage before shortlisting; distinguish production use from keyword mentions.",
+    "soft_skills": "Ask for a concrete example of collaboration or stakeholder communication because the CV provides limited behavioural evidence.",
+    "language": "Confirm the candidate's actual proficiency only if the job marks this language requirement as required.",
+    "certification": "Treat certificates as supporting evidence unless the job explicitly makes one mandatory; verify validity only when relevant.",
+    "role_alignment": "Do not reject on title alone; check whether the candidate's transferable responsibilities and skills match the role.",
+    "industry": "Check whether experience from the candidate's industry transfers to this role and ask about the closest comparable context.",
+    "education": "Verify the education requirement only to the degree it is explicitly required by the job.",
+    "responsibilities": "Review the weak responsibility alignment and ask the candidate to walk through the closest comparable work they owned.",
+    "experience": "Probe the depth, recency, scope, and outcomes of relevant experience rather than relying only on stated years.",
+    "projects": "Ask for project evidence that demonstrates the required skills, the candidate's personal contribution, and measurable outcomes.",
 }
 
 
@@ -83,29 +118,44 @@ def suggest(
     jd_requirements: str = "",
     cv_skills: str = "",
     cv_summary: str = "",
+    viewer_role: str = "APPLICANT",
 ) -> list[str]:
-    """Return 3-5 concrete English suggestions grounded in the SVM output.
+    """Return role-appropriate English guidance grounded in the SVM output.
 
     The decision model's per-field scores (which fields are weak, with numbers)
     plus the JD requirements and the CV's own skills are handed to the LLM so the
-    advice is specific to the gap, not a generic template.
+    guidance is specific to the gap, not a generic template.
     """
+    viewer_role = _normalise_viewer_role(viewer_role)
     if use_llm:
         try:
             generated = _suggest_via_ollama(
                 match_score, jd_title, strong, weak, reason,
                 per_field_scores or {}, jd_requirements, cv_skills, cv_summary,
+                viewer_role,
             )
             if generated:
                 return generated
         except Exception:
             pass
-    return _suggest_template(weak)
+    return _suggest_template(weak, viewer_role=viewer_role)
 
 
-def _suggest_template(weak: list[str]) -> list[str]:
-    suggestions = [_TEMPLATES[field] for field in weak if field in _TEMPLATES][:4]
+def _normalise_viewer_role(viewer_role: str) -> str:
+    return "RECRUITER" if str(viewer_role).strip().upper() == "RECRUITER" else "APPLICANT"
+
+
+def _suggest_template(weak: list[str], *, viewer_role: str = "APPLICANT") -> list[str]:
+    role = _normalise_viewer_role(viewer_role)
+    templates = _RECRUITER_TEMPLATES if role == "RECRUITER" else _APPLICANT_TEMPLATES
+    topics = list(dict.fromkeys(_FIELD_TOPICS[field] for field in weak if field in _FIELD_TOPICS))
+    suggestions = [templates[topic] for topic in topics if topic in templates][:4]
     if not suggestions:
+        if role == "RECRUITER":
+            return [
+                "The available CV evidence aligns well with the role; use the score as decision support, not as an automatic hiring decision.",
+                "Confirm the depth and recency of the strongest evidence during the interview.",
+            ]
         return [
             "Your profile already matches this role well.",
             "Do a final pass for typos and formatting before you apply.",
@@ -123,6 +173,7 @@ def _suggest_via_ollama(
     jd_requirements: str,
     cv_skills: str,
     cv_summary: str,
+    viewer_role: str,
 ) -> list[str]:
     import httpx
 
@@ -133,6 +184,7 @@ def _suggest_via_ollama(
             "prompt": _build_prompt(
                 match_score, jd_title, strong, weak, reason,
                 per_field_scores, jd_requirements, cv_skills, cv_summary,
+                viewer_role,
             ),
             "stream": False,
             "options": {"temperature": 0.4},
@@ -157,9 +209,35 @@ def _build_prompt(
     jd_requirements: str,
     cv_skills: str,
     cv_summary: str,
+    viewer_role: str = "APPLICANT",
 ) -> str:
     strong_text = _field_scores_text(strong, per_field_scores) or "nothing stands out yet"
     weak_text = _field_scores_text(weak, per_field_scores) or "none"
+    evidence = (
+        f"Role: {jd_title or 'Unknown'}\n"
+        f"Overall SVM match score: {match_score:.0%}\n"
+        f"Strong model features: {strong_text}\n"
+        f"Weak model features: {weak_text}\n"
+        f"Model's read on the fit: {reason}\n\n"
+        f"Job requirements (excerpt): {(jd_requirements or '')[:400] or 'not provided'}\n"
+        f"Skills currently in the CV: {(cv_skills or '')[:300] or 'not provided'}\n"
+        f"CV summary: {(cv_summary or '')[:250] or 'not provided'}\n"
+        "Interpretation rule: optional title/certification bonuses are not missing "
+        "requirements when their value is zero.\n"
+    )
+    if _normalise_viewer_role(viewer_role) == "RECRUITER":
+        return (
+            "You are an evidence-focused recruiting assistant. Using the CV-to-job "
+            "match evidence below, write 3-5 short, specific notes for the recruiter. "
+            "Refer to \"the candidate\", never address the candidate as \"you\". Summarise "
+            "relevant evidence, identify gaps or uncertainty, and propose what to verify "
+            "or ask in an interview. Do not advise the candidate how to rewrite their CV, "
+            "do not infer protected or personal characteristics, and do not make the final "
+            "hiring decision. Treat the SVM score as decision support, not ground truth. "
+            "Return only a plain list, one note per line, with no numbering, headings, or "
+            "preamble.\n\n"
+            + evidence
+        )
     return (
         "You are a warm, experienced career coach. Using the CV-to-job match results "
         "below, write 3-5 short, specific suggestions to help this candidate improve "
@@ -168,14 +246,7 @@ def _build_prompt(
         "be concrete, and vary your phrasing so it doesn't read like a template. Avoid "
         "generic filler. Return only a plain list, one suggestion per line, with no "
         "numbering, headings, or preamble.\n\n"
-        f"Role: {jd_title or 'Unknown'}\n"
-        f"Overall match: {match_score:.0%}\n"
-        f"Strengths: {strong_text}\n"
-        f"Areas to improve: {weak_text}\n"
-        f"Model's read on the fit: {reason}\n\n"
-        f"Job requirements (excerpt): {(jd_requirements or '')[:400] or 'not provided'}\n"
-        f"Skills currently in the CV: {(cv_skills or '')[:300] or 'not provided'}\n"
-        f"CV summary: {(cv_summary or '')[:250] or 'not provided'}\n"
+        + evidence
     )
 
 

@@ -186,7 +186,9 @@ def weak_fields(per_field_scores: dict[str, float], threshold: float = 0.15) -> 
     return [
         field
         for field, score in per_field_scores.items()
-        if field != "title_bonus" and score < threshold
+        # Optional bonuses can lift a score when present, but their absence must
+        # never be presented to the applicant/recruiter as a missing requirement.
+        if not field.endswith("_bonus") and score < threshold
     ]
 
 

@@ -1539,6 +1539,12 @@ class BackendEndpointsIntegrationTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.matchScore").value(0.82));
 
+    verify(cvMatchService, times(2)).matchApplicantToJob(
+        eq(applicant.getId()),
+        eq(job.getId()),
+        argThat(options -> options.getViewerRole()
+            == DATN.backend.Enum.CvMatchViewerRoleEnum.APPLICANT));
+
     // Other applicant's token → 403 Forbidden
     mockMvc.perform(post("/api/v1/applicants/{applicantId}/match/{jobId}",
         applicant.getId(), job.getId())
@@ -1599,7 +1605,9 @@ class BackendEndpointsIntegrationTests {
     verify(cvMatchService, times(2)).matchApplicantToJob(
         any(),
         eq(job.getId()),
-        argThat(options -> Boolean.FALSE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
+        argThat(options -> Boolean.FALSE.equals(options.getLlm())
+            && "tfidf".equals(options.getMethod())
+            && options.getViewerRole() == DATN.backend.Enum.CvMatchViewerRoleEnum.RECRUITER));
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/applicants/{applicantId}/ai-match",
         recruiter.getId(), job.getId(), firstApplicant.getId())
@@ -1671,7 +1679,9 @@ class BackendEndpointsIntegrationTests {
     verify(cvMatchService, times(2)).matchApplicantToJob(
         any(),
         eq(job.getId()),
-        argThat(options -> Boolean.FALSE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
+        argThat(options -> Boolean.FALSE.equals(options.getLlm())
+            && "tfidf".equals(options.getMethod())
+            && options.getViewerRole() == DATN.backend.Enum.CvMatchViewerRoleEnum.RECRUITER));
 
     mockMvc.perform(post(
         "/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations/{applicantId}/ai-suggestion",
@@ -1690,7 +1700,9 @@ class BackendEndpointsIntegrationTests {
     verify(cvMatchService).matchApplicantToJob(
         eq(topMatch.getId()),
         eq(job.getId()),
-        argThat(options -> Boolean.TRUE.equals(options.getLlm()) && "tfidf".equals(options.getMethod())));
+        argThat(options -> Boolean.TRUE.equals(options.getLlm())
+            && "tfidf".equals(options.getMethod())
+            && options.getViewerRole() == DATN.backend.Enum.CvMatchViewerRoleEnum.RECRUITER));
 
     mockMvc.perform(post("/api/v1/recruiters/jobs/{recruiterId}/{jobId}/recommendations",
         recruiter.getId(), job.getId())

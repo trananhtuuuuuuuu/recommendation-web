@@ -11,6 +11,7 @@ import DATN.backend.exception.AlreadyExistException;
 import DATN.backend.exception.ForbiddenException;
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.Enum.ApplicantStatusEnum;
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.mapper.ApplicantMapper;
 import DATN.backend.mapper.JobMapper;
 import DATN.backend.model.Applicant;
@@ -117,7 +118,8 @@ public class ImplJobService implements InterfaceJobService {
                                 .findByJob_IdAndActionTypeOrderByIdAsc(jobId, APPLIED_ACTION);
                 CvJobMatchRequest options = new CvJobMatchRequest(
                                 false,
-                                request == null ? null : request.getMethod());
+                                request == null ? null : request.getMethod(),
+                                CvMatchViewerRoleEnum.RECRUITER);
 
                 return java.util.stream.IntStream.range(0, applications.size())
                                 .mapToObj(index -> toRecruiterMatch(applications.get(index), jobId, index + 1, options))
@@ -151,7 +153,7 @@ public class ImplJobService implements InterfaceJobService {
                 for (int index = 0; index < applications.size(); index++) {
                         ApplicantJob application = applications.get(index);
                         if (application.getApplicant().getId().equals(applicantId)) {
-                                CvJobMatchRequest options = request == null ? new CvJobMatchRequest() : request;
+                                CvJobMatchRequest options = recruiterMatchOptions(request);
                                 return toRecruiterMatch(application, jobId, index + 1, options);
                         }
                 }
@@ -168,7 +170,8 @@ public class ImplJobService implements InterfaceJobService {
                 verifyPostingRecruiter(jobId, recruiterId);
                 CvJobMatchRequest options = new CvJobMatchRequest(
                                 false,
-                                request == null ? null : request.getMethod());
+                                request == null ? null : request.getMethod(),
+                                CvMatchViewerRoleEnum.RECRUITER);
 
                 List<RecruiterCandidateMatchResponse> scoredCandidates = applicantRepository
                                 .findByStatusAndCvIsNotNullOrderByIdAsc(ApplicantStatusEnum.OpenToWork)
@@ -207,7 +210,7 @@ public class ImplJobService implements InterfaceJobService {
                 return cvMatchService.matchApplicantToJob(
                                 applicantId,
                                 jobId,
-                                request == null ? new CvJobMatchRequest() : request);
+                                recruiterMatchOptions(request));
         }
 
         private RecruiterCandidateMatchResponse toRecommendedCandidate(Applicant applicant, Long jobId,
@@ -217,6 +220,13 @@ public class ImplJobService implements InterfaceJobService {
                                 0,
                                 ApplicantMapper.toRecruiterVisibleApplicantResponse(applicant),
                                 toScoreOnlyMatch(match));
+        }
+
+        private CvJobMatchRequest recruiterMatchOptions(CvJobMatchRequest request) {
+                return new CvJobMatchRequest(
+                                request != null && Boolean.TRUE.equals(request.getLlm()),
+                                request == null ? null : request.getMethod(),
+                                CvMatchViewerRoleEnum.RECRUITER);
         }
 
         private RecruiterApplicantMatchResponse toRecruiterMatch(ApplicantJob relation, Long jobId,

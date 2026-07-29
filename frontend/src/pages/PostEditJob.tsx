@@ -716,7 +716,9 @@ function CandidateSuggestionDetails({ match }: { match: CvJobMatch }) {
       ) : null}
       {match.suggestions && match.suggestions.length > 0 ? (
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">AI suggestions</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+            AI assessment &amp; interview guidance
+          </h3>
           <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
             {match.suggestions.map((suggestion) => <li key={suggestion}>• {suggestion}</li>)}
           </ul>

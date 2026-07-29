@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import DATN.backend.Enum.DegreeEnum;
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.Enum.JobEducationRequirementModeEnum;
 import DATN.backend.model.Applicant;
 import DATN.backend.model.Certificate;
@@ -99,9 +100,12 @@ class ImplCvMatchServiceTests {
 
         when(applicantRepository.findById(10L)).thenReturn(Optional.of(applicant));
         when(jobRepository.findById(20L)).thenReturn(Optional.of(job));
-        when(aiService.matchCvToJob(any(), any(), anyBoolean(), anyString())).thenReturn(aiResponse);
+        when(aiService.matchCvToJob(
+                any(), any(), anyBoolean(), anyString(), any(CvMatchViewerRoleEnum.class)))
+                .thenReturn(aiResponse);
 
-        CvJobMatchRequest request = new CvJobMatchRequest(false, "tfidf");
+        CvJobMatchRequest request = new CvJobMatchRequest(
+                false, "tfidf", CvMatchViewerRoleEnum.RECRUITER);
         CvJobMatchResponse result = service.matchApplicantToJob(10L, 20L, request);
 
         assertThat(result.getMatchScore()).isEqualTo(0.8234);
@@ -114,7 +118,11 @@ class ImplCvMatchServiceTests {
         ArgumentCaptor<Map<String, Object>> cvCaptor = ArgumentCaptor.captor();
         ArgumentCaptor<Map<String, Object>> jdCaptor = ArgumentCaptor.captor();
         org.mockito.Mockito.verify(aiService).matchCvToJob(
-                cvCaptor.capture(), jdCaptor.capture(), anyBoolean(), anyString());
+                cvCaptor.capture(),
+                jdCaptor.capture(),
+                anyBoolean(),
+                anyString(),
+                org.mockito.ArgumentMatchers.eq(CvMatchViewerRoleEnum.RECRUITER));
         Object entitiesValue = cvCaptor.getValue().get("entitiesByLabel");
         assertThat(entitiesValue).isInstanceOf(Map.class);
         Map<?, ?> entities = (Map<?, ?>) entitiesValue;

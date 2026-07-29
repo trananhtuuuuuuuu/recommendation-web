@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import DATN.backend.request.applicant.CvJobMatchRequest;
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.request.applicant.SaveJobRequest;
 import DATN.backend.request.applicant.UpdateApplicantRequest;
 import DATN.backend.request.applicant.UploadCvRequest;
@@ -210,6 +211,9 @@ public class ApplicantController {
                         @RequestBody(required = false) CvJobMatchRequest request, Authentication authentication) {
                 verifyApplicantAccess(applicantId, authentication);
                 CvJobMatchRequest options = request == null ? new CvJobMatchRequest() : request;
+                // Derive the audience from the authenticated route; do not trust a
+                // viewerRole supplied in the JSON body.
+                options.setViewerRole(CvMatchViewerRoleEnum.APPLICANT);
                 return ResponseEntity.ok(ApiResponse.success("CV matched successfully", HttpStatus.OK,
                                 cvMatchService.matchApplicantToJob(applicantId, jobId, options)));
         }

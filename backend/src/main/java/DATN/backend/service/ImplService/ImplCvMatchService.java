@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import DATN.backend.exception.ResourcesNotFoundException;
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.model.Applicant;
 import DATN.backend.model.Certificate;
 import DATN.backend.model.Cv;
@@ -54,7 +55,13 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
                 .orElseThrow(() -> new ResourcesNotFoundException("Job not found"));
 
         CvMatchAiResponse ai = cvAiService.matchCvToJob(
-                buildCanonical(cv), buildJd(job), Boolean.TRUE.equals(request.getLlm()), request.getMethod());
+                buildCanonical(cv),
+                buildJd(job),
+                Boolean.TRUE.equals(request.getLlm()),
+                request.getMethod(),
+                request.getViewerRole() == null
+                        ? CvMatchViewerRoleEnum.APPLICANT
+                        : request.getViewerRole());
 
         List<String> hardReasons = (ai.getHardFilter() == null || ai.getHardFilter().getReasons() == null)
                 ? List.of()

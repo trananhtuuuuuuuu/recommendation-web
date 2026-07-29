@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.response.cv.CvAnalysisResponse;
 import DATN.backend.response.cv.CvMatchAiResponse;
 
@@ -27,7 +28,9 @@ public interface InterfaceCvAiService {
      * @param jd structured job description fields
      * @param llm whether to use the local LLM for richer suggestions
      * @param method scoring method ("embedding"/"tfidf"); null uses the AI default
+     * @param viewerRole authenticated audience for role-specific guidance
      * @return match score, reason, and suggestions
      */
-    CvMatchAiResponse matchCvToJob(Map<String, Object> cv, Map<String, Object> jd, boolean llm, String method);
+    CvMatchAiResponse matchCvToJob(Map<String, Object> cv, Map<String, Object> jd, boolean llm, String method,
+            CvMatchViewerRoleEnum viewerRole);
 }

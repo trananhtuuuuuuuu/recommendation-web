@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -15,6 +16,10 @@ from .parser import CvParser, UnsupportedDocumentError
 class MatchOptions(BaseModel):
     llm: bool = True
     method: str = "embedding"
+    viewer_role: Literal["APPLICANT", "RECRUITER"] = Field(
+        default="APPLICANT",
+        alias="viewerRole",
+    )
 
 
 class MatchRequest(BaseModel):
@@ -127,6 +132,7 @@ async def match(request: MatchRequest) -> dict:
             request.jd,
             method=request.options.method,
             enable_llm=request.options.llm and llm_enabled(),
+            viewer_role=request.options.viewer_role,
         )
         return asdict(result)
     except Exception as exception:

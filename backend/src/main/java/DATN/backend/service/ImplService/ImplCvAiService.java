@@ -24,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import DATN.backend.exception.AiServiceUnavailableException;
 import DATN.backend.response.cv.CvAnalysisResponse;
 import DATN.backend.response.cv.CvMatchAiResponse;
+import DATN.backend.Enum.CvMatchViewerRoleEnum;
 import DATN.backend.service.InterfaceService.InterfaceCvAiService;
 
 /**
@@ -110,7 +111,8 @@ public class ImplCvAiService implements InterfaceCvAiService {
      * {@inheritDoc}
      */
     @Override
-    public CvMatchAiResponse matchCvToJob(Map<String, Object> cv, Map<String, Object> jd, boolean llm, String method) {
+    public CvMatchAiResponse matchCvToJob(Map<String, Object> cv, Map<String, Object> jd, boolean llm, String method,
+            CvMatchViewerRoleEnum viewerRole) {
         if (!enabled) {
             throw new AiServiceUnavailableException("CV matching is currently disabled");
         }
@@ -120,6 +122,8 @@ public class ImplCvAiService implements InterfaceCvAiService {
         if (method != null && !method.isBlank()) {
             options.put("method", method);
         }
+        options.put("viewerRole",
+                (viewerRole == null ? CvMatchViewerRoleEnum.APPLICANT : viewerRole).name());
         Map<String, Object> body = new HashMap<>();
         body.put("cv", cv);
         body.put("jd", jd);

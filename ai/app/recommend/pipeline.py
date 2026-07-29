@@ -25,6 +25,7 @@ def run_match(
     today=None,
     method: str = "tfidf",
     enable_llm: bool = False,
+    viewer_role: str = "APPLICANT",
 ) -> MatchResult:
     """Score a canonical CV against a structured JD and explain the result."""
     raw_jd = jd if isinstance(jd, dict) else {
@@ -104,6 +105,7 @@ def run_match(
         jd_requirements=jd.requirements,
         cv_skills=", ".join(masked.get("SKILL", [])[:15]),
         cv_summary=cv_canonical.get("summary") or "",
+        viewer_role=viewer_role,
     )
 
     return MatchResult(

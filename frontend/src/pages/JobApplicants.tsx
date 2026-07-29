@@ -302,14 +302,14 @@ function MatchDetails({ match }: { match: CvJobMatch }) {
         )) : <p className="text-xs text-muted-foreground">No per-field scores available.</p>}
       </div>
       <div className="md:col-span-2">
-        <h3 className="text-xs font-semibold text-foreground">AI suggestions</h3>
+        <h3 className="text-xs font-semibold text-foreground">AI assessment &amp; interview guidance</h3>
         {match.suggestions && match.suggestions.length > 0 ? (
           <ul className="mt-2 space-y-1">
             {match.suggestions.map((suggestion) => <li key={suggestion} className="text-xs text-muted-foreground">• {suggestion}</li>)}
           </ul>
         ) : (
           <p className="mt-2 text-xs text-muted-foreground">
-            No AI advice was returned.
+            No AI recruiter guidance was returned.
           </p>
         )}
       </div>
