@@ -235,24 +235,77 @@ public class JobMapper {
 
         if (job.getLanguageRequirements() == null) {
             job.setLanguageRequirements(new ArrayList<>());
-        } else {
-            job.getLanguageRequirements().clear();
         }
 
-        for (int index = 0; index < requestedLanguages.size(); index++) {
-            LanguageRequirementRequest request = requestedLanguages.get(index);
+        List<JobLanguageRequirement> existingLanguages = job.getLanguageRequirements();
+        int sharedLanguageCount = Math.min(existingLanguages.size(), requestedLanguages.size());
+        for (int index = 0; index < sharedLanguageCount; index++) {
+            updateLanguageRequirement(existingLanguages.get(index), requestedLanguages.get(index));
+        }
+
+        if (requestedLanguages.size() < existingLanguages.size()) {
+            existingLanguages.subList(requestedLanguages.size(), existingLanguages.size()).clear();
+            return;
+        }
+
+        int nextDisplayOrder = existingLanguages.stream()
+                .map(JobLanguageRequirement::getDisplayOrder)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo)
+                .map(order -> order + 1)
+                .orElse(0);
+        for (int index = existingLanguages.size(); index < requestedLanguages.size(); index++) {
             JobLanguageRequirement language = new JobLanguageRequirement();
             language.setJob(job);
-            language.setDisplayOrder(index);
-            language.setLanguageName(request.getLanguageName().trim());
-            language.setProficiencyLevel(request.getProficiencyLevel().trim());
-            language.setSkills(new ArrayList<>(normalizeList(request.getSkills())));
-            language.setCertificates(new ArrayList<>(request.getCertificates().stream()
-                    .map(certificate -> new LanguageCertificateRequirement(
-                            certificate.getCertificateName().trim(),
-                            certificate.getMinimumScore().trim()))
-                    .toList()));
-            job.getLanguageRequirements().add(language);
+            language.setDisplayOrder(nextDisplayOrder++);
+            updateLanguageRequirement(language, requestedLanguages.get(index));
+            existingLanguages.add(language);
+        }
+    }
+
+    /**
+     * Applies recruiter-entered language fields to an existing managed child
+     * entity while preserving its database identity and display-order slot.
+     *
+     * @param language managed or newly created language requirement
+     * @param request recruiter-entered language requirement
+     */
+    private static void updateLanguageRequirement(JobLanguageRequirement language,
+            LanguageRequirementRequest request) {
+        language.setLanguageName(request.getLanguageName().trim());
+        language.setProficiencyLevel(request.getProficiencyLevel().trim());
+        language.setSkills(new ArrayList<>(normalizeList(request.getSkills())));
+        reconcileLanguageCertificates(language, request);
+    }
+
+    /**
+     * Reconciles certificate values in place so Hibernate does not replace the
+     * ordered collection with a detached list.
+     *
+     * @param language managed or newly created language requirement
+     * @param request recruiter-entered language requirement
+     */
+    private static void reconcileLanguageCertificates(JobLanguageRequirement language,
+            LanguageRequirementRequest request) {
+        if (language.getCertificates() == null) {
+            language.setCertificates(new ArrayList<>());
+        }
+
+        List<LanguageCertificateRequirement> certificates = language.getCertificates();
+        int sharedCertificateCount = Math.min(certificates.size(), request.getCertificates().size());
+        for (int index = 0; index < sharedCertificateCount; index++) {
+            LanguageCertificateRequirement certificate = certificates.get(index);
+            certificate.setCertificateName(request.getCertificates().get(index).getCertificateName().trim());
+            certificate.setMinimumScore(request.getCertificates().get(index).getMinimumScore().trim());
+        }
+        if (request.getCertificates().size() < certificates.size()) {
+            certificates.subList(request.getCertificates().size(), certificates.size()).clear();
+            return;
+        }
+        for (int index = certificates.size(); index < request.getCertificates().size(); index++) {
+            certificates.add(new LanguageCertificateRequirement(
+                    request.getCertificates().get(index).getCertificateName().trim(),
+                    request.getCertificates().get(index).getMinimumScore().trim()));
         }
     }
 

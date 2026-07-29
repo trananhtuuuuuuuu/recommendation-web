@@ -17,6 +17,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -27,7 +28,9 @@ import lombok.Setter;
  * required by a job.
  */
 @Entity
-@Table(name = "job_language_requirements")
+@Table(name = "job_language_requirements", uniqueConstraints = @UniqueConstraint(
+        name = "uk_job_language_requirement_order",
+        columnNames = { "job_id", "display_order" }))
 @Getter
 @Setter
 @NoArgsConstructor

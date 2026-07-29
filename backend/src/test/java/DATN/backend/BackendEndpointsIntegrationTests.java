@@ -1123,6 +1123,123 @@ class BackendEndpointsIntegrationTests {
   }
 
   @Test
+  void updateJobShouldReconcileExistingLanguageRequirementsWithoutOrderConflicts() throws Exception {
+    Recruiter recruiter = seedRecruiter("language-recruiter", "language-recruiter@example.com");
+    Job job = seedJob(recruiter, "Language Engineer");
+    JobLanguageRequirement existingLanguage = new JobLanguageRequirement();
+    existingLanguage.setJob(job);
+    existingLanguage.setDisplayOrder(0);
+    existingLanguage.setLanguageName("English");
+    existingLanguage.setProficiencyLevel("Intermediate");
+    existingLanguage.setSkills(new ArrayList<>(List.of("Speaking")));
+    existingLanguage.setCertificates(new ArrayList<>(List.of(
+        new LanguageCertificateRequirement("IELTS", "6.0"))));
+    job.getLanguageRequirements().add(existingLanguage);
+    job = jobDescriptionRepository.save(job);
+    Long originalLanguageId = job.getLanguageRequirements().getFirst().getId();
+
+    mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(jobUpdatePayloadWithLanguages(true, """
+            [
+              {
+                "languageName": "English",
+                "proficiencyLevel": "Advanced",
+                "skills": ["Speaking", "Writing"],
+                "certificates": [
+                  {
+                    "certificateName": "IELTS Academic",
+                    "minimumScore": "7.0"
+                  }
+                ]
+              }
+            ]
+            """)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements.length()").value(1))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].proficiencyLevel")
+            .value("Advanced"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].certificates[0].certificateName")
+            .value("IELTS Academic"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].certificates[0].minimumScore")
+            .value("7.0"));
+
+    Job updatedJob = jobDescriptionRepository.findById(job.getId()).orElseThrow();
+    org.assertj.core.api.Assertions.assertThat(updatedJob.getLanguageRequirements())
+        .singleElement()
+        .satisfies(language -> {
+          org.assertj.core.api.Assertions.assertThat(language.getId()).isEqualTo(originalLanguageId);
+          org.assertj.core.api.Assertions.assertThat(language.getCertificates())
+              .singleElement()
+              .satisfies(certificate -> {
+                org.assertj.core.api.Assertions.assertThat(certificate.getCertificateName())
+                    .isEqualTo("IELTS Academic");
+                org.assertj.core.api.Assertions.assertThat(certificate.getMinimumScore()).isEqualTo("7.0");
+              });
+        });
+
+    mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(jobUpdatePayloadWithLanguages(true, """
+            [
+              {
+                "languageName": "English",
+                "proficiencyLevel": "Advanced",
+                "skills": ["Speaking", "Writing"],
+                "certificates": []
+              },
+              {
+                "languageName": "Japanese",
+                "proficiencyLevel": "JLPT N2",
+                "skills": ["Speaking", "Reading"],
+                "certificates": [
+                  {
+                    "certificateName": "JLPT",
+                    "minimumScore": "N2"
+                  }
+                ]
+              }
+            ]
+            """)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements.length()").value(2))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[1].languageName").value("Japanese"));
+
+    mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(jobUpdatePayloadWithLanguages(true, """
+            [
+              {
+                "languageName": "Japanese",
+                "proficiencyLevel": "Business fluent",
+                "skills": ["Speaking", "Writing"],
+                "certificates": []
+              }
+            ]
+            """)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements.length()").value(1))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].languageName").value("Japanese"))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements[0].proficiencyLevel")
+            .value("Business fluent"));
+
+    mockMvc.perform(put("/api/v1/recruiters/jobs/{recruiterId}/{jobId}", recruiter.getId(), job.getId())
+        .header(HttpHeaders.AUTHORIZATION, authorizationHeader(recruiter))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(jobUpdatePayloadWithLanguages(false, "[]")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequired").value(false))
+        .andExpect(jsonPath("$.data.requirementDetails.languageRequirements").isEmpty());
+
+    org.assertj.core.api.Assertions.assertThat(
+        jobDescriptionRepository.findById(job.getId()).orElseThrow().getLanguageRequirements())
+        .isEmpty();
+  }
+
+  @Test
   void browseJobsEndpointsShouldListDetailAndApplicantCount() throws Exception {
     Applicant applicant = seedApplicant("applicant01", "applicant@example.com");
     applicant.setShowFullName(true);
@@ -1647,6 +1764,29 @@ class BackendEndpointsIntegrationTests {
     jobDescription.setPublishedAt(Instant.now());
     jobDescription.setRecruiter(recruiter);
     return jobDescriptionRepository.save(jobDescription);
+  }
+
+  private String jobUpdatePayloadWithLanguages(boolean languageRequired, String languageRequirements) {
+    return """
+        {
+          "jobTitle": "Language Engineer",
+          "requirementDetails": {
+            "educationMode": "NOT_REQUIRED",
+            "degrees": [],
+            "noDegreeRequirement": "Equivalent practical training",
+            "educationMajors": [],
+            "preferredInstitutions": [],
+            "minimumYearsExperience": 2,
+            "experienceRequirements": ["Delivered production software"],
+            "requiredSkills": ["Communication"],
+            "techStack": ["Spring Boot"],
+            "languageRequired": %s,
+            "languageRequirements": %s,
+            "tools": ["Git"],
+            "technicalKnowledge": []
+          }
+        }
+        """.formatted(languageRequired, languageRequirements);
   }
 
   private Cv seedCv(String skills, String period) {

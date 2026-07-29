@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -62,6 +63,24 @@ public class GlobalException {
                 HttpStatus.SERVICE_UNAVAILABLE,
                 exception.getMessage(),
                 List.of(exception.getMessage())));
+    }
+
+    /**
+     * Converts persistence constraint conflicts into the common API response
+     * format without exposing database implementation details.
+     *
+     * @param exception persistence constraint failure
+     * @return conflict response with a stable client-facing error message
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse> handleDataIntegrityViolationException(
+            DataIntegrityViolationException exception) {
+        String message = "Unable to save resource because it conflicts with existing data";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(
+                message,
+                HttpStatus.CONFLICT,
+                message,
+                List.of(message)));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
