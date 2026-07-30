@@ -12,6 +12,7 @@ MODEL_DIR = Path(__file__).resolve().parents[2] / "model"
 SVM_MODEL_PATH = MODEL_DIR / "recommender_svm.joblib"
 WORD2VEC_PATH = MODEL_DIR / "word2vec.kv"
 STRUCTURED_MODEL_PATHS = {
+    "logistic": MODEL_DIR / "content_logistic_primary.joblib",
     "v21": MODEL_DIR / "recommender_svm_v21_primary.joblib",
     "v22": MODEL_DIR / "recommender_svm_v22_backup.joblib",
 }
@@ -70,6 +71,11 @@ FIELD_DISPLAY_NAMES: dict[str, str] = {
     "project_evidence": "project evidence",
     "experience_present": "experience evidence",
     "role_alignment": "role alignment",
+    "skill_semantic_similarity": "semantic skill alignment",
+    "skill_exact_coverage": "required-skill coverage",
+    "skill_hybrid_mean": "hybrid skill alignment",
+    "experience_project_direct_similarity": "experience and project alignment",
+    "content_model_score": "content model score",
 }
 
 FIELD_DISPLAY_NAMES_EN = FIELD_DISPLAY_NAMES
@@ -96,18 +102,10 @@ SENIORITY_YEARS: dict[str, float] = {
     "senior": 5.0, "lead": 8.0, "principal": 8.0, "manager": 8.0, "head": 10.0,
 }
 
-# Tolerance (years) applied before penalising on experience.
-EXPERIENCE_TOLERANCE_YEARS = 0.5
-
-# Years of experience is a noisy proxy for knowledge (and is itself derived from
-# error-prone DATE entities), while the candidate's real knowledge is already
-# scored directly via SKILL / EXPERIENCE / PROJECT / EDUCATION. So experience is
-# a SOFT penalty, not a hard gate: a shortfall scales the final score down via
-# exp_fit in [FLOOR, 1.0] instead of rejecting. Only an egregious gap -- short by
-# more than EXPERIENCE_HARD_GAP_YEARS -- still hard-rejects (e.g. a fresher
-# applying to a senior role).
-EXPERIENCE_HARD_GAP_YEARS = 3.0
-EXPERIENCE_FIT_FLOOR = 0.5
+# YOE is handled before content scoring. A candidate may be up to one year below
+# the form's minimum; a larger confirmed gap is ineligible. There is no second
+# experience multiplier inside/after the content model.
+EXPERIENCE_TOLERANCE_YEARS = 1.0
 
 # Tokens that mean a location requirement is open (auto-pass the hard filter).
 REMOTE_TOKENS = ("remote", "tu xa", "anywhere", "wfh", "hybrid")
@@ -160,13 +158,13 @@ def svm_model_path(method: str = "tfidf") -> Path:
 
 def recommender_sequence() -> tuple[str, ...]:
     """Configured primary followed by technical fallbacks, without duplicates."""
-    primary = os.getenv("AI_RECOMMENDER_PRIMARY", "v21").strip().lower()
+    primary = os.getenv("AI_RECOMMENDER_PRIMARY", "logistic").strip().lower()
     fallbacks = os.getenv(
         "AI_RECOMMENDER_FALLBACKS",
-        "legacy,v22",
+        "v21,v22,legacy",
     ).split(",")
     ordered = [primary, *(item.strip().lower() for item in fallbacks)]
-    allowed = {"v21", "v22", "legacy"}
+    allowed = {*STRUCTURED_MODEL_PATHS, "legacy"}
     return tuple(
         model
         for index, model in enumerate(ordered)

@@ -11,6 +11,7 @@ from .decision import decide_registered, strong_fields, weak_fields
 from .embeddings import sentence_transformers_installed
 from .hard_filter import run_hard_filter
 from .llm_suggest import suggest
+from .match_summary import build_match_summary
 from .masking import mask_entities
 from .schemas import JobDescriptionInput, MatchResult
 from .semantic import score_semantic_fields
@@ -49,6 +50,15 @@ def run_match(
     hard = run_hard_filter(cv_canonical, jd, today=today)
     enforce_hard_filter = hard_filter_enabled()
     if enforce_hard_filter and not hard.passed:
+        summary = build_match_summary(
+            match_score=0.0,
+            per_field_scores={},
+            hard_filter=hard,
+            cv=cv_canonical,
+            jd=raw_jd,
+            viewer_role=viewer_role,
+            content_scored=False,
+        )
         return MatchResult(
             passed_filter=False,
             hard_filter=hard,
@@ -58,7 +68,7 @@ def run_match(
             scoring_method=method,
             reason=hard.reasons[0] if hard.reasons else "Did not pass the hard filter.",
             model_used="n/a",
-            suggestions=None,
+            suggestions=summary,
         )
 
     masked = mask_entities(cv_canonical.get("entitiesByLabel", {}))
@@ -89,12 +99,15 @@ def run_match(
     reason = outcome.reason
     model_used = outcome.model_used
     per_field = outcome.per_field_scores
-    # Experience is a soft signal: a years shortfall scales the knowledge-based
-    # score down rather than rejecting the candidate outright.
-    if enforce_hard_filter and hard.exp_fit < 1.0:
-        match_score = round(match_score * hard.exp_fit, 4)
-        reason += f" (Adjusted for limited experience: multiplier {hard.exp_fit:.2f}.)"
-    suggestions = suggest(
+    summary = build_match_summary(
+        match_score=match_score,
+        per_field_scores=per_field,
+        hard_filter=hard,
+        cv=cv_canonical,
+        jd=raw_jd,
+        viewer_role=viewer_role,
+    )
+    guidance = suggest(
         match_score=match_score,
         jd_title=jd.job_title,
         strong=strong_fields(per_field),
@@ -107,6 +120,10 @@ def run_match(
         cv_summary=cv_canonical.get("summary") or "",
         viewer_role=viewer_role,
     )
+    # Keep the factual form stable even when the optional LLM is unavailable or
+    # varies its wording. Optional status lines are omitted when they add no
+    # decision value; at most two role-specific actions follow the summary.
+    suggestions = summary + guidance[:2]
 
     return MatchResult(
         # When disabled, the original hard-filter result remains in ``hard_filter``

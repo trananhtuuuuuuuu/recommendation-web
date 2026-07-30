@@ -46,17 +46,18 @@ _MONTHS = {
 #   - connector words "to"/"den"(đến)/"thru"/"until"
 #   - a spaced ascii hyphen or tilde
 #   - an en/em dash (with optional spaces)
-#   - a bare hyphen that comes right after a 4-digit year ("2021-2023", "06/2021-09/2021")
+#   - a bare hyphen between two 4-digit years ("2021-2023")
 _SEPARATOR_RE = re.compile(
     r"\s+(?:to|den|thru|until)\s+"
     r"|\s+[-~]\s+"
     r"|\s*[–—]\s*"
-    r"|(?<=\d{4})\s*-\s*(?=\d)",
+    r"|(?<=\d{4})\s*-\s*(?=(?:19|20)\d{2}\b)",
     re.IGNORECASE,
 )
 
 _MONTH_NAME_RE = re.compile(r"\b([a-z]{3,9})\.?\s+(\d{4})\b")
 _NUMERIC_RE = re.compile(r"(?:thang\s*)?(\d{1,2})\s*[/.\s]\s*(\d{4})")
+_ISO_RE = re.compile(r"\b(19\d{2}|20\d{2})[-/](\d{1,2})\b")
 _YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
 _DAYS_PER_YEAR = 365.25
@@ -109,6 +110,12 @@ def _resolve_token(part: str, *, is_end: bool) -> tuple[str, date | None]:
         if resolved is not None:
             return "date", resolved
 
+    iso_match = _ISO_RE.search(part)
+    if iso_match:
+        resolved = _make_date(int(iso_match.group(1)), int(iso_match.group(2)))
+        if resolved is not None:
+            return "date", resolved
+
     year_match = _YEAR_RE.search(part)
     if year_match:
         # Year-only end dates default to December so durations are not undercounted.
@@ -128,6 +135,58 @@ def _parse(text: str, today: date | None) -> DateRange:
     work = _strip_accents(raw).lower()
     if not work:
         return DateRange(None, None, False, 0.0, raw)
+
+    # OCR often removes whitespace or substitutes "=" for the separator:
+    # "February2020-Present", "May 2023=Oct 2023", "02/201308/2015".
+    # Normalize only date-shaped boundaries so hyphens inside ISO YYYY-MM
+    # tokens are preserved.
+    work = re.sub(
+        r"\b([a-z]{3,9})\s*(19\d{2}|20\d{2})\b",
+        r"\1 \2",
+        work,
+    )
+    work = re.sub(r"\bto\s+date\b", " - present", work)
+    work = re.sub(
+        r"(?<=\d{4})(?=\d{1,2}/(?:19|20)\d{2}\b)",
+        " - ",
+        work,
+    )
+    work = re.sub(
+        r"(\d{1,2}/(?:19|20)\d{2})\s*-\s*"
+        r"(?=\d{1,2}/(?:19|20)\d{2}\b)",
+        r"\1 - ",
+        work,
+    )
+    work = re.sub(
+        r"(?<=\d{2})-(?=(?:19|20)\d{2}-\d{1,2}\b)",
+        " - ",
+        work,
+    )
+    work = re.sub(
+        r"(?<=\d{4})\s*=\s*(?=[a-z0-9])",
+        " - ",
+        work,
+    )
+    work = re.sub(
+        r"(?<=\d{4})\s*-\s*(?=(?:"
+        r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+        r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|"
+        r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|"
+        r"present|now|current|ongoing|hien|den|toi|nay"
+        r")\b)",
+        " - ",
+        work,
+    )
+    work = re.sub(
+        r"(?<=\d{4})\s+(?=(?:"
+        r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+        r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|"
+        r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|"
+        r"\d{1,2}/(?:19|20)\d{2}|present|now|current|ongoing"
+        r")\b)",
+        " - ",
+        work,
+    )
 
     parts = [piece for piece in _SEPARATOR_RE.split(work) if piece and piece.strip()]
     start_part = parts[0] if parts else ""

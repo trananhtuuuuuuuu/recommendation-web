@@ -23,6 +23,9 @@ _FIELD_TOPICS = {
     "required_skill_coverage": "skills",
     "weighted_required_skill_coverage": "skills",
     "required_skill_f1": "skills",
+    "skill_semantic_similarity": "skills",
+    "skill_exact_coverage": "skills",
+    "skill_hybrid_mean": "skills",
     "SOFT_SKILL": "soft_skills",
     "LANGUAGE": "language",
     "CERTIFICATION": "certification",
@@ -34,6 +37,7 @@ _FIELD_TOPICS = {
     "responsibility_similarity": "responsibilities",
     "EXPERIENCE": "experience",
     "experience_task_similarity": "experience",
+    "experience_project_direct_similarity": "experience",
     "experience_present": "experience",
     "PROJECT": "projects",
     "project_evidence": "projects",
@@ -120,7 +124,7 @@ def suggest(
     cv_summary: str = "",
     viewer_role: str = "APPLICANT",
 ) -> list[str]:
-    """Return role-appropriate English guidance grounded in the SVM output.
+    """Return role-appropriate English guidance grounded in the model output.
 
     The decision model's per-field scores (which fields are weak, with numbers)
     plus the JD requirements and the CV's own skills are handed to the LLM so the
@@ -215,7 +219,7 @@ def _build_prompt(
     weak_text = _field_scores_text(weak, per_field_scores) or "none"
     evidence = (
         f"Role: {jd_title or 'Unknown'}\n"
-        f"Overall SVM match score: {match_score:.0%}\n"
+        f"Overall content match score: {match_score:.0%}\n"
         f"Strong model features: {strong_text}\n"
         f"Weak model features: {weak_text}\n"
         f"Model's read on the fit: {reason}\n\n"
@@ -233,7 +237,7 @@ def _build_prompt(
             "relevant evidence, identify gaps or uncertainty, and propose what to verify "
             "or ask in an interview. Do not advise the candidate how to rewrite their CV, "
             "do not infer protected or personal characteristics, and do not make the final "
-            "hiring decision. Treat the SVM score as decision support, not ground truth. "
+            "hiring decision. Treat the model score as decision support, not ground truth. "
             "Return only a plain list, one note per line, with no numbering, headings, or "
             "preamble.\n\n"
             + evidence

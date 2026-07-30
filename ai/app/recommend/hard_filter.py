@@ -11,8 +11,6 @@ import re
 
 from ..dates import total_experience_years
 from .config import (
-    EXPERIENCE_FIT_FLOOR,
-    EXPERIENCE_HARD_GAP_YEARS,
     EXPERIENCE_TOLERANCE_YEARS,
     REMOTE_TOKENS,
     LOCATION_ALIASES,
@@ -72,9 +70,9 @@ def run_hard_filter(
     reasons: list[str] = []
     if not years_ok:
         reasons.append(
-            f"Experience gap is too large: the candidate has {candidate_years:.1f} years, "
+            f"Experience requirement is not met: the candidate has {candidate_years:.1f} years, "
             f"while the role requires {required_years:.0f} years "
-            f"(more than a {EXPERIENCE_HARD_GAP_YEARS:.0f}-year gap)."
+            f"(allowed gap: {EXPERIENCE_TOLERANCE_YEARS:.0f} year)."
         )
     if not location_ok:
         reasons.append(f"Location does not match: the role requires '{jd.location}'.")
@@ -93,19 +91,11 @@ def run_hard_filter(
 
 
 def _experience_fit(candidate_years: float, required_years: float) -> tuple[bool, float]:
-    """Map a years shortfall to (passes_gate, soft fit multiplier in [FLOOR, 1.0]).
-
-    No shortfall -> (True, 1.0). A small shortfall passes the gate but scales the
-    score down linearly toward EXPERIENCE_FIT_FLOOR. A shortfall of at least
-    EXPERIENCE_HARD_GAP_YEARS is egregious and hard-rejects -> (False, 0.0).
-    """
+    """Return the external YOE eligibility gate and no soft multiplier."""
     gap = required_years - (candidate_years + EXPERIENCE_TOLERANCE_YEARS)
     if gap <= 0:
         return True, 1.0
-    if gap >= EXPERIENCE_HARD_GAP_YEARS:
-        return False, 0.0
-    fit = 1.0 - (gap / EXPERIENCE_HARD_GAP_YEARS) * (1.0 - EXPERIENCE_FIT_FLOOR)
-    return True, round(fit, 4)
+    return False, 0.0
 
 
 def _required_years(experience_level: str) -> float:

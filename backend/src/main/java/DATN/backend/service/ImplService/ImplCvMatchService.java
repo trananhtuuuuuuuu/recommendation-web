@@ -1,5 +1,7 @@
 package DATN.backend.service.ImplService;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -7,6 +9,9 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import DATN.backend.exception.ResourcesNotFoundException;
 import DATN.backend.Enum.CvMatchViewerRoleEnum;
@@ -34,6 +39,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ImplCvMatchService implements InterfaceCvMatchService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final ApplicantRepository applicantRepository;
     private final JobRepository jobDescriptionRepository;
@@ -111,6 +118,13 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         Map<String, Object> canonical = new HashMap<>();
         canonical.put("entitiesByLabel", byLabel);
         canonical.put("summary", cv.getObjective() == null ? "" : cv.getObjective());
+        Double totalExperienceYears = totalExperienceYears(cv.getExperienceObj());
+        if (totalExperienceYears != null) {
+            canonical.put("totalExperienceYears", totalExperienceYears);
+        }
+        // Matching only uses the persisted profile, which the applicant reviewed
+        // and confirmed after AI extraction.
+        canonical.put("experienceYearsConfirmed", true);
         return canonical;
     }
 
@@ -119,17 +133,95 @@ public class ImplCvMatchService implements InterfaceCvMatchService {
         if (experience == null) {
             return;
         }
+        // UploadCvRequest currently stores a multi-company experience array in
+        // contribution while keeping only the first company in scalar columns.
+        // Expand that JSON here so AI receives every company/date/description.
+        if (addEmbeddedExperiences(
+                experience.getContribution(),
+                titles,
+                companies,
+                dates,
+                descriptions)) {
+            return;
+        }
         addIfPresent(titles, experience.getJobTitle());
         addIfPresent(companies, experience.getCompanyName());
         addIfPresent(descriptions, experience.getContribution());
         if (experience.getStartDate() != null) {
-            dates.add(experience.getStartDate().toString());
+            String end = experience.getEndDate() != null
+                    ? experience.getEndDate().toString()
+                    : Boolean.TRUE.equals(experience.getIsPresent())
+                            ? "Present"
+                            : "";
+            dates.add(end.isBlank()
+                    ? experience.getStartDate().toString()
+                    : experience.getStartDate() + " - " + end);
+        } else {
+            addIfPresent(dates, experience.getTime());
         }
-        if (experience.getEndDate() != null) {
-            dates.add(experience.getEndDate().toString());
-        } else if (Boolean.TRUE.equals(experience.getIsPresent())) {
-            dates.add("Present");
+    }
+
+    private boolean addEmbeddedExperiences(
+            String contribution,
+            List<String> titles,
+            List<String> companies,
+            List<String> dates,
+            List<String> descriptions) {
+        if (contribution == null || !contribution.stripLeading().startsWith("[")) {
+            return false;
         }
+        try {
+            JsonNode entries = OBJECT_MAPPER.readTree(contribution);
+            if (!entries.isArray()) {
+                return false;
+            }
+            boolean found = false;
+            for (JsonNode entry : entries) {
+                if (!entry.isObject()) {
+                    continue;
+                }
+                found = true;
+                addIfPresent(companies, jsonText(entry, "companyName"));
+                addIfPresent(titles, firstJsonText(entry, "jobTitle", "position"));
+                addIfPresent(dates, firstJsonText(entry, "time", "period"));
+                addIfPresent(
+                        descriptions,
+                        firstJsonText(entry, "description", "contribution"));
+            }
+            return found;
+        } catch (Exception ignored) {
+            // A normal free-text contribution follows the scalar path above.
+            return false;
+        }
+    }
+
+    private String firstJsonText(JsonNode node, String first, String second) {
+        String value = jsonText(node, first);
+        return value == null || value.isBlank() ? jsonText(node, second) : value;
+    }
+
+    private String jsonText(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private Double totalExperienceYears(Experience experience) {
+        if (experience == null || experience.getStartDate() == null) {
+            // Do not send a misleading zero. The AI service will calculate YOE
+            // from every DATE range expanded above and merge overlapping jobs.
+            return null;
+        }
+        LocalDate start = experience.getStartDate().toLocalDate();
+        LocalDate end = experience.getEndDate() != null
+                ? experience.getEndDate().toLocalDate()
+                : Boolean.TRUE.equals(experience.getIsPresent())
+                        ? LocalDate.now()
+                        : null;
+        if (end == null || end.isBefore(start)) {
+            return null;
+        }
+        double years = ChronoUnit.DAYS.between(start, end) / 365.25;
+        return Math.round(years * 100.0) / 100.0;
     }
 
     private void addIfPresent(List<String> target, String value) {

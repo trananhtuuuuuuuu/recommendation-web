@@ -1,4 +1,4 @@
-"""Runtime feature builder and scorer for structured ranker v2.1/v2.2."""
+"""Runtime feature builder/scorer for Logistic primary and SVM fallbacks."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from .embeddings import cosine_embed_batch, embeddings_available
+from .match_summary import certificate_keywords
 
 
 def normalize_phrase(value: Any) -> str:
@@ -244,13 +245,75 @@ def build_structured_features(
     responsibility_text = _join_entities(cv, responsibility_labels)
     experience_text = _join_entities(cv, ("EXPERIENCE",))
     project_text = _join_entities(cv, ("PROJECT",))
-    responsibility, experience, project = cosine_embed_batch(
-        [
-            (responsibility_text, description),
-            (experience_text, description),
-            (project_text, f"{description}. {semantic_requirements}"),
-        ]
+    cv_skill_text = _join_entities(cv, ("SKILL",))
+    experience_project_text = _join_entities(
+        cv,
+        ("EXPERIENCE", "PROJECT"),
     )
+    experience_project_target = ". ".join(
+        part
+        for part in (description, semantic_requirements)
+        if part
+    )
+    requested = set(
+        bundle.get("feature_order")
+        or (
+            "required_skill_coverage",
+            "required_skill_f1",
+            "responsibility_similarity",
+            "experience_task_similarity",
+            "project_evidence",
+        )
+    )
+    pairs: list[tuple[str, tuple[str, str]]] = []
+    if requested & {
+        "responsibility_similarity",
+        "experience_task_similarity",
+        "project_evidence",
+    }:
+        pairs.extend(
+            [
+                (
+                    "responsibility_similarity",
+                    (responsibility_text, description),
+                ),
+                (
+                    "experience_task_similarity",
+                    (experience_text, description),
+                ),
+                (
+                    "project_evidence",
+                    (
+                        project_text,
+                        f"{description}. {semantic_requirements}",
+                    ),
+                ),
+            ]
+        )
+    if requested & {
+        "skill_semantic_similarity",
+        "skill_hybrid_mean",
+    }:
+        pairs.append(
+            (
+                "skill_semantic_similarity",
+                (cv_skill_text, semantic_requirements),
+            )
+        )
+    if "experience_project_direct_similarity" in requested:
+        pairs.append(
+            (
+                "experience_project_direct_similarity",
+                (experience_project_text, experience_project_target),
+            )
+        )
+    embedded = {
+        name: float(value)
+        for (name, _), value in zip(
+            pairs,
+            cosine_embed_batch([pair for _, pair in pairs]),
+        )
+    }
 
     skill_idf = bundle.get("skill_idf") or {}
     denominator = sum(float(skill_idf.get(skill, 1.0)) for skill in required)
@@ -259,11 +322,30 @@ def build_structured_features(
     by_label = cv.get("entitiesByLabel") or {}
     features = {
         "required_skill_coverage": coverage,
+        "skill_exact_coverage": coverage,
         "weighted_required_skill_coverage": weighted_coverage,
         "required_skill_f1": skill_f1,
-        "responsibility_similarity": responsibility,
-        "experience_task_similarity": experience,
-        "project_evidence": project,
+        "responsibility_similarity": embedded.get(
+            "responsibility_similarity",
+            0.0,
+        ),
+        "experience_task_similarity": embedded.get(
+            "experience_task_similarity",
+            0.0,
+        ),
+        "project_evidence": embedded.get("project_evidence", 0.0),
+        "skill_semantic_similarity": embedded.get(
+            "skill_semantic_similarity",
+            0.0,
+        ),
+        "skill_hybrid_mean": (
+            embedded.get("skill_semantic_similarity", 0.0) + coverage
+        )
+        / 2.0,
+        "experience_project_direct_similarity": embedded.get(
+            "experience_project_direct_similarity",
+            0.0,
+        ),
         "experience_present": float(bool(experience_text.strip())),
         "role_alignment": _role_alignment(
             list(by_label.get("JOB_TITLE") or []),
@@ -273,8 +355,12 @@ def build_structured_features(
     return {name: float(value) for name, value in features.items()}
 
 
-def _calibrated_probability(bundle: dict[str, Any], vector: list[float]) -> float:
+def _model_probability(bundle: dict[str, Any], vector: list[float]) -> float:
     model = bundle["model"]
+    if bundle.get("model_type") == "logistic_regression":
+        probability = model.predict_proba([vector])[0][1]
+        return max(0.0, min(1.0, float(probability)))
+
     calibrator = bundle["calibrator"]
     margin = np.asarray(model.decision_function([vector]), dtype=float)
     if hasattr(calibrator, "predict_proba"):
@@ -291,7 +377,7 @@ def score_structured_ranker(
 ) -> tuple[float, str, dict[str, float]]:
     features = build_structured_features(cv, jd, bundle)
     order = tuple(bundle["feature_order"])
-    probability = _calibrated_probability(
+    probability = _model_probability(
         bundle,
         [features[name] for name in order],
     )
@@ -306,38 +392,45 @@ def score_structured_ranker(
         "certificationMode",
         "certification_mode",
     ).upper()
-    certificate_keywords = _string_list(
-        _payload_value(
-            jd,
-            "certificateKeywords",
-            "certificate_keywords",
-        )
-    )
-    if certification_mode == "PREFERRED" and certificate_keywords:
+    requested_certificates = certificate_keywords(jd)
+    # The current JD form stores certificates inside language requirements.
+    # They are preferred evidence by default, consistent with the bonus-only
+    # policy, unless a future form explicitly marks them otherwise.
+    if not certification_mode and requested_certificates:
+        certification_mode = "PREFERRED"
+    if certification_mode == "PREFERRED" and requested_certificates:
         certificate_text = f" {normalize_phrase(_join_entities(cv, ('CERTIFICATION',)))} "
         matched_certificates = sum(
             bool(
                 normalize_phrase(keyword)
                 and f" {normalize_phrase(keyword)} " in certificate_text
             )
-            for keyword in certificate_keywords
+            for keyword in requested_certificates
         )
         certification_bonus = float(
             bundle.get("certification_cap") or 0.03
-        ) * matched_certificates / len(certificate_keywords)
+        ) * matched_certificates / len(requested_certificates)
     score = min(1.0, probability + title_bonus + certification_bonus)
     visible = {
         name: round(features[name], 4)
         for name in order
     }
+    visible["content_model_score"] = round(probability, 4)
     visible["role_alignment"] = round(features["role_alignment"], 4)
     visible["title_bonus"] = round(title_bonus, 4)
     visible["certification_bonus"] = round(certification_bonus, 4)
-    reason = (
-        f"{bundle['model_id']} content-first score: required skills "
-        f"{features['required_skill_coverage']:.0%}, responsibilities "
-        f"{features['responsibility_similarity']:.0%}, experience tasks "
-        f"{features['experience_task_similarity']:.0%}, projects "
-        f"{features['project_evidence']:.0%}."
-    )
+    if bundle.get("model_type") == "logistic_regression":
+        reason = (
+            "Logistic content score: hybrid skills "
+            f"{features['skill_hybrid_mean']:.0%}, experience/projects "
+            f"{features['experience_project_direct_similarity']:.0%}."
+        )
+    else:
+        reason = (
+            f"{bundle['model_id']} content-first score: required skills "
+            f"{features['required_skill_coverage']:.0%}, responsibilities "
+            f"{features['responsibility_similarity']:.0%}, experience tasks "
+            f"{features['experience_task_similarity']:.0%}, projects "
+            f"{features['project_evidence']:.0%}."
+        )
     return round(score, 4), reason, visible

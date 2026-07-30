@@ -82,7 +82,7 @@ def decide(per_field_scores: dict[str, float], *, method: str = "tfidf") -> tupl
     return score, _explain(per_field_scores, weights), model_used
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=4)
 def load_structured_model(model_id: str) -> dict | None:
     target = STRUCTURED_MODEL_PATHS.get(model_id)
     if target is None:
@@ -120,10 +120,18 @@ def decide_registered(
                     jd,
                     bundle,
                 )
+                model_type = str(
+                    bundle.get("model_type") or "linear_svm"
+                ).lower()
+                runtime_name = (
+                    "content_logistic"
+                    if model_type == "logistic_regression"
+                    else f"structured_svm_{model_id}"
+                )
                 return DecisionOutcome(
                     score=score,
                     reason=reason,
-                    model_used=f"structured_svm_{model_id}",
+                    model_used=runtime_name,
                     scoring_method="structured_embedding",
                     per_field_scores=scores,
                 )
@@ -173,12 +181,17 @@ def recommender_health() -> dict[str, Any]:
 
 def strong_fields(per_field_scores: dict[str, float], limit: int = 3) -> list[str]:
     """Field names with the highest similarity (the candidate's strengths)."""
+    excluded = {"content_model_score"}
     ranked = sorted(
         per_field_scores,
         key=lambda field: per_field_scores.get(field, 0.0),
         reverse=True,
     )
-    return [field for field in ranked if per_field_scores.get(field, 0.0) >= 0.30][:limit]
+    return [
+        field
+        for field in ranked
+        if field not in excluded and per_field_scores.get(field, 0.0) >= 0.30
+    ][:limit]
 
 
 def weak_fields(per_field_scores: dict[str, float], threshold: float = 0.15) -> list[str]:
@@ -188,7 +201,9 @@ def weak_fields(per_field_scores: dict[str, float], threshold: float = 0.15) -> 
         for field, score in per_field_scores.items()
         # Optional bonuses can lift a score when present, but their absence must
         # never be presented to the applicant/recruiter as a missing requirement.
-        if not field.endswith("_bonus") and score < threshold
+        if field != "content_model_score"
+        and not field.endswith("_bonus")
+        and score < threshold
     ]
 
 
