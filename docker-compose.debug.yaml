@@ -43,8 +43,8 @@ services:
       AI_OCR_ENGINE: ${AI_OCR_ENGINE:-paddle}
       AI_RECOMMENDER_PRIMARY: ${AI_RECOMMENDER_PRIMARY:-logistic}
       AI_RECOMMENDER_FALLBACKS: ${AI_RECOMMENDER_FALLBACKS:-v21,v22,legacy}
-      # Temporary: keep hard-filter output for audit, but do not reject/penalise CVs.
-      AI_HARD_FILTER_ENABLED: ${AI_HARD_FILTER_ENABLED:-false}
+      # Enforce YOE (with the configured one-year tolerance) and language gates.
+      AI_HARD_FILTER_ENABLED: ${AI_HARD_FILTER_ENABLED:-true}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:

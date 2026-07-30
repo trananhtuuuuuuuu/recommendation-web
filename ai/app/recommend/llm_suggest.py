@@ -27,12 +27,10 @@ _FIELD_TOPICS = {
     "skill_exact_coverage": "skills",
     "skill_hybrid_mean": "skills",
     "SOFT_SKILL": "soft_skills",
-    "LANGUAGE": "language",
     "CERTIFICATION": "certification",
     "JOB_TITLE": "role_alignment",
     "role_alignment": "role_alignment",
     "COMPANY": "industry",
-    "EDUCATION": "education",
     "SUMMARY": "responsibilities",
     "responsibility_similarity": "responsibilities",
     "EXPERIENCE": "experience",
@@ -123,6 +121,10 @@ def suggest(
     cv_skills: str = "",
     cv_summary: str = "",
     viewer_role: str = "APPLICANT",
+    education_status: str = "",
+    cv_education: str = "",
+    language_status: str = "",
+    cv_language: str = "",
 ) -> list[str]:
     """Return role-appropriate English guidance grounded in the model output.
 
@@ -136,7 +138,8 @@ def suggest(
             generated = _suggest_via_ollama(
                 match_score, jd_title, strong, weak, reason,
                 per_field_scores or {}, jd_requirements, cv_skills, cv_summary,
-                viewer_role,
+                viewer_role, education_status, cv_education,
+                language_status, cv_language,
             )
             if generated:
                 return generated
@@ -178,6 +181,10 @@ def _suggest_via_ollama(
     cv_skills: str,
     cv_summary: str,
     viewer_role: str,
+    education_status: str = "",
+    cv_education: str = "",
+    language_status: str = "",
+    cv_language: str = "",
 ) -> list[str]:
     import httpx
 
@@ -188,7 +195,8 @@ def _suggest_via_ollama(
             "prompt": _build_prompt(
                 match_score, jd_title, strong, weak, reason,
                 per_field_scores, jd_requirements, cv_skills, cv_summary,
-                viewer_role,
+                viewer_role, education_status, cv_education,
+                language_status, cv_language,
             ),
             "stream": False,
             "options": {"temperature": 0.4},
@@ -214,6 +222,10 @@ def _build_prompt(
     cv_skills: str,
     cv_summary: str,
     viewer_role: str = "APPLICANT",
+    education_status: str = "",
+    cv_education: str = "",
+    language_status: str = "",
+    cv_language: str = "",
 ) -> str:
     strong_text = _field_scores_text(strong, per_field_scores) or "nothing stands out yet"
     weak_text = _field_scores_text(weak, per_field_scores) or "none"
@@ -226,8 +238,20 @@ def _build_prompt(
         f"Job requirements (excerpt): {(jd_requirements or '')[:400] or 'not provided'}\n"
         f"Skills currently in the CV: {(cv_skills or '')[:300] or 'not provided'}\n"
         f"CV summary: {(cv_summary or '')[:250] or 'not provided'}\n"
+        f"Education currently in the CV: "
+        f"{(cv_education or '')[:300] or 'not provided'}\n"
+        f"Structured education check: {education_status or 'not evaluated'}\n"
+        f"Language/certificate evidence in the CV: "
+        f"{(cv_language or '')[:300] or 'not provided'}\n"
+        f"Structured language check: {language_status or 'not evaluated'}\n"
         "Interpretation rule: optional title/certification bonuses are not missing "
-        "requirements when their value is zero.\n"
+        "requirements when their value is zero. Education is evaluated by a "
+        "deterministic structured rule and is already reported separately. Do not "
+        "suggest adding, changing, or verifying education, a degree, a major, or "
+        "coursework in this LLM guidance. Required language is also evaluated "
+        "deterministically from both LANGUAGE and CERTIFICATION evidence and is "
+        "already reported separately. Do not add language advice or claim language "
+        "evidence is missing in this LLM guidance.\n"
     )
     if _normalise_viewer_role(viewer_role) == "RECRUITER":
         return (

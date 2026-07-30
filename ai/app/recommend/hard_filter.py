@@ -1,8 +1,9 @@
 """Group 2 -- Hard filter (rule-based, no ML).
 
 Cheap if-else gate that rejects obviously unsuitable CVs before the expensive
-vector/semantic steps run. Checks work location, years of experience (derived
-from DATE entities), and an optional GPA threshold.
+vector/semantic steps run. Checks years of experience (derived from DATE
+entities), required languages, and an optional GPA threshold. Location is not
+an eligibility rule in the runtime pipeline.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from .config import (
     LOCATION_ALIASES,
     SENIORITY_YEARS,
 )
+from .language_match import language_requirement_status
 from .schemas import HardFilterResult, JobDescriptionInput
 from .textnorm import normalize
 
@@ -33,13 +35,12 @@ def run_hard_filter(
     jd: JobDescriptionInput,
     *,
     today=None,
-    check_location: bool = True,
+    check_location: bool = False,
 ) -> HardFilterResult:
     """Apply the rule-based gate and return a pass/fail with reasons.
 
-    ``check_location=False`` skips the location gate -- useful when building
-    training data from CVs whose locations are out of scope (e.g. foreign
-    Kaggle CVs) so pairs can still be scored on the remaining fields.
+    Location is skipped by default. ``check_location=True`` remains available
+    only for explicit audits and offline experiments.
     """
     by_label = cv.get("entitiesByLabel", {})
 
@@ -67,6 +68,21 @@ def run_hard_filter(
     if required_gpa is not None and candidate_gpa is not None:
         gpa_ok = candidate_gpa + 1e-3 >= required_gpa
 
+    language_values = (
+        list(by_label.get("LANGUAGE", []))
+        + list(by_label.get("CERTIFICATION", []))
+    )
+    language_state, _, language_gaps, _, _ = language_requirement_status(
+        language_values,
+        {
+            "languageRequired": jd.language_required,
+            "languageRequirements": jd.language_requirements,
+        },
+    )
+    # Unknown proficiency (for example TOEIC stored without its score) passes
+    # provisionally. Only absent or explicitly insufficient evidence is rejected.
+    language_ok = language_state != "gap"
+
     reasons: list[str] = []
     if not years_ok:
         reasons.append(
@@ -74,18 +90,25 @@ def run_hard_filter(
             f"while the role requires {required_years:.0f} years "
             f"(allowed gap: {EXPERIENCE_TOLERANCE_YEARS:.0f} year)."
         )
+    if not language_ok:
+        reasons.append(
+            "Language requirement is not met: missing or below the required "
+            f"level ({', '.join(language_gaps)})."
+        )
     if not location_ok:
         reasons.append(f"Location does not match: the role requires '{jd.location}'.")
     if not gpa_ok:
         reasons.append("GPA is below the minimum requirement in the job description.")
 
     return HardFilterResult(
-        passed=years_ok and location_ok and gpa_ok,
+        passed=years_ok and language_ok and location_ok and gpa_ok,
         reasons=reasons,
         candidate_years=candidate_years,
         required_years=required_years,
         location_ok=location_ok,
         gpa_ok=gpa_ok,
+        language_ok=language_ok,
+        language_status=language_state,
         exp_fit=exp_fit,
     )
 

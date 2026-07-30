@@ -33,6 +33,8 @@ class JobDescriptionInput:
     experience_level: str = ""
     minimum_years_experience: str = ""
     industry: str = ""
+    language_required: bool = False
+    language_requirements: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> "JobDescriptionInput":
@@ -44,7 +46,25 @@ class JobDescriptionInput:
                 value = payload.get(_JD_ALIASES[name])
             return str(value).strip() if value is not None else ""
 
-        return cls(**{name: pick(name) for name in cls.__dataclass_fields__})
+        scalar_names = (
+            name
+            for name in cls.__dataclass_fields__
+            if name not in {"language_required", "language_requirements"}
+        )
+        required = payload.get("language_required")
+        if required is None:
+            required = payload.get("languageRequired")
+        requirements = payload.get("language_requirements")
+        if requirements is None:
+            requirements = payload.get("languageRequirements")
+        return cls(
+            **{name: pick(name) for name in scalar_names},
+            language_required=bool(required),
+            language_requirements=[
+                item for item in (requirements or [])
+                if isinstance(item, dict)
+            ],
+        )
 
 
 @dataclass
@@ -57,6 +77,8 @@ class HardFilterResult:
     required_years: float = 0.0
     location_ok: bool = True
     gpa_ok: bool = True
+    language_ok: bool = True
+    language_status: str = "not_required"
     # Kept for response compatibility. With the external YOE gate this is either
     # 1.0 (eligible) or 0.0 (rejected), never a soft score multiplier.
     exp_fit: float = 1.0

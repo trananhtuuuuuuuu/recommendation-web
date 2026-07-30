@@ -30,7 +30,7 @@ class RoleAwareSuggestionTests(unittest.TestCase):
     def test_recruiter_prompt_uses_svm_evidence_and_hiring_guidance(self):
         prompt = self.prompt("RECRUITER")
 
-        self.assertIn("Overall SVM match score: 62%", prompt)
+        self.assertIn("Overall content match score: 62%", prompt)
         self.assertIn("required-skill coverage (45%)", prompt)
         self.assertIn("notes for the recruiter", prompt)
         self.assertIn("ask in an interview", prompt)
@@ -85,6 +85,40 @@ class RoleAwareSuggestionTests(unittest.TestCase):
             "certification_bonus": 0.0,
         })
         self.assertEqual(weak, ["required_skill_coverage"])
+
+    def test_prompt_receives_deterministic_education_status(self):
+        prompt = _build_prompt(
+            0.66,
+            "AI Research Intern",
+            ["skill_hybrid_mean"],
+            ["experience_project_direct_similarity"],
+            "Content-only Logistic score.",
+            {
+                "skill_hybrid_mean": 0.6,
+                "experience_project_direct_similarity": 0.3,
+            },
+            "Bachelor in Computer Science.",
+            "Python, PyTorch",
+            "",
+            "APPLICANT",
+            education_status="met",
+            cv_education="Bachelor of Computer Science",
+            language_status="unknown",
+            cv_language="TOEIC Listening and Reading",
+        )
+
+        self.assertIn("Structured education check: met", prompt)
+        self.assertIn(
+            "Education currently in the CV: Bachelor of Computer Science",
+            prompt,
+        )
+        self.assertIn("Do not suggest adding, changing, or verifying education", prompt)
+        self.assertIn("Structured language check: unknown", prompt)
+        self.assertIn(
+            "Language/certificate evidence in the CV: TOEIC Listening and Reading",
+            prompt,
+        )
+        self.assertIn("Do not add language advice", prompt)
 
 
 if __name__ == "__main__":

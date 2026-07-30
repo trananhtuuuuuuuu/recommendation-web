@@ -11,7 +11,7 @@ from .decision import decide_registered, strong_fields, weak_fields
 from .embeddings import sentence_transformers_installed
 from .hard_filter import run_hard_filter
 from .llm_suggest import suggest
-from .match_summary import build_match_summary
+from .match_summary import build_match_summary, education_status, language_status
 from .masking import mask_entities
 from .schemas import JobDescriptionInput, MatchResult
 from .semantic import score_semantic_fields
@@ -107,6 +107,8 @@ def run_match(
         jd=raw_jd,
         viewer_role=viewer_role,
     )
+    education_state, _ = education_status(cv_canonical, raw_jd)
+    language_state, _, _, _, _ = language_status(cv_canonical, raw_jd)
     guidance = suggest(
         match_score=match_score,
         jd_title=jd.job_title,
@@ -119,6 +121,15 @@ def run_match(
         cv_skills=", ".join(masked.get("SKILL", [])[:15]),
         cv_summary=cv_canonical.get("summary") or "",
         viewer_role=viewer_role,
+        education_status=education_state,
+        cv_education=", ".join(masked.get("EDUCATION", [])[:5]),
+        language_status=language_state,
+        cv_language=", ".join(
+            (
+                masked.get("LANGUAGE", [])
+                + masked.get("CERTIFICATION", [])
+            )[:10]
+        ),
     )
     # Keep the factual form stable even when the optional LLM is unavailable or
     # varies its wording. Optional status lines are omitted when they add no

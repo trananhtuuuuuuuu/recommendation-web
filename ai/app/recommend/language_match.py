@@ -129,10 +129,39 @@ def proficiency_score(value: Any) -> float | None:
     return max(scores) if scores else None
 
 
-def language_evidence(values: Iterable[Any]) -> dict[str, float]:
-    """Return the strongest observed proficiency for every named language."""
+def language_evidence_details(
+    values: Iterable[Any],
+) -> dict[str, float | None]:
+    """Return language evidence while preserving an unknown proficiency.
+
+    A certificate name such as ``TOEIC Listening and Reading`` proves English
+    evidence exists, but without a point/level it must not be treated as a
+    confirmed B1/B2 score.
+    """
     flattened = [str(value) for value in values if str(value or "").strip()]
-    output: dict[str, float] = {}
+    output: dict[str, float | None] = {}
+
+    def record(language: str, score: float | None) -> None:
+        previous = output.get(language)
+        if language not in output or (
+            score is not None and (previous is None or score > previous)
+        ):
+            output[language] = score
+
+    # Backend certificate fields may arrive separately (name/provider/point).
+    # Inspect their combined text so ["TOEIC ...", "900"] still becomes B2.
+    combined = normalize_text(" ".join(flattened))
+    if "toeic" in combined:
+        record("english", _score_toeic(combined))
+    if "ielts" in combined:
+        record("english", _score_ielts(combined))
+    jlpt = re.search(r"\b(?:jlpt\s*)?n[1-5]\b", combined)
+    if jlpt:
+        record("japanese", proficiency_score(jlpt.group(0)))
+    hsk = re.search(r"\bhsk\s*[1-9]\b", combined)
+    if hsk:
+        record("chinese", proficiency_score(hsk.group(0)))
+
     most_recent_language: str | None = None
     for value in flattened:
         language = canonical_language(value)
@@ -149,15 +178,85 @@ def language_evidence(values: Iterable[Any]) -> dict[str, float]:
         if language is None:
             continue
         score = proficiency_score(value)
-        if score is None:
-            score = 0.50
-        output[language] = max(output.get(language, 0.0), score)
+        record(language, score)
     return output
+
+
+def language_evidence(values: Iterable[Any]) -> dict[str, float]:
+    """Return numeric evidence for scoring compatibility.
+
+    Unknown-but-present evidence retains the historical neutral value 0.50;
+    hard-filter decisions use :func:`language_evidence_details` instead.
+    """
+    return {
+        language: 0.50 if score is None else score
+        for language, score in language_evidence_details(values).items()
+    }
 
 
 def _requirement_values(jd: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     raw = jd.get("languageRequirements") or jd.get("language_requirements") or []
     return [item for item in raw if isinstance(item, Mapping)]
+
+
+def language_requirement_status(
+    values: Iterable[Any],
+    jd: Mapping[str, Any],
+) -> tuple[
+    str,
+    list[str],
+    list[str],
+    list[str],
+    dict[str, float | None],
+]:
+    """Check required languages without treating unknown levels as failures.
+
+    State is ``not_required``, ``met``, ``unknown`` or ``gap``. Missing
+    evidence and explicitly insufficient levels are gaps; certificate evidence
+    with no score/level is unknown and therefore passes provisionally.
+    """
+    requirements = _requirement_values(jd)
+    required_flag = jd.get("languageRequired")
+    if required_flag is None:
+        required_flag = jd.get("language_required")
+    evidence = language_evidence_details(values)
+    if required_flag is False or not requirements:
+        return "not_required", [], [], [], evidence
+
+    met: list[str] = []
+    gaps: list[str] = []
+    unknown: list[str] = []
+    for requirement in requirements:
+        raw_name = str(
+            requirement.get("languageName")
+            or requirement.get("language_name")
+            or "specified language"
+        ).strip()
+        raw_level = str(
+            requirement.get("proficiencyLevel")
+            or requirement.get("proficiency_level")
+            or ""
+        ).strip()
+        label = f"{raw_name} ({raw_level})" if raw_level else raw_name
+        language = canonical_language(raw_name)
+        if language is None or language not in evidence:
+            gaps.append(label)
+            continue
+        observed = evidence[language]
+        required = proficiency_score(raw_level)
+        if required is not None and observed is None:
+            unknown.append(label)
+        elif (
+            required is not None
+            and observed is not None
+            and observed + 1e-9 < required
+        ):
+            gaps.append(label)
+        else:
+            met.append(label)
+
+    state = "gap" if gaps else "unknown" if unknown else "met"
+    return state, met, gaps, unknown, evidence
 
 
 def language_gap(

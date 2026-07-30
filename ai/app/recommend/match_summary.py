@@ -12,11 +12,7 @@ import re
 import unicodedata
 from typing import Any
 
-from .language_match import (
-    canonical_language,
-    language_evidence,
-    proficiency_score,
-)
+from .language_match import language_requirement_status
 from .schemas import HardFilterResult
 
 
@@ -198,46 +194,21 @@ def education_status(
     return "met", ""
 
 
-def _language_status(
+def language_status(
     cv: dict[str, Any],
     jd: dict[str, Any],
-) -> tuple[str, list[str], list[str], dict[str, float]]:
-    evidence = language_evidence(
+) -> tuple[
+    str,
+    list[str],
+    list[str],
+    list[str],
+    dict[str, float | None],
+]:
+    values = (
         (cv.get("entitiesByLabel") or {}).get("LANGUAGE", [])
         + (cv.get("entitiesByLabel") or {}).get("CERTIFICATION", [])
     )
-    required_flag = _value(jd, "languageRequired", "language_required")
-    requirements = (
-        _value(jd, "languageRequirements", "language_requirements") or []
-    )
-    if required_flag is False or not isinstance(requirements, list) or not requirements:
-        return "not_required", [], [], evidence
-    met: list[str] = []
-    gaps: list[str] = []
-    for requirement in requirements:
-        if not isinstance(requirement, dict):
-            continue
-        raw_name = str(
-            requirement.get("languageName")
-            or requirement.get("language_name")
-            or "specified language"
-        ).strip()
-        raw_level = str(
-            requirement.get("proficiencyLevel")
-            or requirement.get("proficiency_level")
-            or ""
-        ).strip()
-        label = f"{raw_name} ({raw_level})" if raw_level else raw_name
-        language = canonical_language(raw_name)
-        observed = evidence.get(language) if language else None
-        required = proficiency_score(raw_level)
-        if observed is None or (
-            required is not None and observed + 1e-9 < required
-        ):
-            gaps.append(label)
-        else:
-            met.append(label)
-    return ("met" if not gaps else "gap"), met, gaps, evidence
+    return language_requirement_status(values, jd)
 
 
 def _component(
@@ -341,8 +312,14 @@ def build_match_summary(
             f"relevant majors. {education_detail}"
         )
 
-    language_state, met_languages, language_gaps, language_evidence_map = (
-        _language_status(cv, jd)
+    (
+        language_state,
+        met_languages,
+        language_gaps,
+        unknown_languages,
+        language_evidence_map,
+    ) = (
+        language_status(cv, jd)
     )
     if language_state == "met":
         language_line = (
@@ -357,6 +334,12 @@ def build_match_summary(
         if met_languages:
             language_line += f" Already met: {', '.join(met_languages)}."
         lines.append(language_line)
+    elif language_state == "unknown":
+        lines.append(
+            "Language: evidence was found in the CV/certificate, but its "
+            "level or score is not recorded for "
+            f"{', '.join(unknown_languages)}; verify the required level."
+        )
     elif recruiter and language_evidence_map:
         languages = ", ".join(
             language.title()
@@ -398,10 +381,16 @@ def build_match_summary(
     ]
     if not jd_title:
         title_line = "Job title: the JD has no title to compare."
-    elif role_alignment is None or not cv_titles:
+    elif not cv_titles:
         title_line = (
             f"Job title: no reliable title was found in {possessive} CV; "
             "title does not reduce the core score."
+        )
+    elif role_alignment is None:
+        title_line = (
+            f"Job title: {cv_titles[0]} vs {jd_title}; semantic title "
+            "comparison was not run because an eligibility rule stopped "
+            "content scoring."
         )
     else:
         if _normalize_phrase(cv_titles[0]) == _normalize_phrase(jd_title):
